@@ -169,28 +169,38 @@ that fixed the look.
 
 ---
 
-## 7. Touch: one finger moves, the button fires
+## 7. Touch: a joystick steers, a button fires
 
-**Rule.** On touch devices the only way to fire is the round button in the
-bottom-right corner (≥ 72 css px, thumb reach, showing the bolts left). It
-fires on press. Pointers are tracked by id for their whole life: one that
-lands on the button never moves the heart, the first to land anywhere else is
-the move pointer and never fires, and a tap away from the button does
-nothing. The heart rides ≥ 90 px above the finger. A drag is a *target* the
-heart moves toward at its normal speed, so every movement penalty (rule 2)
-applies to touch exactly as to keys.
+**Rule.** On touch devices the left thumb has a virtual joystick and the
+right thumb a fire button, mirrored. Where the phone's aspect ratio leaves a
+band below the playfield (≥ 150 css px) both sit in that band so thumbs never
+cover the game; where there is no band they overlay the playfield's bottom
+corners at 60 % opacity. The joystick *floats*: a touch anywhere in the left
+40 % of the lower screen puts the base (radius 60) under the thumb; a faint
+dashed outline marks its resting place. The knob (radius 28) follows the
+thumb and clamps to the base's edge. It is analog: a dead zone of 12 % of the
+radius, full speed at the edge, linear between, and full speed is the
+keyboard speed (265 px/s). On release the knob springs home and the heart
+stops. The fire button (radius 44, ≥ 72 css px across) fires on press and
+shows the bolts left. Pointers are tracked by id for their whole life: the
+joystick thumb never fires, the fire thumb never steers, and both work at
+once. A touch outside both zones does nothing; a tap never fires.
 
-**Why.** Tap-to-fire on a drag surface meant every hesitant touch spent a
-bolt, and with five bolts for the whole run (rule 1) that is a lost game, not
-a mistake. Firing on press keeps the shot where the eye is. Tracking by id is
-what makes two thumbs work: without it a second finger either fired the drag
-or dragged the fire. The offset keeps the thumb off the heart, and the
-target-not-teleport movement keeps rule 2 honest — an earlier version let a
-drag move the heart 1:1, which made the embed penalty vanish on a phone.
+**Why.** The joystick vector simply adds to the key vector, so the movement
+block has one path: the same 265 px/s, the same 65 % / 115 % penalty
+multipliers. Rule 2 holds on touch with no special-case code — the previous
+drag-to-move needed its own target-follow system to keep the penalties, and
+before that a 1:1 drag had silently bypassed them. A floating base forgives
+thumbs that miss a small fixed target; the resting outline tells a new
+player where it lives. Moving while firing is the core action, which is why
+two independent pointers matter: without id tracking a second finger either
+fired the drag or dragged the fire. Controls in the band keep the thumbs off
+the picture, which the telegraph contract (rule 4) needs readable.
 
-**In code.** `pointers`, `movePtr`, `drag`, `fireBtn`, `onFireBtn()`, the
-`pointerdown/move/up` handlers and the drag block in `update()`; the button is
-`drawFireBtn()` in the HUD.
+**In code.** `CTL`, `layoutControls()`, `inStickZone()`, `onFire()`,
+`stickMove()`, `stickRelease()`, the `pointerdown/move/up` handlers on
+`#wrap`, `CTL.joy` in the movement block of `update()`, `drawControls()` on
+the `#ctl` layer. Keyboard and mouse (a click fires) are unchanged.
 
 ---
 

@@ -29,7 +29,12 @@ body{
   -webkit-user-select:none;user-select:none;
   -webkit-tap-highlight-color:transparent;
 }
-#wrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:6px}
+#wrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:6px}
+/* the touch controls: a layer over the whole screen, drawn by game.js */
+#ctl{position:absolute;inset:0;pointer-events:none;z-index:5;display:none}
+body.touch #ctl{display:block}
+/* when the aspect ratio leaves a band below the playfield, the playfield sits at the top and the controls take the band */
+body.band #wrap{align-items:flex-start}
 
 /* ---- the monitor: beige-grey plastic, a curved screen, a power LED ---- */
 #monitor{
@@ -81,8 +86,8 @@ body.bare #wrap{padding:0}
 body.bare #monitor{padding:0;border-radius:0;background:none;box-shadow:none}
 body.bare #monitor::before,body.bare #led,body.bare #badge{display:none}
 body.bare #stage{border-radius:0}
-/* on touch screens the fire button owns the bottom-right corner; the mute goes bottom-left */
-body.touch #mute{right:auto;left:calc(6px * var(--s))}
+/* on touch screens both bottom corners belong to the controls; the mute sits between them */
+body.touch #mute{position:fixed;right:auto;left:50%;transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 /* the glass itself: a soft reflection that sells the barrel curve */
 #stage::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:4;

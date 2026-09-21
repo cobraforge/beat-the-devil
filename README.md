@@ -126,16 +126,22 @@ whole run, and two of them are for his eyes.
 
 ## On a phone
 
-- **Touch controls.** Drag anywhere to move the heart; it rides about 90 px
-  above the finger so the thumb never covers it. A round button in the
-  bottom-right corner (at least 72 css px across, in thumb reach) fires on
-  press, not release, and shows the bolts left. Pointers are tracked by id: a
-  finger that lands on the button never moves the heart, a drag never fires,
-  and a second finger can fire mid-drag. The drag is a target the heart moves
-  toward at its normal speed, so the embed and burn penalties apply to touch
-  exactly as to keys. The title card explains the button on touch devices.
+- **Touch controls.** A virtual joystick for the left thumb, a fire button
+  for the right, mirrored. The joystick floats: touch anywhere in the left
+  40 % of the lower screen and the base (radius 60 px) lands under the thumb;
+  a faint outline marks where it rests. The knob (28 px) follows the thumb,
+  clamps to the base's edge, and is analog — a 12 % dead zone, full speed at
+  the edge (the keyboard speed), linear between. Release and it springs home
+  and the heart stops. The fire button (44 px radius) fires on press and shows
+  the bolts left. Pointers are tracked by id: the joystick thumb never fires,
+  the fire thumb never steers, and both work at once. The joystick's vector
+  simply adds to the keys', so the embed and burn penalties apply as the same
+  multipliers.
 - **Layout.** On screens under 600 px the bezel goes and the glass takes the
-  whole width; the mute button moves to the bottom-left.
+  whole width. Where the aspect ratio leaves a band of at least 150 px below
+  the playfield, the playfield sits at the top and both controls live in the
+  band, so thumbs never cover the game; otherwise they overlay the bottom
+  corners at 60 % opacity. The mute button sits between them.
 - **Performance.** Touch devices cap the device pixel ratio at 1.5. Three
   quality tiers (`QUALITY` in `game.js`: full, medium, low) trade heat
   shimmer, smoke, glow sprites, particle share, flame edge detail, fire
@@ -186,7 +192,7 @@ Handy for jumping to the fight: `BTD_G.surv = 41.9`.
 With `#debug` a frame-time overlay sits in the bottom-left: rolling average,
 p95 and max rAF interval, time in update+draw, device pixel ratio, particle
 and flame counts. `BTD_PERF()` returns the same numbers (`BTD_PERF(true)`
-resets the ring), `BTD_TIER(n)` pins a quality tier, `BTD_WANT(n)` requests
+resets the ring), `BTD_TIER(n)` pins a quality tier, `BTD_CTL` is the touch controls' layout in css px, `BTD_WANT(n)` requests
 one the safe way, `window.BTD_LOCK_TIER = true` stops the adaptive step,
 `window.BTD_NOSHADOW = true` and `window.BTD_SKIP = {devil: true}` leave
 effects or drawing blocks out to measure their cost.
@@ -195,7 +201,7 @@ effects or drawing blocks out to measure their cost.
 
 `dev/perf.py` drives a separate Chrome (its own throwaway profile) over the
 DevTools protocol: 390×844 at 3× DPR, touch, CPU throttled 1×/4×/6×, and a
-finger dragging the heart in circles while it reads `BTD_PERF()`. Needs the
+thumb working the joystick in circles while it reads `BTD_PERF()`. Needs the
 dev server running and `pip install websocket-client`.
 
 ```

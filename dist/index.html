@@ -41,7 +41,12 @@ body{
   -webkit-user-select:none;user-select:none;
   -webkit-tap-highlight-color:transparent;
 }
-#wrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:6px}
+#wrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:6px}
+/* the touch controls: a layer over the whole screen, drawn by game.js */
+#ctl{position:absolute;inset:0;pointer-events:none;z-index:5;display:none}
+body.touch #ctl{display:block}
+/* when the aspect ratio leaves a band below the playfield, the playfield sits at the top and the controls take the band */
+body.band #wrap{align-items:flex-start}
 
 /* ---- the monitor: beige-grey plastic, a curved screen, a power LED ---- */
 #monitor{
@@ -93,8 +98,8 @@ body.bare #wrap{padding:0}
 body.bare #monitor{padding:0;border-radius:0;background:none;box-shadow:none}
 body.bare #monitor::before,body.bare #led,body.bare #badge{display:none}
 body.bare #stage{border-radius:0}
-/* on touch screens the fire button owns the bottom-right corner; the mute goes bottom-left */
-body.touch #mute{right:auto;left:calc(6px * var(--s))}
+/* on touch screens both bottom corners belong to the controls; the mute sits between them */
+body.touch #mute{position:fixed;right:auto;left:50%;transform:translateX(-50%);bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 /* the glass itself: a soft reflection that sells the barrel curve */
 #stage::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
@@ -188,6 +193,7 @@ body.touch #mute{right:auto;left:calc(6px * var(--s))}
     <div id="badge">BTD</div>
     <div id="led"></div>
   </div>
+  <canvas id="ctl" aria-hidden="true"></canvas>
 </div>
 
 <script>
@@ -826,7 +832,7 @@ var isTouch = (window.matchMedia && window.matchMedia('(pointer:coarse)').matche
               ('ontouchstart' in window);
 
 // on a small screen the bezel goes and the glass takes the whole screen
-var bare = false;
+var bare = false, CTL = null;
 function resize(){
   bare = Math.min(window.innerWidth, window.innerHeight) < 600;
   document.body.classList.toggle('bare', bare);
@@ -845,8 +851,8 @@ function resize(){
   stage.style.width = w + 'px';
   stage.style.height = h + 'px';
   monitor.style.setProperty('--s', (w / LW).toFixed(3));
-  layoutFireBtn();
   ctx.setTransform(cvs.width / LW, 0, 0, cvs.height / LH, 0, 0);
+  layoutControls(w, h);
 }
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', function(){ setTimeout(resize, 120); });
@@ -854,7 +860,7 @@ resize();
 
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
 document.getElementById('tip').innerHTML = STORY + (isTouch
-  ? 'Drag anywhere to move<br>The round button fires'
+  ? 'Left thumb: joystick to move<br>Right thumb: button to fire'
   : 'Arrows / WASD to move<br>Space to fire<br>P pause &middot; M mute');
 if (isTouch){
   document.body.classList.add('touch');
@@ -1099,28 +1105,102 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 15;
+  window.BTD_VERSION = 16;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
 // ---------- input ----------
 var keys = {};
 var fireQueued = false;
-// Pointers are tracked by id from the moment they land. One that lands on the
-// fire button is a 'fire' pointer for its whole life and never moves the
-// heart; the first to land anywhere else is the 'move' pointer and never
-// fires. Fingers that arrive while the move pointer is held do nothing.
-var pointers = {}, movePtr = null, drag = null;
-var downT = 0, moved = 0;                         // mouse only: a tap fires
-// the fire button: bottom right, in thumb reach, at least 72 css px across
-var fireBtn = { x: 0, y: 0, r: 40, press: 0 };
-function layoutFireBtn(){
-  if (!fireBtn) return;                           // resize() runs once before this block
-  fireBtn.r = clamp(38 / Math.max(0.2, scale), 30, 64);
-  fireBtn.x = LW - 10 - fireBtn.r; fireBtn.y = LH - 10 - fireBtn.r;
+// ---------- touch controls ----------
+// A virtual joystick on the left, a fire button on the right, drawn on their
+// own layer (#ctl) in css px. Pointers are tracked by id for their whole
+// life: the joystick thumb never fires, the fire thumb never steers, and
+// both work at once.
+var ctl = document.getElementById('ctl'), cctx = ctl.getContext('2d');
+CTL = {
+  band: false,                 // the controls sit in the band below the playfield
+  W: 0, H: 0, dpr: 1,
+  base: 60, knob: 28, fireR: 44,
+  home: { x: 0, y: 0 },        // the joystick's resting place (a faint outline)
+  fire: { x: 0, y: 0, press: 0 },
+  stick: null,                 // { x, y, kx, ky } while a thumb holds it
+  knobX: 0, knobY: 0,          // where the knob is drawn (springs home on release)
+  joy: { x: 0, y: 0 }          // the analog vector, |joy| <= 1
+};
+var pointers = {};             // id -> 'stick' | 'fire' | 'tap'
+var downT = 0;                 // mouse only: a click fires
+function layoutControls(w, h){
+  if (!isTouch || !CTL) return;
+  var W = wrap.clientWidth, H = wrap.clientHeight, s = w / LW;
+  var monitorH = h + (bare ? 0 : BEZEL_Y * s), pad = bare ? 0 : 12;
+  var band = H - pad - monitorH;
+  CTL.band = band >= 150;
+  document.body.classList.toggle('band', CTL.band);
+  CTL.W = W; CTL.H = H;
+  CTL.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  ctl.width = Math.floor(W * CTL.dpr); ctl.height = Math.floor(H * CTL.dpr);
+  ctl.style.width = W + 'px'; ctl.style.height = H + 'px';
+  var margin = 18, cy, left, right;
+  if (CTL.band){
+    cy = H - band / 2; left = margin + CTL.base; right = W - margin - CTL.base;
+  } else {
+    // no band: the playfield's bottom corners, over the picture
+    rect = null;
+    var r = canvasRect(), wr = wrap.getBoundingClientRect();
+    cy = r.bottom - wr.top - margin - CTL.base;
+    left = r.left - wr.left + margin + CTL.base; right = r.right - wr.left - margin - CTL.base;
+  }
+  CTL.home.x = left; CTL.home.y = cy;
+  CTL.fire.x = right; CTL.fire.y = cy;
+  if (!CTL.stick){ CTL.knobX = left; CTL.knobY = cy; }
 }
-layoutFireBtn();
-function onFireBtn(x, y){ return isTouch && Math.hypot(x - fireBtn.x, y - fireBtn.y) <= fireBtn.r * 1.15; }
+function wrapPoint(e){ var r = wrap.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+function onFire(q){ return Math.hypot(q.x - CTL.fire.x, q.y - CTL.fire.y) <= CTL.fireR * 1.3; }
+// the joystick floats: a touch anywhere in the left 40 % of the lower screen puts the base under the thumb
+function inStickZone(q){ return q.x < CTL.W * 0.4 && q.y > CTL.H * 0.5; }
+function stickMove(q){
+  var st = CTL.stick, dx = q.x - st.x, dy = q.y - st.y, d = Math.hypot(dx, dy), R = CTL.base;
+  if (d > R){ dx *= R / d; dy *= R / d; d = R; }          // the knob clamps to the base's edge
+  CTL.knobX = st.x + dx; CTL.knobY = st.y + dy;
+  // analog: dead zone of 12 % of the radius, full speed at the edge, linear between
+  var m = d / R, k = m < 0.12 ? 0 : Math.min(1, (m - 0.12) / 0.88);
+  CTL.joy.x = d > 0 ? dx / d * k : 0; CTL.joy.y = d > 0 ? dy / d * k : 0;
+}
+function stickRelease(){ CTL.stick = null; CTL.joy.x = CTL.joy.y = 0; }
+function clearPointers(){ pointers = {}; stickRelease(); }
+
+resize();
+wrap.addEventListener('pointerdown', function(e){
+  if (e.target === muteBtn) return;
+  try { wrap.setPointerCapture(e.pointerId); } catch(err){}   // synthetic pointers have no capture
+  if (G.mode !== 'play'){ tryStart(); return; }
+  if (G.paused){ togglePause(); return; }
+  if (!isTouch){ pointers[e.pointerId] = 'tap'; downT = performance.now(); return; }
+  var q = wrapPoint(e);
+  if (onFire(q)){
+    pointers[e.pointerId] = 'fire';
+    CTL.fire.press = 1; fireQueued = true;          // on press, not release
+  } else if (inStickZone(q) && !CTL.stick){
+    pointers[e.pointerId] = 'stick';
+    var R = CTL.base + 4;
+    CTL.stick = { x: clamp(q.x, R, CTL.W - R), y: clamp(q.y, R, CTL.H - R) };
+    stickMove(q);
+    G.idleT = 0;
+  }
+});
+wrap.addEventListener('pointermove', function(e){
+  if (pointers[e.pointerId] === 'stick' && CTL.stick) stickMove(wrapPoint(e));
+});
+function endPointer(e){
+  var kind = pointers[e.pointerId];
+  delete pointers[e.pointerId];
+  if (kind === 'stick') stickRelease();
+  // a mouse click (no button on screen) fires; a finger never does by lifting
+  else if (kind === 'tap' && G.mode === 'play' && !G.paused && performance.now() - downT < 300) fireQueued = true;
+}
+wrap.addEventListener('pointerup', endPointer);
+wrap.addEventListener('pointercancel', endPointer);
 
 window.addEventListener('keydown', function(e){
   var k = e.key, space = k === ' ' || e.code === 'Space';
@@ -1139,7 +1219,7 @@ window.addEventListener('keydown', function(e){
   }
 });
 window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
-window.addEventListener('blur', function(){ keys = {}; pointers = {}; movePtr = null; drag = null; });
+window.addEventListener('blur', function(){ keys = {}; clearPointers(); });
 document.addEventListener('visibilitychange', function(){
   if (document.hidden && G.mode === 'play' && !G.paused && !window.BTD_FREEZE) togglePause();
 });
@@ -1149,47 +1229,6 @@ document.addEventListener('visibilitychange', function(){
 var rect = null;
 function canvasRect(){ return rect || (rect = cvs.getBoundingClientRect()); }
 window.addEventListener('scroll', function(){ rect = null; }, true);
-function toLogical(e){
-  var r = canvasRect();
-  return { x: (e.clientX - r.left) / r.width * LW, y: (e.clientY - r.top) / r.height * LH };
-}
-stage.addEventListener('pointerdown', function(e){
-  if (e.target === muteBtn) return;
-  try { stage.setPointerCapture(e.pointerId); } catch(err){}   // synthetic pointers have no capture
-  var p = toLogical(e);
-  if (G.mode !== 'play'){ tryStart(); return; }
-  if (G.paused){ togglePause(); return; }
-  if (onFireBtn(p.x, p.y)){
-    pointers[e.pointerId] = { kind: 'fire' };
-    fireBtn.press = 1; fireQueued = true;          // on press, not release
-    return;
-  }
-  if (movePtr != null) return;
-  movePtr = e.pointerId;
-  pointers[e.pointerId] = { kind: 'move', x: p.x, y: p.y };
-  // the heart rides above the finger: whatever offset it lands with eases
-  // to one that keeps it clear of the thumb
-  drag = { ox: G.player.x - p.x, oy: G.player.y - p.y, t: 0 };
-  downT = performance.now(); moved = 0;
-  G.idleT = 0;
-});
-stage.addEventListener('pointermove', function(e){
-  var pt = pointers[e.pointerId];
-  if (!pt || pt.kind !== 'move') return;
-  var p = toLogical(e);
-  moved += Math.abs(p.x - pt.x) + Math.abs(p.y - pt.y);
-  pt.x = p.x; pt.y = p.y;
-});
-function endPointer(e){
-  var pt = pointers[e.pointerId];
-  delete pointers[e.pointerId];
-  if (!pt || pt.kind !== 'move') return;
-  // a mouse tap (no button on screen) fires; a finger never does
-  if (!isTouch && G.mode === 'play' && !G.paused && moved < 10 && performance.now() - downT < 300) fireQueued = true;
-  movePtr = null; drag = null;
-}
-stage.addEventListener('pointerup', endPointer);
-stage.addEventListener('pointercancel', endPointer);
 
 var muteBtn = document.getElementById('mute');
 function toggleMute(){
@@ -1661,7 +1700,9 @@ function update(dt){
   G.white = decay(G.white, 2.2, dt);
   G.lightning = decay(G.lightning, 2.0, dt);
   G.recoil = decay(G.recoil, 8, dt);
-  fireBtn.press = decay(fireBtn.press, 5, dt);
+  CTL.fire.press = decay(CTL.fire.press, 5, dt);
+  // the knob springs home when let go
+  if (!CTL.stick){ CTL.knobX = lerp(CTL.knobX, CTL.home.x, Math.min(1, dt * 14)); CTL.knobY = lerp(CTL.knobY, CTL.home.y, Math.min(1, dt * 14)); }
   if (G.herald > 0) G.herald -= dt;
   if (G.hold > 0) G.hold -= dt;
   if (G.devil) G.devil.kick = decay(G.devil.kick, 3, dt);
@@ -1716,24 +1757,17 @@ function update(dt){
   if (keys['arrowright']|| keys['d']) mx += 1;
   if (keys['arrowup']   || keys['w']) my -= 1;
   if (keys['arrowdown'] || keys['s']) my += 1;
-  var dragging = false;
-  if (drag && movePtr != null && pointers[movePtr]){
-    // the target: the finger plus an offset that eases to sit above it
-    var fp = pointers[movePtr];
-    drag.t += dt;
-    var k = smooth(drag.t / 0.35);
-    var ox = lerp(drag.ox, clamp(drag.ox, -30, 30), k), oy = lerp(drag.oy, Math.min(drag.oy, -90), k);
-    var ddx = fp.x + ox - p.x, ddy = fp.y + oy - p.y, dd = Math.hypot(ddx, ddy);
-    if (dd > 0.5){ mx = ddx / dd; my = ddy / dd; dragging = true; }
-    if (dragging && dd < sp * dt) sp = dd / dt;   // no overshoot
-  }
+  // the joystick: an analog vector, |joy| <= 1, so the same speed and the
+  // same penalties as the keys with no special case
+  mx += CTL.joy.x; my += CTL.joy.y;
   if (pen === 'burn' && (mx || my)){ mx += rnd(-0.45, 0.45); my += rnd(-0.45, 0.45); }
   if (mx || my){
-    var m = Math.hypot(mx,my) || 1;
-    p.x += mx/m * sp * dt;
-    p.y += my/m * sp * dt;
+    var m = Math.hypot(mx,my);
+    if (m > 1){ mx /= m; my /= m; }             // keys on a diagonal: no faster
+    p.x += mx * sp * dt;
+    p.y += my * sp * dt;
     G.idleT = 0;
-  } else if (movePtr == null){
+  } else if (!CTL.stick){
     G.idleT += dt;
     if (G.idleT > 3 && !G.heart.flutterDue){ G.heart.flutterDue = true; G.idleT = -2; }   // it flutters, then waits again
   }
@@ -3506,28 +3540,54 @@ function drawHUD(){
   var label = G.phase === 'survive' ? 'S' : (G.devil && !G.devil.dying && (G.devil.state === 'open' || G.devil.state === 'attack') ? (open ? 'O' : 'C') : '-');
   var key = [Math.floor(G.score), hi, G.ammo, G.phase, Math.round(clamp(G.surv / G.SURV, 0, 1) * 200), alive, label].join('|');
   hudLayer.draw(key, drawHUDStatic);
-  if (isTouch) drawFireBtn();
   // lives, beating too
   for (var i=0;i<G.lives;i++) drawGem(18 + i*20, 44, 6.5 * (1 + (G.heart.scale - 1) * 0.6), { alpha: 0.9, pulse: G.heart.pulse * 0.5 });
 }
-function drawFireBtn(){
-  var b = fireBtn, r = b.r, k = b.press;
-  ctx.save();
-  ctx.globalAlpha = 0.92;
-  ctx.fillStyle = 'rgba(10,6,32,' + (0.55 + 0.25 * k) + ')';
-  ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, 6.2832); ctx.fill();
-  ctx.lineWidth = 2 + 2 * k;
-  ctx.strokeStyle = G.ammo > 0 ? col('heart', 0.75 + 0.25 * k) : 'rgba(253,248,240,.25)';
-  ctx.stroke();
-  if (k > 0){ ctx.strokeStyle = col('heart', 0.5 * k); ctx.lineWidth = 6 * k; ctx.beginPath(); ctx.arc(b.x, b.y, r + 4 + 6 * k, 0, 6.2832); ctx.stroke(); }
-  // a bolt, and the count beside it
-  ctx.fillStyle = G.ammo > 0 ? '#eefaff' : 'rgba(253,248,240,.3)';
-  boltShape(b.x - r * 0.32, b.y + r * 0.02, r / 26);
-  ctx.fill();
-  ctx.font = Math.round(r * 0.55) + "px 'Press Start 2P', monospace";
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(String(G.ammo), b.x + r * 0.26, b.y + 2);
-  ctx.restore();
+// the touch controls, in css px on their own layer. Over the picture they
+// are translucent; in the band below it they are solid.
+function drawControls(){
+  var c = cctx, W = CTL.W, H = CTL.H;
+  c.setTransform(CTL.dpr, 0, 0, CTL.dpr, 0, 0);
+  c.clearRect(0, 0, W, H);
+  if (G.mode !== 'play' || G.paused) return;
+  var over = CTL.band ? 1 : 0.6, R = CTL.base, K = CTL.knob;
+  // the joystick's resting outline, so the player knows where it lives
+  c.globalAlpha = (CTL.stick ? 0.18 : 0.42) * over;
+  c.lineWidth = 2; c.strokeStyle = COLORS.heart;
+  c.setLineDash([6, 8]);
+  c.beginPath(); c.arc(CTL.home.x, CTL.home.y, R, 0, 6.2832); c.stroke();
+  c.setLineDash([]);
+  // the base, under the thumb while held
+  var bx = CTL.stick ? CTL.stick.x : CTL.home.x, by = CTL.stick ? CTL.stick.y : CTL.home.y;
+  if (CTL.stick){
+    c.globalAlpha = over;
+    c.fillStyle = 'rgba(10,6,32,.55)';
+    c.beginPath(); c.arc(bx, by, R, 0, 6.2832); c.fill();
+    c.strokeStyle = col('heart', 0.7); c.lineWidth = 2; c.stroke();
+  }
+  // the knob
+  c.globalAlpha = over;
+  var kg = c.createRadialGradient(CTL.knobX - K * 0.3, CTL.knobY - K * 0.35, 2, CTL.knobX, CTL.knobY, K);
+  kg.addColorStop(0, CTL.stick ? '#ffffff' : col('heart', 0.9)); kg.addColorStop(0.5, col('heart', CTL.stick ? 0.95 : 0.5)); kg.addColorStop(1, col('heart', CTL.stick ? 0.55 : 0.2));
+  c.fillStyle = kg;
+  c.beginPath(); c.arc(CTL.knobX, CTL.knobY, K, 0, 6.2832); c.fill();
+  c.strokeStyle = col('heart', 0.8); c.lineWidth = 1.5; c.stroke();
+  // the fire button: a bolt, the count beside it, a flash on press
+  var f = CTL.fire, r = CTL.fireR, k = f.press;
+  c.globalAlpha = over;
+  c.fillStyle = 'rgba(10,6,32,' + (0.55 + 0.25 * k) + ')';
+  c.beginPath(); c.arc(f.x, f.y, r, 0, 6.2832); c.fill();
+  c.lineWidth = 2 + 2 * k;
+  c.strokeStyle = G.ammo > 0 ? col('heart', 0.75 + 0.25 * k) : 'rgba(253,248,240,.25)';
+  c.stroke();
+  if (k > 0){ c.strokeStyle = col('heart', 0.5 * k); c.lineWidth = 6 * k; c.beginPath(); c.arc(f.x, f.y, r + 4 + 6 * k, 0, 6.2832); c.stroke(); }
+  c.fillStyle = G.ammo > 0 ? '#eefaff' : 'rgba(253,248,240,.3)';
+  var saved = ctx; ctx = c; boltShape(f.x - r * 0.32, f.y + r * 0.02, r / 24); ctx = saved;
+  c.fill();
+  c.font = Math.round(r * 0.5) + "px 'Press Start 2P', monospace";
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(String(G.ammo), f.x + r * 0.28, f.y + 2);
+  c.globalAlpha = 1;
 }
 function drawHUDStatic(){
   ctx.save();
@@ -3822,6 +3882,7 @@ function applyTier(){
 }
 if (/debug/.test(location.hash)){
   window.BTD_TIER = setTier;
+  window.BTD_CTL = CTL;                          // the touch controls' layout, in css px
   window.BTD_WANT = function(n){ wantTier = n; };   // ask for a tier the safe way, as adapt() does
   // reset: true clears the ring so the next read covers only what follows
   window.BTD_PERF = function(reset){ var st = perfStats(); if (reset){ PERF.i = PERF.n = PERF.total = 0; } return st; };
@@ -3840,6 +3901,7 @@ function frame(now){
     PERF.errors++;
     console.error(err);
   }
+  if (isTouch) drawControls();
   perfPush(frameMs, performance.now() - t0);
   adapt(frameMs);
   if (window.BTD_G) drawPerf();
