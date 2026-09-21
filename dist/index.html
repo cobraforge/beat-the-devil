@@ -85,8 +85,16 @@ canvas{display:block}
   background:
     repeating-linear-gradient(to bottom, rgba(0,0,0,.30) 0 1px, rgba(0,0,0,0) 1px 3px),
     radial-gradient(130% 100% at 50% 50%, rgba(0,0,0,0) 52%, rgba(0,0,0,.72) 100%);
-  mix-blend-mode:multiply;
+  /* plain alpha: black over the picture is the same result as a multiply,
+     and it spares the compositor a blend layer every frame */
 }
+/* small screens: no bezel, the glass fills the screen */
+body.bare #wrap{padding:0}
+body.bare #monitor{padding:0;border-radius:0;background:none;box-shadow:none}
+body.bare #monitor::before,body.bare #led,body.bare #badge{display:none}
+body.bare #stage{border-radius:0}
+/* on touch screens the fire button owns the bottom-right corner; the mute goes bottom-left */
+body.touch #mute{right:auto;left:calc(6px * var(--s))}
 /* the glass itself: a soft reflection that sells the barrel curve */
 #stage::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
@@ -817,12 +825,19 @@ var BEZEL_X = 26 * 2, BEZEL_Y = 24 + 44;
 var isTouch = (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ||
               ('ontouchstart' in window);
 
+// on a small screen the bezel goes and the glass takes the whole screen
+var bare = false;
 function resize(){
-  var aw = wrap.clientWidth - 12, ah = wrap.clientHeight - 12;
-  scale = Math.min(aw / (LW + BEZEL_X), ah / (LH + BEZEL_Y));
+  bare = Math.min(window.innerWidth, window.innerHeight) < 600;
+  document.body.classList.toggle('bare', bare);
+  var pad = bare ? 0 : 12, bx = bare ? 0 : BEZEL_X, by = bare ? 0 : BEZEL_Y;
+  var aw = wrap.clientWidth - pad, ah = wrap.clientHeight - pad;
+  scale = Math.min(aw / (LW + bx), ah / (LH + by));
   var w = Math.max(160, Math.floor(LW * scale));
   var h = Math.max(240, Math.floor(LH * scale));
-  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // fewer device pixels on touch screens: every raster cost scales with them
+  var dpr = Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 2);
+  rect = null;
   cvs.width = Math.floor(w * dpr);
   cvs.height = Math.floor(h * dpr);
   cvs.style.width = w + 'px';
@@ -830,6 +845,7 @@ function resize(){
   stage.style.width = w + 'px';
   stage.style.height = h + 'px';
   monitor.style.setProperty('--s', (w / LW).toFixed(3));
+  layoutFireBtn();
   ctx.setTransform(cvs.width / LW, 0, 0, cvs.height / LH, 0, 0);
 }
 window.addEventListener('resize', resize);
@@ -838,9 +854,10 @@ resize();
 
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
 document.getElementById('tip').innerHTML = STORY + (isTouch
-  ? 'Drag to move<br>Tap to fire'
+  ? 'Drag anywhere to move<br>The round button fires'
   : 'Arrows / WASD to move<br>Space to fire<br>P pause &middot; M mute');
 if (isTouch){
+  document.body.classList.add('touch');
   document.getElementById('start-hint').textContent = 'Tap to start';
   document.getElementById('over-hint').textContent = 'Tap to try again';
   document.getElementById('win-hint').textContent = 'Tap to play again';
@@ -891,6 +908,58 @@ var FLOOR = LH - 8;
 function ceilingY(){ return G.phase === 'survive' ? LH * 0.25 : LH * 0.42; }
 // the tallest a floor flame may be and still leave 80 px of air above the ceiling
 function flameLimit(){ return LH - ceilingY() - 80; }
+
+// ---------- quality ----------
+// Three tiers. The game starts at the top and steps down when frames run long
+// (see frame()): never mid-attack, only in the survive phase or between his
+// attacks. Nothing here changes the rules, only what is drawn.
+var QUALITY = [
+  { name: 'full',   shimmer: true,  smoke: true,  glow: true,  parts: 1,   partCap: 260, edge: 1,   fireEvery: 1, fireLo: false, armsEvery: 1, devilEvery: 1 },
+  { name: 'medium', shimmer: false, smoke: true,  glow: true,  parts: 0.6, partCap: 140, edge: 1.5, fireEvery: 2, fireLo: false, armsEvery: 2, devilEvery: 2 },
+  { name: 'low',    shimmer: false, smoke: false, glow: false, parts: 0.3, partCap: 70,  edge: 2,   fireEvery: 2, fireLo: true,  armsEvery: 3, devilEvery: 3 }
+];
+var tier = 0, Q = QUALITY[0], wantTier = 0;
+// BTD_SKIP: debug, {block: true} leaves a drawing block out, to measure its cost
+function skip(k){ return window.BTD_SKIP && window.BTD_SKIP[k]; }
+// a shadow radius, or none on the low tier (BTD_NOSHADOW: A/B switch for measuring)
+function shadowR(r){ return Q.glow && !window.BTD_NOSHADOW ? r : 0; }
+// pre-rendered glows: a radial falloff in one colour, drawn with drawImage
+// where a shadowBlur would otherwise be re-blurred every frame. Keyed by
+// colour and size, rendered once. Off entirely on the low tier.
+var glowCache = {};
+function glowSprite(rgb, r){
+  var key = rgb.join(',') + '|' + r, c = glowCache[key];
+  if (c) return c;
+  var R = Math.ceil(r), size = R * 2;
+  c = document.createElement('canvas'); c.width = c.height = size;
+  var cx = c.getContext('2d'), g = cx.createRadialGradient(R, R, 0, R, R, R);
+  g.addColorStop(0, rgba(rgb[0], rgb[1], rgb[2], 0.55));
+  g.addColorStop(0.35, rgba(rgb[0], rgb[1], rgb[2], 0.22));
+  g.addColorStop(1, rgba(rgb[0], rgb[1], rgb[2], 0));
+  cx.fillStyle = g; cx.fillRect(0, 0, size, size);
+  return glowCache[key] = c;
+}
+// a glow centred on x,y: radius r (quantised so the cache stays small),
+// optionally stretched to w×h, at alpha a. Colour as [r,g,b].
+function drawGlow(x, y, r, rgb, a, w, h){
+  if (!Q.glow || window.BTD_NOSHADOW) return;
+  var R = Math.max(4, Math.round(r / 4) * 4), sp = glowSprite(rgb, R);
+  w = w || R * 2; h = h || R * 2;
+  var pa = ctx.globalAlpha;
+  ctx.globalAlpha = pa * (a == null ? 1 : a);
+  ctx.drawImage(sp, x - w / 2, y - h / 2, w, h);
+  ctx.globalAlpha = pa;
+}
+function setTier(n){
+  tier = clamp(n, 0, QUALITY.length - 1); Q = QUALITY[tier]; wantTier = tier; if (G) G.tier = tier;
+  faceFire = Q.fireLo ? faceFireLo : faceFireHi; colFire = Q.fireLo ? colFireLo : colFireHi;
+}
+// a particle, subject to the tier's share and cap
+function addPart(q){
+  if (Q.parts < 1 && Math.random() > Q.parts) return;
+  if (G.parts.length >= Q.partCap) return;
+  G.parts.push(q);
+}
 
 // ---------- fire ----------
 // A tiling value-noise field, and a small palette-mapped fire texture rendered
@@ -976,13 +1045,15 @@ var FIRE = (function(){
   }
   return { at: at, curl: curl, make: make };
 })();
-var faceFire = FIRE.make(128, 96);
-var colFire  = FIRE.make(96, 144);
+var faceFireHi = FIRE.make(128, 96), faceFireLo = FIRE.make(80, 60);
+var colFireHi  = FIRE.make(96, 144), colFireLo  = FIRE.make(60, 90);
+var faceFire = faceFireHi, colFire = colFireHi;   // swapped by setTier
 
 // ---------- state ----------
 var G = {};
 function reset(){
   G.mode = 'title';           // title | play | ending | over | won
+  G.tier = tier;
   G.t = 0;
   G.score = 0;
   G.lives = 3;
@@ -1028,14 +1099,28 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 14;
+  window.BTD_VERSION = 15;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
 // ---------- input ----------
 var keys = {};
 var fireQueued = false;
-var pointerDown = false, lastPX = 0, lastPY = 0, downT = 0, downMode = '', moved = 0;
+// Pointers are tracked by id from the moment they land. One that lands on the
+// fire button is a 'fire' pointer for its whole life and never moves the
+// heart; the first to land anywhere else is the 'move' pointer and never
+// fires. Fingers that arrive while the move pointer is held do nothing.
+var pointers = {}, movePtr = null, drag = null;
+var downT = 0, moved = 0;                         // mouse only: a tap fires
+// the fire button: bottom right, in thumb reach, at least 72 css px across
+var fireBtn = { x: 0, y: 0, r: 40, press: 0 };
+function layoutFireBtn(){
+  if (!fireBtn) return;                           // resize() runs once before this block
+  fireBtn.r = clamp(38 / Math.max(0.2, scale), 30, 64);
+  fireBtn.x = LW - 10 - fireBtn.r; fireBtn.y = LH - 10 - fireBtn.r;
+}
+layoutFireBtn();
+function onFireBtn(x, y){ return isTouch && Math.hypot(x - fireBtn.x, y - fireBtn.y) <= fireBtn.r * 1.15; }
 
 window.addEventListener('keydown', function(e){
   var k = e.key, space = k === ' ' || e.code === 'Space';
@@ -1054,41 +1139,54 @@ window.addEventListener('keydown', function(e){
   }
 });
 window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
-window.addEventListener('blur', function(){ keys = {}; pointerDown = false; });
+window.addEventListener('blur', function(){ keys = {}; pointers = {}; movePtr = null; drag = null; });
 document.addEventListener('visibilitychange', function(){
   if (document.hidden && G.mode === 'play' && !G.paused && !window.BTD_FREEZE) togglePause();
 });
 
+// the canvas rect, measured once per layout rather than per pointer event
+// (getBoundingClientRect forces layout every time it is asked)
+var rect = null;
+function canvasRect(){ return rect || (rect = cvs.getBoundingClientRect()); }
+window.addEventListener('scroll', function(){ rect = null; }, true);
 function toLogical(e){
-  var r = cvs.getBoundingClientRect();
+  var r = canvasRect();
   return { x: (e.clientX - r.left) / r.width * LW, y: (e.clientY - r.top) / r.height * LH };
 }
 stage.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  stage.setPointerCapture && stage.setPointerCapture(e.pointerId);
-  pointerDown = true;
-  var p = toLogical(e); lastPX = p.x; lastPY = p.y;
-  downT = performance.now(); downMode = G.mode; moved = 0;
-  if (G.mode === 'play'){ if (G.paused) togglePause(); }
-  else tryStart();
+  try { stage.setPointerCapture(e.pointerId); } catch(err){}   // synthetic pointers have no capture
+  var p = toLogical(e);
+  if (G.mode !== 'play'){ tryStart(); return; }
+  if (G.paused){ togglePause(); return; }
+  if (onFireBtn(p.x, p.y)){
+    pointers[e.pointerId] = { kind: 'fire' };
+    fireBtn.press = 1; fireQueued = true;          // on press, not release
+    return;
+  }
+  if (movePtr != null) return;
+  movePtr = e.pointerId;
+  pointers[e.pointerId] = { kind: 'move', x: p.x, y: p.y };
+  // the heart rides above the finger: whatever offset it lands with eases
+  // to one that keeps it clear of the thumb
+  drag = { ox: G.player.x - p.x, oy: G.player.y - p.y, t: 0 };
+  downT = performance.now(); moved = 0;
+  G.idleT = 0;
 });
 stage.addEventListener('pointermove', function(e){
-  if (!pointerDown) return;
+  var pt = pointers[e.pointerId];
+  if (!pt || pt.kind !== 'move') return;
   var p = toLogical(e);
-  var dx = p.x - lastPX, dy = p.y - lastPY;
-  if (G.mode === 'play' && !G.paused){
-    G.player.x += dx;
-    G.player.y += dy;
-  }
-  moved += Math.abs(dx) + Math.abs(dy);
-  lastPX = p.x; lastPY = p.y;
+  moved += Math.abs(p.x - pt.x) + Math.abs(p.y - pt.y);
+  pt.x = p.x; pt.y = p.y;
 });
-function endPointer(){
-  if (pointerDown && downMode === 'play' && G.mode === 'play' && !G.paused &&
-      moved < 10 && performance.now() - downT < 300){
-    fireQueued = true;   // a tap (not a drag) fires
-  }
-  pointerDown = false;
+function endPointer(e){
+  var pt = pointers[e.pointerId];
+  delete pointers[e.pointerId];
+  if (!pt || pt.kind !== 'move') return;
+  // a mouse tap (no button on screen) fires; a finger never does
+  if (!isTouch && G.mode === 'play' && !G.paused && moved < 10 && performance.now() - downT < 300) fireQueued = true;
+  movePtr = null; drag = null;
 }
 stage.addEventListener('pointerup', endPointer);
 stage.addEventListener('pointercancel', endPointer);
@@ -1368,7 +1466,7 @@ function spawnBreath(side){
 function burst(x, y, color, n, spd, grav){
   for (var i=0;i<(n||8);i++){
     var a = rnd(0, Math.PI*2), s = rnd(40, spd||210);
-    G.parts.push({ x:x, y:y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: rnd(0.3,0.75), t:0, c: color, r: rnd(1.3,3.2), g: grav == null ? 260 : grav });
+    addPart({ x:x, y:y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: rnd(0.3,0.75), t:0, c: color, r: rnd(1.3,3.2), g: grav == null ? 260 : grav });
   }
 }
 function addText(x, y, text, color, life, size){
@@ -1556,12 +1654,14 @@ function victory(){
 
 // ---------- update ----------
 function update(dt){
+  applyTier();
   G.t += dt;
   G.shake = decay(G.shake, 3.4, dt);
   G.flash = decay(G.flash, 3, dt);
   G.white = decay(G.white, 2.2, dt);
   G.lightning = decay(G.lightning, 2.0, dt);
   G.recoil = decay(G.recoil, 8, dt);
+  fireBtn.press = decay(fireBtn.press, 5, dt);
   if (G.herald > 0) G.herald -= dt;
   if (G.hold > 0) G.hold -= dt;
   if (G.devil) G.devil.kick = decay(G.devil.kick, 3, dt);
@@ -1616,13 +1716,24 @@ function update(dt){
   if (keys['arrowright']|| keys['d']) mx += 1;
   if (keys['arrowup']   || keys['w']) my -= 1;
   if (keys['arrowdown'] || keys['s']) my += 1;
+  var dragging = false;
+  if (drag && movePtr != null && pointers[movePtr]){
+    // the target: the finger plus an offset that eases to sit above it
+    var fp = pointers[movePtr];
+    drag.t += dt;
+    var k = smooth(drag.t / 0.35);
+    var ox = lerp(drag.ox, clamp(drag.ox, -30, 30), k), oy = lerp(drag.oy, Math.min(drag.oy, -90), k);
+    var ddx = fp.x + ox - p.x, ddy = fp.y + oy - p.y, dd = Math.hypot(ddx, ddy);
+    if (dd > 0.5){ mx = ddx / dd; my = ddy / dd; dragging = true; }
+    if (dragging && dd < sp * dt) sp = dd / dt;   // no overshoot
+  }
   if (pen === 'burn' && (mx || my)){ mx += rnd(-0.45, 0.45); my += rnd(-0.45, 0.45); }
   if (mx || my){
     var m = Math.hypot(mx,my) || 1;
     p.x += mx/m * sp * dt;
     p.y += my/m * sp * dt;
     G.idleT = 0;
-  } else if (!pointerDown){
+  } else if (movePtr == null){
     G.idleT += dt;
     if (G.idleT > 3 && !G.heart.flutterDue){ G.heart.flutterDue = true; G.idleT = -2; }   // it flutters, then waits again
   }
@@ -1835,7 +1946,7 @@ function moveHazards(dt, live){
       }
       // embers shed from the top and drift up on the turbulence
       if (fl.h > 30 && Math.random() < 0.4)
-        G.parts.push({ x: fl.x + rnd(-fl.w*0.3, fl.w*0.3), y: LH - fl.h + rnd(-6, 24), vx: rnd(-12, 12), vy: rnd(-70, -30),
+        addPart({ x: fl.x + rnd(-fl.w*0.3, fl.w*0.3), y: LH - fl.h + rnd(-6, 24), vx: rnd(-12, 12), vy: rnd(-70, -30),
                        life: rnd(0.7, 1.5), t: 0, c: Math.random() < 0.5 ? '#ffb060' : '#ff7a10', r: rnd(1.2, 2.4), g: -26, turb: 60 });
       burn = Math.abs(p.x - fl.x) < fl.w * (0.5 + 0.2 * fl.flare) + 4 && p.y > LH - fl.h - 6;
       if (burn) burnAt = [fl.x, p.y + 20];
@@ -1845,7 +1956,7 @@ function moveHazards(dt, live){
         // embers shed off the tail
         if (Math.random() < 0.6){
           var bv = Math.hypot(fl.vx, fl.vy) || 1;
-          G.parts.push({ x: fl.x - fl.vx / bv * rnd(8, 26) + rnd(-4, 4), y: fl.y - fl.vy / bv * rnd(8, 26) + rnd(-4, 4),
+          addPart({ x: fl.x - fl.vx / bv * rnd(8, 26) + rnd(-4, 4), y: fl.y - fl.vy / bv * rnd(8, 26) + rnd(-4, 4),
                          vx: -fl.vx * 0.08 + rnd(-20, 20), vy: -fl.vy * 0.08 + rnd(-30, 0), life: rnd(0.4, 0.9), t: 0,
                          c: Math.random() < 0.5 ? '#ffb060' : '#ff7a10', r: rnd(1, 2.2), g: -20, turb: 40 });
         }
@@ -1963,7 +2074,7 @@ function hurt(kind, hx, hy, vx, vy){
   h.stop = 0.2; h.big = true; h.arr = 2.0; h.next = h.since + rnd(0.05, 0.25);
   h.light = Math.max(0.35, h.light - 0.22);
   for (var li=0; li<16; li++)
-    G.parts.push({ x: p.x, y: p.y, vx: rnd(-90, 90), vy: rnd(-120, 20), life: rnd(0.5, 1.1), t: 0,
+    addPart({ x: p.x, y: p.y, vx: rnd(-90, 90), vy: rnd(-120, 20), life: rnd(0.5, 1.1), t: 0,
                    c: Math.random() < 0.5 ? COLORS.heart : '#ffffff', r: rnd(1, 2.6), g: -10, turb: 30 });
   if (G.arms) G.arms.creep = Math.max(0, 3 - G.lives);
   // the penalty, and the scar it leaves
@@ -2218,10 +2329,10 @@ function drawPlayer(){
   var speed = Math.hypot(p.vx, p.vy);
   var rot = settle + clamp(p.vx / 1400, -0.22, 0.22);
   if (speed > 150 && Math.random() < 0.8)
-    G.parts.push({ x: p.x - p.vx / speed * 8 + rnd(-3, 3), y: y - p.vy / speed * 8 + rnd(-3, 3), vx: -p.vx * 0.05, vy: -p.vy * 0.05,
+    addPart({ x: p.x - p.vx / speed * 8 + rnd(-3, 3), y: y - p.vy / speed * 8 + rnd(-3, 3), vx: -p.vx * 0.05, vy: -p.vy * 0.05,
                    life: rnd(0.18, 0.32), t: 0, c: col('heart', 0.5), r: rnd(1.5, 3), g: 0 });
   if (burn && speed > 40 && Math.random() < 0.5)
-    G.parts.push({ x: p.x + rnd(-6, 6), y: y + rnd(-6, 6), vx: -p.vx * 0.06 + rnd(-8, 8), vy: -p.vy * 0.06 - 30, life: rnd(0.5, 1.0), t: 0,
+    addPart({ x: p.x + rnd(-6, 6), y: y + rnd(-6, 6), vx: -p.vx * 0.06 + rnd(-8, 8), vy: -p.vy * 0.06 - 30, life: rnd(0.5, 1.0), t: 0,
                    c: 'rgba(30,18,30,.55)', r: rnd(3, 6), g: -14, turb: 20 });
   ctx.save();
   if (lit > 0){
@@ -2246,12 +2357,12 @@ function drawPlayer(){
     ctx.rotate(em.ang + q);
     ctx.translate(0, -12);          // tines in the heart, handle out along the arrival line
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.shadowColor = COLORS.ember; ctx.shadowBlur = 8;
+    drawGlow(0, 10, 16, RGB.ember, 0.5, 30, 60);
     ctx.strokeStyle = '#ff6a24'; ctx.lineWidth = 3;
     forkShape();
     ctx.restore();
     if (Math.random() < 0.7)
-      G.parts.push({ x: p.x + em.dir.x * 6 + rnd(-3, 3), y: y + em.dir.y * 6 + rnd(-3, 3), vx: em.dir.x * 20 + rnd(-10, 10), vy: -18 + rnd(-10, 10),
+      addPart({ x: p.x + em.dir.x * 6 + rnd(-3, 3), y: y + em.dir.y * 6 + rnd(-3, 3), vx: em.dir.x * 20 + rnd(-10, 10), vy: -18 + rnd(-10, 10),
                      life: rnd(0.3, 0.7), t: 0, c: Math.random() < 0.6 ? COLORS.heart : '#ffffff', r: rnd(0.8, 1.8), g: -8, turb: 20 });
   }
   // flame clinging to the struck side, licking upward, shrinking as the timer runs out
@@ -2259,7 +2370,7 @@ function drawPlayer(){
     var bk = Math.max(0, 1 - pen.t / 2.0), bx = p.x + dx + burn.dir.x * s * 0.9, by = y + dy + burn.dir.y * s * 0.6;
     var fh = 26 * bk;
     ctx.save();
-    ctx.shadowColor = '#ff6a10'; ctx.shadowBlur = 14;
+    drawGlow(bx, by - fh * 0.5, 20, [255, 106, 16], 0.7 * bk, 34, fh + 30);
     var fg = ctx.createLinearGradient(0, by, 0, by - fh);
     fg.addColorStop(0, 'rgba(255,220,120,.9)'); fg.addColorStop(0.5, 'rgba(255,110,10,.8)'); fg.addColorStop(1, 'rgba(255,40,10,0)');
     ctx.fillStyle = fg;
@@ -2271,7 +2382,7 @@ function drawPlayer(){
     ctx.closePath(); ctx.fill();
     ctx.restore();
     if (Math.random() < 0.4)
-      G.parts.push({ x: bx + rnd(-4, 4), y: by - fh * 0.6, vx: rnd(-8, 8), vy: rnd(-40, -20), life: rnd(0.3, 0.7), t: 0, c: '#ffb060', r: rnd(0.8, 1.6), g: -20, turb: 30 });
+      addPart({ x: bx + rnd(-4, 4), y: by - fh * 0.6, vx: rnd(-8, 8), vy: rnd(-40, -20), life: rnd(0.3, 0.7), t: 0, c: '#ffb060', r: rnd(0.8, 1.6), g: -20, turb: 30 });
   }
   ctx.restore();
 }
@@ -2288,8 +2399,7 @@ function boltShape(x, y, s){
 }
 function drawBolt(b){
   ctx.save();
-  ctx.shadowColor = COLORS.heart;
-  ctx.shadowBlur = 12;
+  drawGlow(b.x, b.y, 16, RGB.heart, 0.8, 26, 40);
   ctx.fillStyle = '#eefaff';
   boltShape(b.x, b.y, 1);
   ctx.fill();
@@ -2325,8 +2435,7 @@ function drawFork(f){
   ctx.rotate(f.rot);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.shadowColor = COLORS.ember;
-  ctx.shadowBlur = f.state === 'lock' ? 16 : 8;
+  drawGlow(0, 0, f.state === 'lock' ? 28 : 18, RGB.ember, f.state === 'lock' ? 0.9 : 0.6, 40, 70);
   ctx.strokeStyle = f.state === 'lock' ? '#ffb070' : '#ff6a24';
   ctx.lineWidth = 3;
   forkShape();
@@ -2372,13 +2481,13 @@ function flameColumn(x, h, w, seed, flare){
   if (h < 4) return;
   var t = G.t, top = LH - h;
   w = w * (1 + 0.35 * (flare || 0));
-  smokePlume(x, top, w, seed, t);
+  if (Q.smoke) smokePlume(x, top, w, seed, t);
   floorSpill(x, w, h);
   ctx.save();
   // silhouette: the edge churns rather than waves
   ctx.beginPath();
   ctx.moveTo(x - w*0.5, LH + 4);
-  var steps = Math.max(8, Math.floor(h / 9)), i, k;
+  var steps = Math.max(8, Math.floor(h / (9 * Q.edge))), i, k;
   for (i=0;i<=steps;i++){
     k = i/steps;
     ctx.lineTo(x - w*0.5*(1 - k*0.5) + flameEdge(k, seed, t, w), LH - h*k);
@@ -2388,7 +2497,7 @@ function flameColumn(x, h, w, seed, flare){
     ctx.lineTo(x + w*0.5*(1 - k*0.5) + flameEdge(k, seed + 0.37, t, w), LH - h*k);
   }
   ctx.closePath();
-  ctx.shadowColor = '#ff5a10'; ctx.shadowBlur = 26 + 20 * (flare || 0);
+  drawGlow(x, LH - h * 0.45, 40, [255, 90, 16], 0.8 + 0.5 * (flare || 0), w * 2.6 + 30, h + 90);
   var sg = ctx.createLinearGradient(0, LH, 0, top);
   sg.addColorStop(0, 'rgba(255,90,10,.6)');
   sg.addColorStop(0.55, 'rgba(255,60,10,.35)');
@@ -2397,25 +2506,38 @@ function flameColumn(x, h, w, seed, flare){
   ctx.fill();
   ctx.shadowBlur = 0;
   ctx.clip();
-  var sx = Math.floor(seed * 60) % 60;
-  ctx.drawImage(colFire.canvas, sx, 0, 36, colFire.h, x - w*0.7, top - 10, w*1.4, h + 14);
+  var win = Math.floor(colFire.w * 0.375), sx = Math.floor(seed * (colFire.w - win)) % (colFire.w - win);
+  ctx.drawImage(colFire.canvas, sx, 0, win, colFire.h, x - w*0.7, top - 10, w*1.4, h + 14);
   if (flare){
     ctx.fillStyle = 'rgba(255,240,200,' + (0.5 * flare) + ')';
     ctx.fillRect(x - w, top - 20, w * 2, h + 30);
   }
   ctx.restore();
-  // heat shimmer: everything seen through and just above the flame is displaced sideways
+  if (Q.shimmer) heatShimmer(x, top, w, seed, t);
+}
+// heat shimmer: everything seen through and just above the flame is displaced
+// sideways. The region behind the flame is copied ONCE into a buffer and the
+// strips are drawn from that; drawing the canvas onto itself would force a
+// full-canvas snapshot per strip.
+var shimmerBuf = document.createElement('canvas'), shimmerCtx = shimmerBuf.getContext('2d');
+function heatShimmer(x, top, w, seed, t){
   var S = cvs.width / LW, sh = 7;
+  var y0 = Math.max(2, top - 70), sy0 = Math.floor(y0 * S);
+  var sxx = Math.max(0, Math.floor((x - w * 0.9) * S)), sw = Math.floor(w * 1.8 * S);
+  var shTot = Math.min(cvs.height - sy0, Math.ceil((LH - 6 - y0) * S));
+  if (sw <= 0 || shTot <= 0) return;
+  if (shimmerBuf.width < sw || shimmerBuf.height < shTot){ shimmerBuf.width = Math.max(shimmerBuf.width, sw); shimmerBuf.height = Math.max(shimmerBuf.height, shTot); }
+  shimmerCtx.clearRect(0, 0, sw, shTot);
+  shimmerCtx.drawImage(cvs, sxx, sy0, sw, shTot, 0, 0, sw, shTot);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  for (var yy = Math.max(2, top - 70); yy < LH - 6; yy += sh){
+  for (var yy = y0; yy < LH - 6; yy += sh){
     var above = yy < top ? 1 - (top - yy) / 70 : 1;
     var amp = yy < top ? 6 * above : 2.6;
     var off = (FIRE.at(yy * 0.22 + seed * 200, t * 85) - 0.5) * 2 * amp;
-    var sy = Math.floor(yy * S), sxx = Math.max(0, Math.floor((x - w * 0.9) * S));
-    var sw = Math.floor(w * 1.8 * S), shh = Math.ceil(sh * S);
+    var sy = Math.floor(yy * S), shh = Math.ceil(sh * S);
     if (sy + shh > cvs.height) break;
-    ctx.drawImage(cvs, sxx, sy, sw, shh, sxx + off * S, sy, sw, shh);
+    ctx.drawImage(shimmerBuf, 0, sy - sy0, sw, shh, sxx + off * S, sy, sw, shh);
   }
   ctx.restore();
 }
@@ -2443,7 +2565,7 @@ function drawFlame(fl){
     ctx.lineTo(inner, LH);
     ctx.lineTo(inner, top + 60);
     ctx.closePath();
-    ctx.shadowColor = COLORS.ember; ctx.shadowBlur = 30;
+    drawGlow((outer + inner) / 2, (top + LH) / 2, 60, RGB.ember, 0.8, Math.abs(outer - inner) + 90, LH - top + 60);
     ctx.fillStyle = 'rgba(255,110,10,.75)';
     ctx.fill();
     ctx.shadowBlur = 0;
@@ -2467,7 +2589,7 @@ function drawFireball(f){
   ctx.translate(f.x, f.y);
   ctx.rotate(ang);
   // tail: tapering behind, edges churning
-  ctx.shadowColor = '#ff6a10'; ctx.shadowBlur = 18;
+  drawGlow(-14, 0, 24, [255, 106, 16], 0.8, 70, 40);
   var tg = ctx.createLinearGradient(0, 0, -46, 0);
   tg.addColorStop(0, 'rgba(255,200,90,.95)'); tg.addColorStop(0.4, 'rgba(255,110,10,.8)'); tg.addColorStop(1, 'rgba(255,40,10,0)');
   ctx.fillStyle = tg;
@@ -2495,7 +2617,7 @@ function drawScorchRing(f){
   var k = f.t / f.fuse, r = lerp(42, 14, smooth(k));
   var flick = 0.55 + 0.45 * Math.abs(Math.sin(f.t * (6 + k * 26)));
   ctx.save();
-  ctx.shadowColor = '#ff6a10'; ctx.shadowBlur = 6 + 18 * k;
+  ctx.shadowColor = '#ff6a10'; ctx.shadowBlur = shadowR(6 + 18 * k);
   ctx.strokeStyle = rgba(255, 90 + 130 * k, 20 + 60 * k, 0.35 + 0.65 * k * flick);
   ctx.lineWidth = 2 + 2.5 * k;
   ctx.beginPath(); ctx.ellipse(f.tx, f.ty, r, r * 0.45, 0, 0, 6.2832); ctx.stroke();
@@ -2505,7 +2627,7 @@ function drawScorchRing(f){
   ctx.beginPath(); ctx.ellipse(f.tx, f.ty, r, r * 0.45, 0, 0, 6.2832); ctx.fill();
   // the coal at the centre
   ctx.fillStyle = k < 0.8 ? '#c8320a' : '#ffb070';
-  ctx.shadowColor = COLORS.ember; ctx.shadowBlur = 6 + 12 * k;
+  ctx.shadowColor = COLORS.ember; ctx.shadowBlur = shadowR(6 + 12 * k);
   ctx.beginPath(); ctx.arc(f.tx, f.ty, 3 + 2.5 * k, 0, 6.2832); ctx.fill();
   ctx.restore();
 }
@@ -2515,7 +2637,7 @@ function drawDetonation(f){
   ctx.globalAlpha = Math.max(0, 1 - bt / 0.8);
   var g = ctx.createRadialGradient(f.tx, f.ty, 1, f.tx, f.ty, br + 6);
   g.addColorStop(0, '#ffe58a'); g.addColorStop(0.5, '#ff7a10'); g.addColorStop(1, 'rgba(255,26,0,0)');
-  ctx.fillStyle = g; ctx.shadowColor = COLORS.ember; ctx.shadowBlur = 16;
+  ctx.fillStyle = g; ctx.shadowColor = COLORS.ember; ctx.shadowBlur = shadowR(16);
   ctx.beginPath(); ctx.arc(f.tx, f.ty, br + 6, 0, 6.2832); ctx.fill();
   // a shock ring racing out
   ctx.strokeStyle = 'rgba(255,220,160,' + (0.8 * Math.max(0, 1 - bt / 0.35)) + ')';
@@ -2530,7 +2652,7 @@ function drawJet(j){
   // the vent: a notch in the wall that glows as it charges
   var charge = aiming ? j.t / j.aimT : 1;
   ctx.shadowColor = locked ? COLORS.sulfur : '#ff6a10';
-  ctx.shadowBlur = 8 + 18 * charge;
+  ctx.shadowBlur = shadowR(8 + 18 * charge);
   ctx.fillStyle = '#12040a';
   ctx.beginPath(); ctx.ellipse(j.ox, j.oy, 10, 16, 0, 0, 6.2832); ctx.fill();
   var vg = ctx.createRadialGradient(j.ox, j.oy, 1, j.ox, j.oy, 12);
@@ -2572,7 +2694,7 @@ function drawJet(j){
     ctx.lineTo(L * k, 20 * (1 - k*0.55) + e);
   }
   ctx.closePath();
-  ctx.shadowColor = '#ff5a10'; ctx.shadowBlur = 24;
+  ctx.shadowColor = '#ff5a10'; ctx.shadowBlur = shadowR(24);
   var lg = ctx.createLinearGradient(0, 0, L, 0);
   lg.addColorStop(0, 'rgba(255,240,180,.95)');
   lg.addColorStop(0.5, 'rgba(255,110,10,.7)');
@@ -2682,21 +2804,19 @@ function drawDevil(d){
 
   // horns: char, with burning edges
   [-1, 1].forEach(function(dir){
+    drawGlow(cx + dir*w*0.40, cy - h*0.52, 24, [255, 106, 16], 0.5, 50, 70);
     hornPath(cx + dir*w*0.40, cy - h*0.40, dir);
     ctx.fillStyle = '#0c0203'; ctx.fill();
-    ctx.shadowColor = '#ff6a10'; ctx.shadowBlur = 10;
     ctx.strokeStyle = 'rgba(255,110,30,.7)'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.shadowBlur = 0;
   });
 
   // --- the skull: fire skin over bone. Brow ridge, cheekbones, a narrowing jaw, a chin.
   var skull = skullPoints(cx, cy, w, h, sk);
+  drawGlow(cx + sk * 0.3, cy + h * 0.05, 48, [255, 74, 0], 0.85, w * 1.5, h * 2.1);
   ctx.save();
   skullPath(skull);
-  ctx.shadowColor = '#ff4a00'; ctx.shadowBlur = 24;
   ctx.fillStyle = '#3a0a04';
   ctx.fill();
-  ctx.shadowBlur = 0;
   ctx.clip();
   ctx.drawImage(faceFire.canvas, cx - w*0.6, cy - h*0.9, w*1.2, h*1.76);
   // planes: the brow ridge lit on top and shadowed beneath
@@ -2786,11 +2906,10 @@ function drawDevil(d){
   var mouth = d.mouth || 0, glow = d.mouthGlow || 0;
   var mw = 64 + 10 * mouth, mh = 13 + 40 * mouth, mx = cx + sk, my = cy + 52 + mh * 0.5;
   var mpts = mouthPoints(mx, my, mw, mh, G.t);
+  drawGlow(mx, my, 32, [255, 138, 32], 0.6 + 0.8 * glow, mw * 2.2 + 60 * glow, mh * 2.4 + 60 * glow);
   ctx.save();
   skullPath(mpts);
-  ctx.shadowColor = '#ff8a20'; ctx.shadowBlur = 18 + 30 * glow;
   ctx.fillStyle = '#160303'; ctx.fill();
-  ctx.shadowBlur = 0;
   ctx.clip();
   var tg = ctx.createRadialGradient(mx, my + mh * 0.55, 2, mx, my + mh * 0.15, mw * 1.05);
   tg.addColorStop(0, 'rgba(255,220,120,.95)'); tg.addColorStop(0.35, 'rgba(255,110,10,.85)'); tg.addColorStop(0.75, 'rgba(120,20,4,.9)'); tg.addColorStop(1, 'rgba(12,2,2,1)');
@@ -2879,7 +2998,7 @@ function drawDevil(d){
       bg.addColorStop(1, 'rgba(255,42,0,.35)');
       ctx.fillStyle = bg;
       ctx.shadowColor = COLORS.sulfur;
-      ctx.shadowBlur = 24;
+      ctx.shadowBlur = shadowR(24);
       ctx.beginPath();
       ctx.moveTo(ex - 8, ey);
       ctx.lineTo(ex + 8, ey);
@@ -2911,8 +3030,7 @@ function drawGem(x, y, s, o){
   ctx.rotate(o.rot || 0);
   ctx.scale(o.sx || 1, o.sy || 1);
   ctx.globalAlpha = (o.alpha == null ? 1 : o.alpha) * (0.75 + 0.25 * glow);
-  ctx.shadowColor = rgba(core[0], core[1], core[2], 1);
-  ctx.shadowBlur = (10 + 14 * pulse) * glow;
+  drawGlow(0, 0, s * (2.0 + 0.9 * pulse), core, 0.9 * glow);
   var g = ctx.createRadialGradient(-s*0.25, -s*0.35, 1, 0, 0, s * (1.15 + 0.3 * breath));
   g.addColorStop(0, dmg >= 2 ? '#dfe8ee' : '#ffffff');
   g.addColorStop(0.32, rgba(core[0], core[1], core[2], 1));
@@ -2988,7 +3106,7 @@ function drawGem(x, y, s, o){
       ctx.beginPath(); cr.forEach(function(pt, i){ if (i) ctx.lineTo(pt[0]*s + 0.6, pt[1]*s + 0.6); else ctx.moveTo(pt[0]*s + 0.6, pt[1]*s + 0.6); }); ctx.stroke();
       if (o.leak && s > 8 && Math.random() < 0.35){
         var pt2 = cr[Math.floor(Math.random() * cr.length)];
-        G.parts.push({ x: x + pt2[0]*s, y: y + pt2[1]*s, vx: rnd(-14, 14), vy: rnd(-30, -8), life: rnd(0.4, 0.9), t: 0,
+        addPart({ x: x + pt2[0]*s, y: y + pt2[1]*s, vx: rnd(-14, 14), vy: rnd(-30, -8), life: rnd(0.4, 0.9), t: 0,
                        c: Math.random() < 0.6 ? COLORS.heart : '#ffffff', r: rnd(0.8, 1.8), g: -6, turb: 20 });
       }
     }
@@ -3246,9 +3364,16 @@ function drawArm(a){
   }
   ctx.restore();
 }
+var armsLayer = makeLayer(), devilLayer = makeLayer();
 function drawArms(front){
   var A = G.arms, T = G.taken && G.mode === 'ending' ? G.taken : null;
   if (A.present <= 0) return;
+  var busy = A.l.mode !== 'idle' || A.r.mode !== 'idle' || T;
+  if (Q.armsEvery > 1 && !busy){
+    // idle sway may lag a frame or two; a slam or a reach never does
+    armsLayer.draw(Math.floor(PERF.total / Q.armsEvery), function(){ drawArm(A.l); drawArm(A.r); });
+    return;
+  }
   drawArm(A.l);
   if (!(T && T.point > 0)) drawArm(A.r);       // the right hand is busy pointing
   if (front && T && T.grabbed){
@@ -3348,7 +3473,7 @@ function drawQuiver(){
       boltShape(x, y, 0.75);
       ctx.stroke();
     } else {
-      ctx.shadowColor = COLORS.heart; ctx.shadowBlur = 8;
+      drawGlow(x, y + 4, 12, RGB.heart, 0.7, 20, 30);
       ctx.fillStyle = '#eefaff';
       boltShape(x, y, 0.75);
       ctx.fill();
@@ -3357,7 +3482,54 @@ function drawQuiver(){
   }
 }
 
+// an offscreen layer at device resolution, drawn with drawImage; render()
+// is called again only when key changes
+function makeLayer(){
+  var c = document.createElement('canvas'), cx = c.getContext('2d');
+  return {
+    canvas: c, key: null,
+    draw: function(key, render){
+      if (c.width !== cvs.width || c.height !== cvs.height){ c.width = cvs.width; c.height = cvs.height; this.key = null; }
+      if (key !== this.key){
+        this.key = key;
+        cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, c.width, c.height);
+        cx.setTransform(cvs.width / LW, 0, 0, cvs.height / LH, 0, 0);
+        var saved = ctx; ctx = cx; render(); ctx = saved;
+      }
+      ctx.drawImage(c, 0, 0, c.width, c.height, 0, 0, LW, LH);
+    }
+  };
+}
+var hudLayer = makeLayer(), vignetteLayer = makeLayer(), mistStrip = null;
 function drawHUD(){
+  var alive = G.devil ? livingEyes(G.devil).length : 0, open = G.devil ? anyEyeOpen(G.devil) : false;
+  var label = G.phase === 'survive' ? 'S' : (G.devil && !G.devil.dying && (G.devil.state === 'open' || G.devil.state === 'attack') ? (open ? 'O' : 'C') : '-');
+  var key = [Math.floor(G.score), hi, G.ammo, G.phase, Math.round(clamp(G.surv / G.SURV, 0, 1) * 200), alive, label].join('|');
+  hudLayer.draw(key, drawHUDStatic);
+  if (isTouch) drawFireBtn();
+  // lives, beating too
+  for (var i=0;i<G.lives;i++) drawGem(18 + i*20, 44, 6.5 * (1 + (G.heart.scale - 1) * 0.6), { alpha: 0.9, pulse: G.heart.pulse * 0.5 });
+}
+function drawFireBtn(){
+  var b = fireBtn, r = b.r, k = b.press;
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = 'rgba(10,6,32,' + (0.55 + 0.25 * k) + ')';
+  ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, 6.2832); ctx.fill();
+  ctx.lineWidth = 2 + 2 * k;
+  ctx.strokeStyle = G.ammo > 0 ? col('heart', 0.75 + 0.25 * k) : 'rgba(253,248,240,.25)';
+  ctx.stroke();
+  if (k > 0){ ctx.strokeStyle = col('heart', 0.5 * k); ctx.lineWidth = 6 * k; ctx.beginPath(); ctx.arc(b.x, b.y, r + 4 + 6 * k, 0, 6.2832); ctx.stroke(); }
+  // a bolt, and the count beside it
+  ctx.fillStyle = G.ammo > 0 ? '#eefaff' : 'rgba(253,248,240,.3)';
+  boltShape(b.x - r * 0.32, b.y + r * 0.02, r / 26);
+  ctx.fill();
+  ctx.font = Math.round(r * 0.55) + "px 'Press Start 2P', monospace";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(G.ammo), b.x + r * 0.26, b.y + 2);
+  ctx.restore();
+}
+function drawHUDStatic(){
   ctx.save();
   ctx.font = "10px 'Press Start 2P', monospace";
   ctx.textBaseline = 'top';
@@ -3367,9 +3539,6 @@ function drawHUD(){
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(199,154,143,.9)';
   ctx.fillText('HI ' + String(hi).padStart(6,'0'), LW - 12, 12);
-
-  // lives, beating too
-  for (var i=0;i<G.lives;i++) drawGem(18 + i*20, 44, 6.5 * (1 + (G.heart.scale - 1) * 0.6), { alpha: 0.9, pulse: G.heart.pulse * 0.5 });
 
   drawQuiver();
 
@@ -3431,7 +3600,7 @@ function drawHerald(){
   ctx.font = "20px 'Press Start 2P', monospace";
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = COLORS.heart; ctx.shadowBlur = 24;
+  ctx.shadowColor = COLORS.heart; ctx.shadowBlur = shadowR(24);
   ctx.fillStyle = COLORS.title;
   var jx = rnd(-1,1) * 2, jy = rnd(-1,1) * 2;
   ctx.fillText("HE'S HERE", LW/2 + jx, LH*0.5 + jy);
@@ -3449,7 +3618,7 @@ function drawLightning(){
   if (k > 0.55 && G.boltPath){
     ctx.globalAlpha = (k - 0.55) / 0.45;
     ctx.strokeStyle = '#fff4e0';
-    ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 14;
+    ctx.shadowColor = '#ffffff'; ctx.shadowBlur = shadowR(14);
     ctx.lineWidth = 2;
     ctx.beginPath();
     G.boltPath.forEach(function(pt, i){ if (i) ctx.lineTo(pt.x, pt.y); else ctx.moveTo(pt.x, pt.y); });
@@ -3460,12 +3629,15 @@ function drawLightning(){
 
 // darkness closes in over the survive phase: radius 0.72 → 0.5
 function drawVignette(){
-  var r = lerp(0.72, 0.5, G.prog);
-  var g = ctx.createRadialGradient(LW/2, LH/2, LH * r * 0.55, LW/2, LH/2, LH * (r + 0.1));
-  g.addColorStop(0, col('void', 0));
-  g.addColorStop(1, col('void', 0.86));
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, LW, LH);
+  var step = Math.round(G.prog * 40);
+  vignetteLayer.draw(step, function(){
+    var r = lerp(0.72, 0.5, step / 40);
+    var g = ctx.createRadialGradient(LW/2, LH/2, LH * r * 0.55, LW/2, LH/2, LH * (r + 0.1));
+    g.addColorStop(0, col('void', 0));
+    g.addColorStop(1, col('void', 0.86));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, LW, LH);
+  });
   if (G.lives === 1 && (G.mode === 'play' || G.mode === 'ending')){
     var a = 0.10 + 0.2 * G.heart.pulse;
     var rg = ctx.createRadialGradient(LW/2, LH/2, LH*0.3, LW/2, LH/2, LH*0.7);
@@ -3484,7 +3656,7 @@ function drawPaused(){
   ctx.textBaseline = 'middle';
   ctx.font = "14px 'Press Start 2P', monospace";
   ctx.fillStyle = COLORS.sulfur;
-  ctx.shadowColor = COLORS.sulfur; ctx.shadowBlur = 12;
+  ctx.shadowColor = COLORS.sulfur; ctx.shadowBlur = shadowR(12);
   ctx.fillText('PAUSED', LW/2, LH/2 - 12);
   ctx.shadowBlur = 0;
   ctx.font = "7px 'Press Start 2P', monospace";
@@ -3501,8 +3673,9 @@ function draw(){
   }
   // the fire textures, once per frame
   var needFire = G.flames.length || (G.devil && G.devil.state !== 'wait' && !G.devil.dead);
-  if (needFire){ colFire.render(G.t, 'column'); }
-  if (G.devil && G.devil.state !== 'wait' && !G.devil.dead) faceFire.render(G.t, 'face');
+  var fireTick = Q.fireEvery === 1 || (PERF.total % Q.fireEvery) === 0;
+  if (needFire && fireTick){ colFire.render(G.t, 'column'); }
+  if (G.devil && G.devil.state !== 'wait' && !G.devil.dead && fireTick) faceFire.render(G.t, 'face');
 
   ctx.save();
   if (G.shake > 0){
@@ -3515,11 +3688,14 @@ function draw(){
   ctx.fillRect(-20, -20, LW+40, LH+40);
   // violet mist above the floor line, breathing with the heart; fire warms it once he is here
   var mist = 0.55 + 0.25 * pulse;
-  var hg = ctx.createLinearGradient(0, LH, 0, LH - 260);
-  hg.addColorStop(0, rgba(M[0], M[1], M[2], mist));
-  hg.addColorStop(1, rgba(M[0], M[1], M[2], 0));
-  ctx.fillStyle = hg;
-  ctx.fillRect(-20, LH - 260, LW + 40, 280);
+  if (!skip('mist')){
+  if (!mistStrip){
+    mistStrip = document.createElement('canvas'); mistStrip.width = 4; mistStrip.height = 280;
+    var mc = mistStrip.getContext('2d'), hg = mc.createLinearGradient(0, 280, 0, 20);
+    hg.addColorStop(0, rgba(M[0], M[1], M[2], 1)); hg.addColorStop(1, rgba(M[0], M[1], M[2], 0));
+    mc.fillStyle = hg; mc.fillRect(0, 0, 4, 280);
+  }
+  ctx.globalAlpha = mist; ctx.drawImage(mistStrip, -20, LH - 260, LW + 40, 280); ctx.globalAlpha = 1;
   if (G.inferno || G.phase === 'devil'){
     var fglow = (G.inferno ? 0.32 : 0.12) + 0.16 * pulse;
     var fg2 = ctx.createLinearGradient(0, LH, 0, LH - (G.inferno ? 300 : 200));
@@ -3527,6 +3703,7 @@ function draw(){
     fg2.addColorStop(1, col('ember', 0));
     ctx.fillStyle = fg2;
     ctx.fillRect(-20, LH - 300, LW + 40, 320);
+  }
   }
   if (G.mode === 'title') drawTitleHearts();
 
@@ -3549,13 +3726,18 @@ function draw(){
   ctx.moveTo(0, FLOOR); ctx.lineTo(LW, FLOOR);
   ctx.stroke();
 
-  if (G.lightning > 0 && G.phase === 'devil') drawLightning();
-  if (G.watch) drawWatch();
+  if (G.lightning > 0 && G.phase === 'devil' && !skip('lightning')) drawLightning();
+  if (G.watch && !skip('watch')) drawWatch();
 
   var taken = G.taken && G.mode === 'ending';
-  if (G.devil) drawDevil(G.devil);
-  if (G.arms && !taken) drawArms();
-  G.flames.forEach(drawFlame);
+  if (G.devil && !skip('devil')){
+    // on lower tiers he is redrawn every 2nd or 3rd frame; the eyes and beams
+    // are attack telegraphs, and a frame of lag is well inside their windows
+    if (Q.devilEvery > 1 && !G.devil.dead) devilLayer.draw(Math.floor(PERF.total / Q.devilEvery), function(){ drawDevil(G.devil); });
+    else drawDevil(G.devil);
+  }
+  if (G.arms && !taken && !skip('arms')) drawArms();
+  if (!skip('flames')) G.flames.forEach(drawFlame);
   G.forks.forEach(drawFork);
   G.loose.forEach(function(L){
     ctx.save(); ctx.translate(L.x, L.y); ctx.rotate(L.rot); ctx.globalAlpha = Math.max(0, 1 - L.t / 3);
@@ -3580,8 +3762,8 @@ function draw(){
 
   ctx.restore();
 
-  if (G.mode !== 'title') drawVignette();
-  if (G.mode === 'play') drawHUD();
+  if (G.mode !== 'title' && !skip('vignette')) drawVignette();
+  if (G.mode === 'play' && !skip('hud')) drawHUD();
   if (G.herald > 0) drawHerald();
   if (G.flash > 0){
     ctx.fillStyle = 'rgba(255,42,0,' + (G.flash * 0.4) + ')';
@@ -3594,17 +3776,73 @@ function draw(){
   if (G.paused) drawPaused();
 }
 
+// ---------- frame-time telemetry ----------
+// A ring of the last 120 frames: the rAF interval (what the player feels) and
+// the time spent in update+draw (what this code costs). Drawn as an overlay
+// with #debug, read by BTD_PERF() and by the adaptive quality step.
+var PERF = { N: 120, frame: new Float32Array(120), work: new Float32Array(120), i: 0, n: 0, total: 0, errors: 0 };
+function perfPush(frameMs, workMs){
+  PERF.frame[PERF.i] = frameMs; PERF.work[PERF.i] = workMs;
+  PERF.i = (PERF.i + 1) % PERF.N; if (PERF.n < PERF.N) PERF.n++; PERF.total++;
+}
+function perfStats(){
+  var n = PERF.n, f = [], w = 0, mx = 0;
+  for (var i=0;i<n;i++){ f.push(PERF.frame[i]); w += PERF.work[i]; if (PERF.frame[i] > mx) mx = PERF.frame[i]; }
+  if (!n) return { n: 0 };
+  f.sort(function(a, b){ return a - b; });
+  var sum = 0; for (i=0;i<n;i++) sum += f[i];
+  return { n: n, total: PERF.total, errors: PERF.errors, avg: sum / n, p95: f[Math.min(n - 1, Math.floor(n * 0.95))], max: mx, work: w / n };
+}
+function drawPerf(){
+  var st = perfStats(); if (!st.n) return;
+  ctx.save(); ctx.setTransform(cvs.width / LW, 0, 0, cvs.height / LH, 0, 0);
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(4, LH - 40, 200, 36);
+  ctx.fillStyle = st.avg > 20 ? '#ff5a1f' : '#9fe8ff'; ctx.font = '7px monospace';
+  ctx.fillText('frame ' + st.avg.toFixed(1) + 'ms  p95 ' + st.p95.toFixed(1) + '  max ' + st.max.toFixed(0), 8, LH - 29);
+  ctx.fillText('work ' + st.work.toFixed(1) + 'ms  dpr ' + (cvs.width / parseFloat(cvs.style.width)).toFixed(2) + '  parts ' + G.parts.length + '  fl ' + G.flames.length, 8, LH - 18);
+  ctx.fillText('touch ' + (isTouch ? 1 : 0) + '  ' + cvs.width + 'x' + cvs.height, 8, LH - 7);
+  ctx.restore();
+}
+// adaptive quality: a rolling one-second average over 20 ms asks for the next
+// tier down. The request is applied by applyTier() only when it is safe.
+var slowAcc = 0, slowN = 0, slowT = 0;
+function adapt(frameMs){
+  if (frameMs > 250) return;                       // a tab switch, not a slow frame
+  if (window.BTD_LOCK_TIER) return;               // measuring: hold the tier
+  slowAcc += frameMs; slowN++; slowT += frameMs;
+  if (slowT < 1000) return;
+  var avg = slowAcc / slowN;
+  slowAcc = 0; slowN = 0; slowT = 0;
+  if (avg > 20 && wantTier === tier && tier < QUALITY.length - 1) wantTier = tier + 1;
+}
+function applyTier(){
+  if (wantTier === tier) return;
+  var d = G.devil, safe = G.mode !== 'play' || G.phase === 'survive' || !d || d.state === 'wait' || d.state === 'open' || d.dead;
+  if (safe) setTier(wantTier);
+}
+if (/debug/.test(location.hash)){
+  window.BTD_TIER = setTier;
+  window.BTD_WANT = function(n){ wantTier = n; };   // ask for a tier the safe way, as adapt() does
+  // reset: true clears the ring so the next read covers only what follows
+  window.BTD_PERF = function(reset){ var st = perfStats(); if (reset){ PERF.i = PERF.n = PERF.total = 0; } return st; };
+}
+
 // ---------- loop ----------
 var last = performance.now();
 function frame(now){
   var dt = Math.min(0.033, (now - last) / 1000);
+  var frameMs = now - last, t0 = performance.now();
   last = now;
   try {
     if (!G.paused && !window.BTD_FREEZE) update(dt);   // BTD_FREEZE: debug, holds the state for a screenshot
     draw();
   } catch(err){
+    PERF.errors++;
     console.error(err);
   }
+  perfPush(frameMs, performance.now() - t0);
+  adapt(frameMs);
+  if (window.BTD_G) drawPerf();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

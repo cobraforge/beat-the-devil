@@ -124,6 +124,26 @@ whole run, and two of them are for his eyes.
     as it moves. It leaves a permanent charred patch at the impact point. A
     burn while a fork is embedded burns the fork away early.
 
+## On a phone
+
+- **Touch controls.** Drag anywhere to move the heart; it rides about 90 px
+  above the finger so the thumb never covers it. A round button in the
+  bottom-right corner (at least 72 css px across, in thumb reach) fires on
+  press, not release, and shows the bolts left. Pointers are tracked by id: a
+  finger that lands on the button never moves the heart, a drag never fires,
+  and a second finger can fire mid-drag. The drag is a target the heart moves
+  toward at its normal speed, so the embed and burn penalties apply to touch
+  exactly as to keys. The title card explains the button on touch devices.
+- **Layout.** On screens under 600 px the bezel goes and the glass takes the
+  whole width; the mute button moves to the bottom-left.
+- **Performance.** Touch devices cap the device pixel ratio at 1.5. Three
+  quality tiers (`QUALITY` in `game.js`: full, medium, low) trade heat
+  shimmer, smoke, glow sprites, particle share, flame edge detail, fire
+  texture resolution and how often his face and the arms are redrawn. The
+  game starts at full and steps down when the rolling one-second frame average
+  passes 20 ms, applied only in the survive phase or between his attacks,
+  never mid-attack. Nothing in the tiers changes the rules.
+
 ## Files
 
 - `index.html` — page shell: canvas, title / game-over / win overlays, mute button
@@ -132,6 +152,7 @@ whole run, and two of them are for his eyes.
                  is slaved to the heartbeat (survive, devil, title, dirge, win)
 - `game.js`    — the game: heartbeat clock, fire renderer, input, hazards, devil AI, endings, rendering
 - `build.py`   — bundles everything into `dist/index.html`; `dist/` is the deployable site root
+- `dev/bot.js` — the imperfect playtest bot; `dev/perf.py` — frame-time measurement under throttling
 
 No build step, no assets. Plain HTML/CSS/JS; all audio is synthesised at runtime.
 
@@ -161,6 +182,40 @@ object), `BTD_STEP(dt)` (advance one frame by hand) and `BTD_VERSION`. Set
 `window.BTD_FREEZE = true` to hold the state without the pause overlay, and
 `window.BTD_HEART_SCALE = 5` to magnify the heart for a look at its damage.
 Handy for jumping to the fight: `BTD_G.surv = 41.9`.
+
+With `#debug` a frame-time overlay sits in the bottom-left: rolling average,
+p95 and max rAF interval, time in update+draw, device pixel ratio, particle
+and flame counts. `BTD_PERF()` returns the same numbers (`BTD_PERF(true)`
+resets the ring), `BTD_TIER(n)` pins a quality tier, `BTD_WANT(n)` requests
+one the safe way, `window.BTD_LOCK_TIER = true` stops the adaptive step,
+`window.BTD_NOSHADOW = true` and `window.BTD_SKIP = {devil: true}` leave
+effects or drawing blocks out to measure their cost.
+
+## Measuring performance
+
+`dev/perf.py` drives a separate Chrome (its own throwaway profile) over the
+DevTools protocol: 390×844 at 3× DPR, touch, CPU throttled 1×/4×/6×, and a
+finger dragging the heart in circles while it reads `BTD_PERF()`. Needs the
+dev server running and `pip install websocket-client`.
+
+```
+python dev/perf.py --rates 1,4,6 --scenes survive,boss --label after
+python dev/perf.py --software --tier 0 --profile --scenes boss
+```
+
+`--software` runs the 2D canvas without the GPU so raster cost lands on the
+throttled thread (a pessimistic stand-in for a weak phone GPU; DevTools
+throttling alone leaves a desktop GPU doing the blurs for free). `--profile`
+prints self time by function with native canvas calls charged to their
+callers. `--tier`, `--noshadow`, `--skip` and `--css` pin or remove things
+for A/B attribution.
+
+What it found: the heat shimmer drew the canvas onto itself in ~90 strips per
+column per frame, each forcing a full-canvas snapshot — 85 % of the frame.
+It now copies the region behind the flame once into a buffer. After that,
+in software raster at 4×: the survive phase went from 154 ms a frame to 17
+and the fight from 49 to 19; on the GPU path the game never leaves the top
+tier.
 
 ## Sound
 

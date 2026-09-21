@@ -169,7 +169,52 @@ that fixed the look.
 
 ---
 
-## 7. Rules that cut across everything
+## 7. Touch: one finger moves, the button fires
+
+**Rule.** On touch devices the only way to fire is the round button in the
+bottom-right corner (≥ 72 css px, thumb reach, showing the bolts left). It
+fires on press. Pointers are tracked by id for their whole life: one that
+lands on the button never moves the heart, the first to land anywhere else is
+the move pointer and never fires, and a tap away from the button does
+nothing. The heart rides ≥ 90 px above the finger. A drag is a *target* the
+heart moves toward at its normal speed, so every movement penalty (rule 2)
+applies to touch exactly as to keys.
+
+**Why.** Tap-to-fire on a drag surface meant every hesitant touch spent a
+bolt, and with five bolts for the whole run (rule 1) that is a lost game, not
+a mistake. Firing on press keeps the shot where the eye is. Tracking by id is
+what makes two thumbs work: without it a second finger either fired the drag
+or dragged the fire. The offset keeps the thumb off the heart, and the
+target-not-teleport movement keeps rule 2 honest — an earlier version let a
+drag move the heart 1:1, which made the embed penalty vanish on a phone.
+
+**In code.** `pointers`, `movePtr`, `drag`, `fireBtn`, `onFireBtn()`, the
+`pointerdown/move/up` handlers and the drag block in `update()`; the button is
+`drawFireBtn()` in the HUD.
+
+---
+
+## 8. Quality tiers never touch the rules
+
+**Rule.** `QUALITY` has three tiers (full, medium, low). They change only
+what is drawn: shimmer, smoke, glow sprites, particle share, flame edge
+detail, fire texture resolution, how often his face and the arms are redrawn.
+The game starts at full and steps down when the rolling one-second frame
+average exceeds 20 ms — applied only in the survive phase or while he is
+between attacks (`open`), never mid-attack. Tiers never step up during a run.
+
+**Why.** A frame-time stutter mid-attack is bad; a *visual change* mid-attack
+is worse, because the telegraph contract (rule 4) depends on the player
+reading the same picture from aim to fire. So the step waits. Nothing that
+affects hit-testing, speeds, timers or spawns may live in a tier, or the game
+would play differently on a slow phone.
+
+**In code.** `QUALITY`, `Q`, `setTier()`, `adapt()`, `applyTier()`,
+`addPart()`, `shadowR()`, `drawGlow()`, `makeLayer()`.
+
+---
+
+## 9. Rules that cut across everything
 
 - **The heartbeat is the master clock.** 68 bpm at rest to 150 at full
   danger; the floor glow, embers, aura and the music sequencer all pulse from
@@ -198,3 +243,5 @@ that fixed the look.
 4. Light two columns and check `flameFreeOK` still rejects a third that would
    cover more than 60 %.
 5. Screenshot the arms; if you can find a straight edge, it's wrong.
+6. `python dev/perf.py --software --rates 4` before and after anything that
+   touches drawing; the numbers in the README are the reference.

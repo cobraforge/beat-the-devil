@@ -7,7 +7,9 @@ root = pathlib.Path(__file__).parent
 html = (root / 'index.html').read_text(encoding='utf-8')
 
 css = (root / 'style.css').read_text(encoding='utf-8')
-html = html.replace('<link rel="stylesheet" href="style.css">', '<style>\n' + css + '</style>')
+# the stylesheet link may carry a cache-busting ?v= query, like the scripts
+html, n = re.subn(r'<link rel="stylesheet" href="style\.css(\?v=\d+)?">', lambda m: '<style>\n' + css + '</style>', html)
+assert n == 1, 'style.css link'
 
 for name in ('audio.js', 'game.js'):
     js = (root / name).read_text(encoding='utf-8')
