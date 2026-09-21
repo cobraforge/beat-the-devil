@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beat the Devil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="wrap">
+  <div id="monitor">
+    <div id="stage">
+      <canvas id="c" aria-label="Beat the Devil arcade game"></canvas>
+
+      <div class="screen" id="scr-title">
+        <div class="banner">AN ARCADE NIGHTMARE</div>
+        <div class="title">BEAT<br>THE DEVIL</div>
+        <div class="sub" id="tip">Arrow keys or A / D to move<br>Hold space to fire<br><br>Survive the pitchforks and the fire.<br>Then put a bolt through<br>each of his eyes.</div>
+        <div class="blink" id="start-hint">Press space to start</div>
+        <div class="stat" id="hi-title"></div>
+      </div>
+
+      <div class="screen" id="scr-over" hidden>
+        <div class="big lose">HE TOOK IT</div>
+        <div class="sub why" id="over-why"></div>
+        <div class="stat" id="over-score"></div>
+        <div class="stat" id="over-hi"></div>
+        <div class="blink" id="over-hint">Press space to try again</div>
+      </div>
+
+      <div class="screen" id="scr-win" hidden>
+        <div class="big">YOU BEAT<br>THE DEVIL</div>
+        <div class="sub why" id="win-why"></div>
+        <div class="stat" id="win-score"></div>
+        <div class="stat" id="win-hi"></div>
+        <div class="blink" id="win-hint">Press space to play again</div>
+      </div>
+
+      <button id="mute" type="button">Sound on</button>
+    </div>
+    <div id="badge">BTD</div>
+    <div id="led"></div>
+  </div>
+</div>
+
+<script src="audio.js?v=14"></script>
+<script src="game.js?v=14"></script>
+</body>
+</html>

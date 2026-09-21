@@ -1,0 +1,3613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beat the Devil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  /* the palette. game.js reads these once at start. */
+  --void:#0a0620;        /* deep indigo-black */
+  --midnight:#1b1046;    /* violet mist above the floor line */
+  --heart:#9fe8ff;       /* cyan glass, white core */
+  --claw:#c2140e;        /* dark muscled red, unlit */
+  --bone:#fdf8f0;
+  --ember:#ff2a00;
+  --sulfur:#ffc321;
+  --ash:#c79a8f;
+  --title:#ff5a1f;       /* red-orange display type */
+  --plastic:#cfc9b8;     /* the monitor */
+  --plastic-dark:#8f887a;
+  --s:1;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{
+  background:
+    radial-gradient(120% 70% at 50% 118%, rgba(27,16,70,.9), rgba(27,16,70,0) 60%),
+    var(--void);
+  color:var(--bone);
+  font-family:"Press Start 2P","Courier New",ui-monospace,monospace;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;touch-action:none;
+  -webkit-user-select:none;user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#wrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:6px}
+
+/* ---- the monitor: beige-grey plastic, a curved screen, a power LED ---- */
+#monitor{
+  position:relative;
+  padding:calc(24px * var(--s)) calc(26px * var(--s)) calc(44px * var(--s));
+  border-radius:calc(18px * var(--s));
+  background:
+    linear-gradient(160deg, #e2ddcd 0%, var(--plastic) 45%, #b5ae9c 100%);
+  box-shadow:
+    inset 0 calc(2px * var(--s)) 0 rgba(255,255,255,.55),
+    inset 0 calc(-3px * var(--s)) 0 rgba(0,0,0,.25),
+    0 calc(18px * var(--s)) calc(40px * var(--s)) rgba(0,0,0,.6);
+}
+#monitor::before{ /* the recessed rim around the glass */
+  content:"";position:absolute;pointer-events:none;
+  inset:calc(16px * var(--s)) calc(18px * var(--s)) calc(36px * var(--s));
+  border-radius:calc(16px * var(--s));
+  background:linear-gradient(180deg, #6d675b, #3c3830 60%, #55503f);
+  box-shadow:inset 0 calc(2px * var(--s)) calc(6px * var(--s)) rgba(0,0,0,.7);
+}
+#led{
+  position:absolute;right:calc(30px * var(--s));bottom:calc(16px * var(--s));
+  width:calc(7px * var(--s));height:calc(7px * var(--s));border-radius:50%;
+  background:#48ff6a;box-shadow:0 0 calc(6px * var(--s)) #48ff6a, 0 0 calc(14px * var(--s)) rgba(72,255,106,.5);
+}
+#badge{
+  position:absolute;left:calc(32px * var(--s));bottom:calc(13px * var(--s));
+  font-size:calc(6px * var(--s));color:var(--plastic-dark);letter-spacing:1px;
+  text-shadow:0 1px 0 rgba(255,255,255,.5);
+}
+#stage{
+  position:relative;line-height:0;
+  border-radius:calc(14px * var(--s));
+  overflow:hidden;
+  background:#000;
+}
+canvas{display:block}
+/* scanlines and the tube's vignette, inside the glass */
+#stage::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+    repeating-linear-gradient(to bottom, rgba(0,0,0,.30) 0 1px, rgba(0,0,0,0) 1px 3px),
+    radial-gradient(130% 100% at 50% 50%, rgba(0,0,0,0) 52%, rgba(0,0,0,.72) 100%);
+  mix-blend-mode:multiply;
+}
+/* the glass itself: a soft reflection that sells the barrel curve */
+#stage::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
+  background:
+    radial-gradient(60% 40% at 18% 8%, rgba(255,255,255,.10), rgba(255,255,255,0) 70%),
+    radial-gradient(120% 80% at 50% 50%, rgba(255,255,255,0) 70%, rgba(180,200,255,.06) 100%);
+}
+
+/* ---- overlay screens ---- */
+.screen{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  gap:calc(14px * var(--s));padding:calc(22px * var(--s));
+  background:rgba(10,6,32,.72);z-index:2;line-height:1.7;
+}
+.screen[hidden]{display:none}
+/* after he takes it: the panel sits in the empty lower third, off the picture */
+#scr-over.low{justify-content:flex-end;padding-bottom:calc(56px * var(--s));
+  background:linear-gradient(to top, rgba(10,6,32,.9) 32%, rgba(10,6,32,0) 60%)}
+#scr-title{justify-content:flex-start;padding-top:calc(54px * var(--s));background:rgba(10,6,32,.35)}
+.banner{
+  position:absolute;top:0;left:0;right:0;
+  padding:calc(7px * var(--s)) 0;
+  background:linear-gradient(180deg, #1a0a10, #05020a);
+  border-bottom:1px solid rgba(255,90,31,.5);
+  font-size:calc(6px * var(--s));letter-spacing:calc(3px * var(--s));color:var(--title);
+  text-shadow:0 0 calc(6px * var(--s)) rgba(255,90,31,.6);
+}
+.title{
+  margin-top:calc(10px * var(--s));
+  font-size:calc(26px * var(--s));line-height:1.35;color:var(--title);letter-spacing:1px;
+  text-shadow:
+    calc(3px * var(--s)) calc(3px * var(--s)) 0 #6e1208,
+    0 0 calc(10px * var(--s)) rgba(159,232,255,.9),
+    0 0 calc(28px * var(--s)) rgba(159,232,255,.55),
+    0 0 calc(60px * var(--s)) rgba(159,232,255,.3);
+}
+.sub{font-size:calc(7px * var(--s));color:#c9c1e8;line-height:2.1;
+  text-shadow:0 0 calc(6px * var(--s)) rgba(10,6,32,.9)}
+.why{color:var(--bone);opacity:.85}
+.big{font-size:calc(13px * var(--s));color:var(--sulfur);
+  text-shadow:0 0 calc(12px * var(--s)) rgba(255,195,33,.7)}
+.lose{color:var(--ember);text-shadow:0 0 calc(12px * var(--s)) rgba(255,42,0,.8)}
+.stat{font-size:calc(8px * var(--s));color:var(--bone)}
+.blink{font-size:calc(8px * var(--s));color:var(--heart);animation:bl 1.1s steps(1,end) infinite;
+  text-shadow:0 0 calc(8px * var(--s)) rgba(159,232,255,.7)}
+@keyframes bl{0%,55%{opacity:1}56%,100%{opacity:0}}
+#mute{
+  position:absolute;z-index:3;right:calc(6px * var(--s));bottom:calc(6px * var(--s));
+  background:transparent;border:1px solid rgba(159,232,255,.3);color:rgba(159,232,255,.7);
+  font-family:inherit;font-size:calc(7px * var(--s));padding:calc(5px * var(--s)) calc(7px * var(--s));
+  border-radius:2px;cursor:pointer;
+}
+#mute:hover,#mute:focus-visible{color:var(--heart);border-color:rgba(159,232,255,.7)}
+:focus-visible{outline:2px solid var(--heart);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.blink{animation:none}}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="monitor">
+    <div id="stage">
+      <canvas id="c" aria-label="Beat the Devil arcade game"></canvas>
+
+      <div class="screen" id="scr-title">
+        <div class="banner">AN ARCADE NIGHTMARE</div>
+        <div class="title">BEAT<br>THE DEVIL</div>
+        <div class="sub" id="tip">Arrow keys or A / D to move<br>Hold space to fire<br><br>Survive the pitchforks and the fire.<br>Then put a bolt through<br>each of his eyes.</div>
+        <div class="blink" id="start-hint">Press space to start</div>
+        <div class="stat" id="hi-title"></div>
+      </div>
+
+      <div class="screen" id="scr-over" hidden>
+        <div class="big lose">HE TOOK IT</div>
+        <div class="sub why" id="over-why"></div>
+        <div class="stat" id="over-score"></div>
+        <div class="stat" id="over-hi"></div>
+        <div class="blink" id="over-hint">Press space to try again</div>
+      </div>
+
+      <div class="screen" id="scr-win" hidden>
+        <div class="big">YOU BEAT<br>THE DEVIL</div>
+        <div class="sub why" id="win-why"></div>
+        <div class="stat" id="win-score"></div>
+        <div class="stat" id="win-hi"></div>
+        <div class="blink" id="win-hint">Press space to play again</div>
+      </div>
+
+      <button id="mute" type="button">Sound on</button>
+    </div>
+    <div id="badge">BTD</div>
+    <div id="led"></div>
+  </div>
+</div>
+
+<script>
+// audio.js — Web Audio synthesis for Beat the Devil.
+// Sound effects and a chiptune sequencer that is slaved to the game's
+// heartbeat: the game calls music.beat() on every "lub" and the sequencer
+// schedules one beat's worth of steps from that moment. Everything is
+// generated at runtime; there are no audio assets. Exposes window.BTD_AUDIO.
+(function(){
+"use strict";
+
+var actx = null, master = null, sfxBus = null, musicBus = null, noiseBuf = null;
+var heartBus = null, heartFilter = null;   // the heartbeat has its own bus so it can be muffled
+var muted = false;
+var MASTER_GAIN = 0.28, MUSIC_GAIN = 0.5, HEART_GAIN = 1.3;
+
+function ctx(){
+  if (!actx){
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      actx = new AC();
+      var comp = actx.createDynamicsCompressor();
+      comp.threshold.value = -14; comp.knee.value = 12; comp.ratio.value = 5;
+      comp.attack.value = 0.004; comp.release.value = 0.18;
+      comp.connect(actx.destination);
+      master = actx.createGain();
+      master.gain.value = muted ? 0 : MASTER_GAIN;
+      master.connect(comp);
+      sfxBus = actx.createGain(); sfxBus.gain.value = 1;   sfxBus.connect(master);
+      musicBus = actx.createGain(); musicBus.gain.value = MUSIC_GAIN; musicBus.connect(master);
+      heartFilter = actx.createBiquadFilter(); heartFilter.type = 'lowpass'; heartFilter.frequency.value = 20000;
+      heartBus = actx.createGain(); heartBus.gain.value = HEART_GAIN; heartBus.connect(heartFilter); heartFilter.connect(master);
+      noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i=0;i<d.length;i++) d[i] = Math.random()*2 - 1;
+    } catch(e){ return null; }
+  }
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function running(){ return actx && actx.state === 'running'; }
+
+// ---------- primitives ----------
+// tone({freq, dur, vol, type, slide, attack, filter, q, detune, t, bus})
+function tone(o){
+  var a = ctx(); if (!a) return;
+  var t = o.t == null ? a.currentTime : o.t;
+  var osc = a.createOscillator();
+  osc.type = o.type || 'square';
+  osc.frequency.setValueAtTime(o.freq, t);
+  if (o.slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.slide), t + o.dur);
+  if (o.detune) osc.detune.value = o.detune;
+  var g = a.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(o.vol == null ? 0.3 : o.vol, t + (o.attack || 0.004));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+  var node = osc;
+  if (o.filter){
+    var f = a.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = o.filter; f.Q.value = o.q || 0.7;
+    osc.connect(f); node = f;
+  }
+  node.connect(g); g.connect(o.bus || sfxBus);
+  osc.start(t); osc.stop(t + o.dur + 0.05);
+}
+// noise({dur, vol, type, freq, q, slide, attack, t, bus})
+function noise(o){
+  var a = ctx(); if (!a) return;
+  var t = o.t == null ? a.currentTime : o.t;
+  var src = a.createBufferSource();
+  src.buffer = noiseBuf; src.loop = true;
+  var f = a.createBiquadFilter();
+  f.type = o.type || 'lowpass'; f.frequency.value = o.freq || 1400;
+  if (o.q) f.Q.value = o.q;
+  if (o.slide) f.frequency.exponentialRampToValueAtTime(o.slide, t + o.dur);
+  var g = a.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(o.vol == null ? 0.3 : o.vol, t + (o.attack || 0.004));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+  src.connect(f); f.connect(g); g.connect(o.bus || sfxBus);
+  src.start(t, Math.random()*0.5); src.stop(t + o.dur + 0.05);
+}
+function later(ms, fn){ setTimeout(fn, ms); }
+
+// ---------- sound effects ----------
+var sfx = {
+  shoot: function(){
+    noise({dur:0.05, vol:0.18, type:'highpass', freq:3000});
+    tone({freq:700, slide:2400, dur:0.07, vol:0.16});
+    tone({freq:180, slide:60, dur:0.09, vol:0.22, type:'triangle'});
+  },
+  click: function(){
+    tone({freq:1400, dur:0.03, vol:0.12});
+    tone({freq:300, slide:120, dur:0.05, vol:0.12, type:'triangle'});
+  },
+  pop: function(){
+    noise({dur:0.12, vol:0.28});
+    tone({freq:320, slide:120, dur:0.08, vol:0.2});
+  },
+  // pitchfork: aim whine, lock tick, throw whoosh, stick thud
+  aim:   function(){ tone({freq:1800, slide:2600, dur:0.4, vol:0.05, type:'sine', attack:0.15}); },
+  lock:  function(){ tone({freq:2200, dur:0.04, vol:0.14}); tone({freq:1100, dur:0.06, vol:0.1, type:'triangle'}); },
+  throwFork: function(){ noise({dur:0.22, vol:0.2, type:'highpass', freq:900, slide:4000}); },
+  stick: function(){ noise({dur:0.07, vol:0.14, freq:500}); tone({freq:140, slide:50, dur:0.09, vol:0.14, type:'sine'}); },
+  graze: function(){ tone({freq:2400, slide:3400, dur:0.05, vol:0.11, type:'sine'}); },
+  lost:  function(){ tone({freq:640, slide:180, dur:0.28, vol:0.16}); },
+  clank: function(){
+    noise({dur:0.08, vol:0.25, type:'bandpass', freq:3000});
+    tone({freq:1800, slide:900, dur:0.1, vol:0.18});
+  },
+  hurt: function(){
+    tone({freq:200, slide:50, dur:0.35, vol:0.5, type:'sawtooth'});
+    noise({dur:0.3, vol:0.4});
+  },
+  grab: function(){ noise({dur:0.6, vol:0.22, freq:600, slide:120, attack:0.2}); tone({freq:70, slide:38, dur:0.7, vol:0.3, type:'sine', attack:0.15}); },
+  volley: function(){ explosion(210, 1.3); noise({dur:0.5, vol:0.5, type:'highpass', freq:800, slide:5000}); },
+  // fire: ignite crackle, eruption, breath warning growl, breath roar, ember hiss, bloom
+  ignite: function(x){ whoosh(x); },
+  crackle: function(x){ crackle(x); },
+  erupt:  function(x){ explosion(x, 0.8); },
+  impact: function(x, wall){ forkImpact(x, wall); },
+  laughter: function(){ return laughter(); },
+  breathWarn: function(){ tone({freq:48, slide:110, dur:1.0, vol:0.35, type:'sawtooth', filter:300, attack:0.3}); },
+  breath: function(){ noise({dur:0.9, vol:0.45, freq:2200, slide:300, attack:0.03}); },
+  jet: function(){ noise({dur:0.85, vol:0.36, type:'bandpass', freq:1400, q:0.8, slide:500, attack:0.02}); tone({freq:160, slide:70, dur:0.5, vol:0.2, type:'sawtooth', filter:400}); },
+  emberLand: function(){ noise({dur:0.15, vol:0.08, type:'highpass', freq:5000}); },
+  bloom: function(x){ explosion(x, 1); },
+  eyeOpen: function(){
+    tone({freq:300, slide:1400, dur:0.18, vol:0.2});
+    noise({dur:0.12, vol:0.1, type:'highpass', freq:4000});
+  },
+  watch: function(){ tone({freq:55, dur:1.2, vol:0.18, type:'sine', attack:0.4}); noise({dur:1.1, vol:0.04, type:'bandpass', freq:2600, q:6, attack:0.3}); },
+  eye: function(){
+    tone({freq:1200, slide:300, dur:0.12, vol:0.4});
+    noise({dur:0.1, vol:0.3});
+  },
+  roar: function(){
+    tone({freq:120, slide:45, dur:0.7, vol:0.5, type:'sawtooth'});
+    tone({freq:180, slide:60, dur:0.5, vol:0.3, type:'sawtooth'});
+    noise({dur:0.6, vol:0.45, freq:900, slide:200});
+  },
+  laugh: function(){
+    [230, 205, 180, 160, 145].forEach(function(f, i){
+      later(i*150, function(){
+        tone({freq:f, slide:f*0.8, dur:0.12, vol:0.3, type:'sawtooth', filter:1200});
+      });
+    });
+  },
+  kill: function(){
+    tone({freq:110, slide:40, dur:1.2, vol:0.5, type:'sawtooth'});
+    noise({dur:1.1, vol:0.5});
+  },
+  thunder: function(){ noise({dur:1.4, vol:0.5, freq:500, slide:60}); },
+  boss: function(){
+    tone({freq:70, slide:45, dur:1.4, vol:0.55, type:'sawtooth'});
+    noise({dur:1.4, vol:0.5, freq:500, slide:60});
+  },
+  pause: function(){ tone({freq:440, dur:0.08, vol:0.15}); },
+  win: function(){
+    [523,659,784,1046].forEach(function(f,i){ later(i*150, function(){ tone({freq:f, dur:0.28, vol:0.35}); }); });
+  },
+  over: function(){
+    [392,330,262,175].forEach(function(f,i){ later(i*200, function(){ tone({freq:f, dur:0.4, vol:0.35, type:'sawtooth'}); }); });
+  }
+};
+
+// ---------- music ----------
+// Patterns are 16 steps per bar, 4 steps per heartbeat. Tokens: note names
+// (D2, Eb2 ...), '.' rest, and for drums 'x' (hit) / 'o' (soft hit).
+// There is no kick: the heartbeat is the kick.
+var NOTE = {C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11};
+function midi(n){ return 440 * Math.pow(2, (n - 69) / 12); }
+function parse(bars){
+  return bars.join(' ').split(/\s+/).filter(Boolean).map(function(tok){
+    if (tok === '.') return 0;
+    if (tok === 'x') return 1;
+    if (tok === 'o') return 0.55;
+    var m = /^([A-G][b#]?)(\d)$/.exec(tok);
+    if (!m) throw new Error('bad note token: ' + tok);
+    return 12 * (parseInt(m[2], 10) + 1) + NOTE[m[1]];
+  });
+}
+
+var TRACKS = {
+  // Survive phase: sparse D Phrygian. Quiet and patient at a resting pulse,
+  // driving once the heart races.
+  survive: {
+    bars: 4, bed: true, breath: true,
+    bass: parse([
+      'D2 . . . D2 . . . D2 . . . F2 . Eb2 .',
+      'D2 . . . D2 . . . D2 . . . Bb2 . A2 .',
+      'F2 . . . F2 . . . F2 . . . G2 . F2 .',
+      'A2 . . . Bb2 . . . G2 . F2 . Eb2 . D2 .'
+    ]),
+    lead: parse([
+      'D4 . . . . . . . A4 . . . . . . .',
+      'D4 . . . . . . . Eb5 . . . D5 . . .',
+      'F4 . . . . . . . C5 . . . . . . .',
+      'Eb4 . . . . . . . D5 . . . A4 . . .'
+    ]),
+    snare: parse([
+      '. . . . . . . . x . . . . . . .',
+      '. . . . . . . . x . . . . . . .',
+      '. . . . . . . . x . . . . . . .',
+      '. . . . . . . . x . . . . . x .'
+    ]),
+    hat: parse([
+      '. . o . . . o . . . o . . . o .',
+      '. . o . . . o . . . o . . . o .',
+      '. . o . . . o . . . o . . . o .',
+      '. . o . . . o . . . o . . . o .'
+    ])
+  },
+  // Devil fight: tritones, a sawtooth drone and the rumble underneath.
+  devil: {
+    bars: 4, bed: true, breath: true, drone: 38, leadType: 'sawtooth', leadDur: 3.2,
+    bass: parse([
+      'D2 D2 . D2 D2 D2 . Ab2 D2 D2 . D2 Ab2 . A2 .',
+      'D2 D2 . D2 D2 D2 . Ab2 F2 F2 . F2 Eb2 . D2 .',
+      'D2 D2 . D2 D2 D2 . Ab2 D2 D2 . D2 Ab2 . A2 .',
+      'Bb2 Bb2 . Bb2 A2 A2 . A2 Ab2 Ab2 . Ab2 G2 . F2 .'
+    ]),
+    lead: parse([
+      'D5 . . . Eb5 . . . D5 . . . Ab4 . . .',
+      'A4 . . . Ab4 . F4 . Eb4 . . . D4 . . .',
+      'D5 . . . Eb5 . . . F5 . . . Ab4 . A4 .',
+      'Bb4 . . . A4 . . . Ab4 . . . G4 . F4 .'
+    ]),
+    snare: parse([
+      '. . . . x . . . . . . . x . . .',
+      '. . . . x . . . . . . . x . . .',
+      '. . . . x . . . . . . . x . . .',
+      '. . . . x . . . . . . . x . x x'
+    ]),
+    hat: parse([
+      'x . o . x . o . x . o . x . o .',
+      'x . o . x . o . x . o . x . o .',
+      'x . o . x . o . x . o . x . o .',
+      'x . o . x . o . x . o . x o x o'
+    ])
+  },
+  // Title: drone and sparse bells.
+  title: {
+    bars: 4, drone: 38,
+    bell: parse([
+      'D5 . . . . . . . . . . . . . . .',
+      '. . . . . . . . Ab4 . . . . . . .',
+      'F4 . . . . . . . . . . . . . . .',
+      '. . . . . . . . Eb4 . . . D4 . . .'
+    ])
+  },
+  // Game over: a slow dirge.
+  dirge: {
+    bars: 2, drone: 26, bassDur: 7,
+    bass: parse([
+      'D2 . . . . . . . Ab2 . . . . . . .',
+      'F2 . . . . . . . Eb2 . . . . . . .'
+    ]),
+    bell: parse([
+      'D5 . . . . . . . . . . . Ab4 . . .',
+      '. . . . F4 . . . . . . . Eb4 . . .'
+    ])
+  },
+  // Victory: bright loop in D.
+  win: {
+    bars: 2, leadDur: 1.8,
+    bass: parse([
+      'D2 . . . D2 . . . G2 . . . A2 . . .',
+      'D2 . . . D2 . . . Bb2 . . . A2 . . .'
+    ]),
+    lead: parse([
+      'D5 . F#5 . A5 . D6 . B4 . D5 . G5 . A5 .',
+      'D5 . F#5 . A5 . D6 . Bb4 . D5 . F5 . A5 .'
+    ]),
+    hat: parse([
+      'o . x . o . x . o . x . o . x .',
+      'o . x . o . x . o . x . o . x .'
+    ])
+  }
+};
+// sanity: every pattern must span bars*16 steps
+Object.keys(TRACKS).forEach(function(k){
+  var tr = TRACKS[k], len = tr.bars * 16;
+  ['bass','lead','bell','snare','hat'].forEach(function(p){
+    if (tr[p] && tr[p].length !== len) throw new Error('track ' + k + '.' + p + ' has ' + tr[p].length + ' steps, expected ' + len);
+  });
+});
+
+// ----- instruments -----
+function bass(t, n, dur){
+  tone({freq:midi(n),    t:t, dur:dur, vol:0.34, type:'square',   filter:700, bus:musicBus});
+  tone({freq:midi(n-12), t:t, dur:dur, vol:0.22, type:'triangle', bus:musicBus});
+}
+function lead(t, n, dur, type){
+  tone({freq:midi(n), t:t, dur:dur, vol:0.10, type:type||'square', detune:-6, filter:2600, bus:musicBus});
+  tone({freq:midi(n), t:t, dur:dur, vol:0.10, type:type||'square', detune: 6, filter:2600, bus:musicBus});
+}
+function bell(t, n){
+  tone({freq:midi(n),   t:t, dur:1.6, vol:0.16, type:'sine', attack:0.01, bus:musicBus});
+  tone({freq:midi(n)*3, t:t, dur:0.7, vol:0.04, type:'sine', attack:0.01, bus:musicBus});
+}
+function snare(t, v){
+  noise({t:t, dur:0.14, vol:0.28*v, type:'bandpass', freq:1900, bus:musicBus});
+  tone({freq:210, slide:110, t:t, dur:0.09, vol:0.22*v, type:'triangle', bus:musicBus});
+}
+function hat(t, v){ noise({t:t, dur:0.035, vol:0.12*v, type:'highpass', freq:7000, bus:musicBus}); }
+// the heartbeat itself: lub, then a softer dub
+function thump(t, v){
+  tone({freq:64, slide:36, t:t, dur:0.24, vol:0.75*v, type:'sine', bus:heartBus});
+  noise({t:t, dur:0.05, vol:0.06*v, freq:300, bus:heartBus});
+}
+
+// ----- sustained layers (drone, rumble bed, breathing, whispers) -----
+var layers = [], whisperGain = null;
+function layer(nodes, g){ layers.push({ nodes: nodes, g: g }); }
+function startDrone(n){
+  var a = actx, now = a.currentTime;
+  var g = a.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(0.13, now + 1.5);
+  var f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220; f.Q.value = 3;
+  var lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.13;
+  var lg = a.createGain(); lg.gain.value = 140; lfo.connect(lg); lg.connect(f.frequency);
+  var o1 = a.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = midi(n);
+  var o2 = a.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = midi(n); o2.detune.value = 7;
+  var o3 = a.createOscillator(); o3.type = 'square';   o3.frequency.value = midi(n-12);
+  o1.connect(f); o2.connect(f); o3.connect(f); f.connect(g); g.connect(musicBus);
+  o1.start(); o2.start(); o3.start(); lfo.start();
+  layer([o1,o2,o3,lfo], g);
+}
+function startBed(){
+  var a = actx, now = a.currentTime;
+  var g = a.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(0.09, now + 2);
+  var f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 160;
+  var src = a.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  src.connect(f); f.connect(g); g.connect(musicBus); src.start();
+  layer([src], g);
+}
+// something large breathing in the dark, ~0.3 Hz
+function startBreath(){
+  var a = actx, now = a.currentTime;
+  var g = a.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(0.05, now + 3);
+  var lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.3;
+  var lg = a.createGain(); lg.gain.value = 0.045; lfo.connect(lg); lg.connect(g.gain);
+  var f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 380; f.Q.value = 1.2;
+  var src = a.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  src.connect(f); f.connect(g); g.connect(musicBus); src.start(); lfo.start();
+  layer([src, lfo], g);
+  // whispers: filtered noise the game fades in late in the survive phase
+  var w = a.createGain(); w.gain.value = 0.0001;
+  var wf = a.createBiquadFilter(); wf.type = 'bandpass'; wf.frequency.value = 2400; wf.Q.value = 10;
+  var wl = a.createOscillator(); wl.type = 'sine'; wl.frequency.value = 0.7;
+  var wlg = a.createGain(); wlg.gain.value = 700; wl.connect(wlg); wlg.connect(wf.frequency);
+  var ws = a.createBufferSource(); ws.buffer = noiseBuf; ws.loop = true;
+  ws.connect(wf); wf.connect(w); w.connect(musicBus); ws.start(); wl.start();
+  layer([ws, wl], w);
+  whisperGain = w;
+}
+function stopLayers(fade){
+  whisperGain = null;
+  if (!layers.length) return;
+  var a = actx, now = a.currentTime, old = layers; layers = [];
+  fade = fade == null ? 0.8 : fade;
+  old.forEach(function(L){
+    L.g.gain.cancelScheduledValues(now);
+    L.g.gain.setValueAtTime(L.g.gain.value, now);
+    L.g.gain.linearRampToValueAtTime(0.0001, now + fade);
+  });
+  later(fade * 1000 + 100, function(){ old.forEach(function(L){ L.nodes.forEach(function(n){ try { n.stop(); } catch(e){} }); }); });
+}
+
+// ---------- impacts, explosions, fire voices, his laugh ----------
+// pan by arena x (0..420)
+function panner(x){
+  if (!actx.createStereoPanner) return null;
+  var pn = actx.createStereoPanner();
+  pn.pan.value = Math.max(-1, Math.min(1, (x / 420) * 2 - 1)) * 0.7;
+  return pn;
+}
+// a pitchfork striking stone: a low sine pitched down fast, a filtered
+// clatter. ±15 % pitch and level per hit, panned by x, tighter for walls.
+// Never more than three at once.
+var thudsLive = 0;
+function forkImpact(x, wall){
+  if (!running() || thudsLive >= 3) return;
+  thudsLive++; later(260, function(){ thudsLive--; });
+  var v = 0.85 + Math.random() * 0.3, pv = 0.85 + Math.random() * 0.3;
+  var pn = panner(x), bus = sfxBus;
+  if (pn){ pn.connect(sfxBus); bus = pn; }
+  var f0 = (wall ? 92 : 70) * pv, dur = wall ? 0.14 : 0.22;
+  tone({freq: f0, slide: f0 * 0.42, dur: dur, vol: 0.55 * v, type: 'sine', bus: bus});
+  noise({dur: wall ? 0.05 : 0.08, vol: 0.28 * v, type: 'bandpass', freq: (wall ? 3200 : 2400) * pv, q: 1.4, bus: bus});
+  noise({dur: 0.03, vol: 0.18 * v, type: 'highpass', freq: 5000, bus: bus});
+}
+// an explosion with weight: sub drop, a mid body through a lowpass that opens
+// then closes, a bright crack on the front. Ducks the music underneath.
+function explosion(x, size){
+  if (!running()) return;
+  size = size == null ? 1 : size;
+  var a = actx, t = a.currentTime, pn = panner(x == null ? 210 : x), bus = sfxBus;
+  if (pn){ pn.connect(sfxBus); bus = pn; }
+  tone({freq: 50, slide: 25, dur: 0.4 * size, vol: 0.9 * size, type: 'sine', bus: bus});
+  // the body: noise through a lowpass that opens over 60 ms and closes over 400
+  var src = a.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  var f = a.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 0.9;
+  f.frequency.setValueAtTime(220, t); f.frequency.linearRampToValueAtTime(2600, t + 0.06); f.frequency.exponentialRampToValueAtTime(180, t + 0.5 * size);
+  var g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.7 * size, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55 * size);
+  src.connect(f); f.connect(g); g.connect(bus); src.start(t, Math.random() * 0.5); src.stop(t + 0.6 * size);
+  noise({dur: 0.03, vol: 0.5, type: 'highpass', freq: 3500, bus: bus});
+  duckMusic(0.3, 0.05, 0.35);
+}
+function duckMusic(to, hold, release){
+  var t = actx.currentTime;
+  musicBus.gain.cancelScheduledValues(t);
+  musicBus.gain.setTargetAtTime(MUSIC_GAIN * to, t, 0.01);
+  musicBus.gain.setTargetAtTime(MUSIC_GAIN, t + hold, release);
+}
+// ----- fire voices: each active flame breathes through its own bandpass -----
+var fireBus = null, fireVoices = {}, FIRE_MAX = 4;
+function fireBusGet(){
+  if (!fireBus){ fireBus = actx.createGain(); fireBus.gain.value = 0.7; fireBus.connect(master); }
+  return fireBus;
+}
+function makeFireVoice(x){
+  var a = actx, t = a.currentTime;
+  var src = a.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  var f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900 + Math.random() * 300; f.Q.value = 0.9;
+  var lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.25 + Math.random() * 0.4;
+  var lg = a.createGain(); lg.gain.value = 260; lfo.connect(lg); lg.connect(f.frequency);
+  var g = a.createGain(); g.gain.value = 0.0001;
+  var glfo = a.createOscillator(); glfo.type = 'sine'; glfo.frequency.value = 0.4 + Math.random() * 0.5;
+  var glg = a.createGain(); glg.gain.value = 0.35; glfo.connect(glg);   // breathes: applied to a second gain stage
+  var breathe = a.createGain(); breathe.gain.value = 1; glg.connect(breathe.gain);
+  var pn = panner(x);
+  src.connect(f); f.connect(g); g.connect(breathe);
+  if (pn){ breathe.connect(pn); pn.connect(fireBusGet()); } else breathe.connect(fireBusGet());
+  src.start(t, Math.random() * 0.5); lfo.start(); glfo.start();
+  return { src: src, f: f, g: g, pn: pn, nodes: [src, lfo, glfo], level: 0 };
+}
+function killFireVoice(v){
+  var a = actx, t = a.currentTime;
+  v.g.gain.cancelScheduledValues(t); v.g.gain.setTargetAtTime(0.0001, t, 0.25);
+  later(900, function(){ v.nodes.forEach(function(n){ try { n.stop(); } catch(e){} }); });
+}
+// entries: [{id, x, h (0..1 of full height), dist (px from the heart)}]
+function fireUpdate(entries){
+  if (!running()) return;
+  var a = actx, t = a.currentTime, want = {};
+  // the bandpass keeps only a sliver of the noise, so the level sits well above unity
+  entries.forEach(function(e){ e.level = e.h * (1 - Math.min(1, e.dist / 520)) * 1.4; });
+  entries.sort(function(u, v){ return v.level - u.level; }).slice(0, FIRE_MAX).forEach(function(e){ want[e.id] = e; });
+  Object.keys(fireVoices).forEach(function(id){ if (!want[id]){ killFireVoice(fireVoices[id]); delete fireVoices[id]; } });
+  Object.keys(want).forEach(function(id){
+    var e = want[id], v = fireVoices[id];
+    if (!v){ v = fireVoices[id] = makeFireVoice(e.x); }
+    v.g.gain.setTargetAtTime(Math.max(0.0001, e.level), t, 0.12);
+    if (v.pn) v.pn.pan.setTargetAtTime(Math.max(-1, Math.min(1, (e.x / 420) * 2 - 1)) * 0.7, t, 0.2);
+  });
+}
+// a rising whoosh at ignition, and sparse pops as a fire dies
+function whoosh(x){
+  if (!running()) return;
+  var a = actx, t = a.currentTime, pn = panner(x), bus = sfxBus;
+  if (pn){ pn.connect(sfxBus); bus = pn; }
+  var src = a.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  var f = a.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.2;
+  f.frequency.setValueAtTime(260, t); f.frequency.exponentialRampToValueAtTime(3200, t + 0.35);
+  var g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.32, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+  src.connect(f); f.connect(g); g.connect(bus); src.start(t, Math.random() * 0.5); src.stop(t + 0.55);
+}
+function crackle(x){
+  if (!running()) return;
+  var pn = panner(x), bus = sfxBus;
+  if (pn){ pn.connect(sfxBus); bus = pn; }
+  for (var i=0;i<7;i++){
+    var dt = Math.random() * 0.7;
+    noise({t: actx.currentTime + dt, dur: 0.012 + Math.random() * 0.02, vol: 0.12 + Math.random() * 0.14, type: 'highpass', freq: 2500 + Math.random() * 3000, bus: bus});
+  }
+}
+// ----- his laugh: a low voice in bursts, a fifth below it detuned, a long tail -----
+var reverb = null;
+function reverbGet(){
+  if (reverb) return reverb;
+  var a = actx, len = Math.floor(a.sampleRate * 2.6), buf = a.createBuffer(2, len, a.sampleRate);
+  for (var c=0;c<2;c++){ var d = buf.getChannelData(c); for (var i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.6) * (i < 400 ? i/400 : 1); }
+  var cv = a.createConvolver(); cv.buffer = buf;
+  var wet = a.createGain(); wet.gain.value = 0.55; cv.connect(wet); wet.connect(master);
+  reverb = { input: cv };
+  return reverb;
+}
+// returns the laugh's length in seconds
+function laughter(){
+  if (!running()) return 2.4;
+  var a = actx, t0 = a.currentTime + 0.02;
+  var out = a.createGain(); out.gain.value = 1; out.connect(master); out.connect(reverbGet().input);
+  var bursts = [[0.0, 0.2, 108], [0.3, 0.22, 104], [0.64, 0.26, 98], [1.04, 0.3, 90], [1.52, 0.4, 82]];
+  [1, 2/3].forEach(function(ratio, vi){
+    var o = a.createOscillator(); o.type = 'sawtooth';
+    var o2 = a.createOscillator(); o2.type = 'square';
+    var lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 1.2;
+    var fm = a.createBiquadFilter(); fm.type = 'bandpass'; fm.frequency.value = 640; fm.Q.value = 2.2;   // a rough "ah"
+    var g = a.createGain(); g.gain.setValueAtTime(0.0001, t0);
+    o.connect(lp); o2.connect(lp); lp.connect(fm); fm.connect(g); g.connect(out);
+    bursts.forEach(function(b){
+      var bt = t0 + b[0], bd = b[1], f = b[2] * ratio;
+      o.frequency.setValueAtTime(f * 1.06, bt); o.frequency.exponentialRampToValueAtTime(f * 0.94, bt + bd);
+      o2.frequency.setValueAtTime(f * 1.06 * (vi ? 1.004 : 1), bt); o2.frequency.exponentialRampToValueAtTime(f * 0.94 * (vi ? 1.004 : 1), bt + bd);
+      g.gain.setValueAtTime(0.0001, bt); g.gain.linearRampToValueAtTime(vi ? 0.4 : 0.6, bt + 0.04);
+      g.gain.setValueAtTime(vi ? 0.4 : 0.6, bt + bd * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, bt + bd);
+    });
+    o.start(t0); o2.start(t0); o.stop(t0 + 2.3); o2.stop(t0 + 2.3);
+  });
+  // duck everything else while it plays
+  [sfxBus, musicBus, heartBus].forEach(function(b, i){
+    var base = i === 0 ? 1 : (i === 1 ? MUSIC_GAIN : HEART_GAIN);
+    b.gain.cancelScheduledValues(t0); b.gain.setTargetAtTime(base * (i === 2 ? 0.5 : 0.22), t0, 0.05);
+    b.gain.setTargetAtTime(base, t0 + 2.0, 0.4);
+  });
+  if (fireBus){ fireBus.gain.setTargetAtTime(0.15, t0, 0.05); fireBus.gain.setTargetAtTime(0.7, t0 + 2.0, 0.4); }
+  return 2.3;
+}
+// bus meters for the mix check: peak of each bus over the last buffer
+var meters = null;
+function meter(){
+  if (!running()) return null;
+  if (!meters){
+    meters = {};
+    [['master', master], ['music', musicBus], ['sfx', sfxBus], ['heart', heartBus], ['fire', fireBusGet()]].forEach(function(p){
+      var an = actx.createAnalyser(); an.fftSize = 2048; p[1].connect(an); meters[p[0]] = an;
+    });
+  }
+  var out = {}, buf = new Float32Array(2048);
+  Object.keys(meters).forEach(function(k){ meters[k].getFloatTimeDomainData(buf); var pk = 0, rms = 0; for (var i=0;i<buf.length;i++){ var v = Math.abs(buf[i]); if (v > pk) pk = v; rms += buf[i]*buf[i]; } out[k] = { peak: +pk.toFixed(3), rms: +Math.sqrt(rms / buf.length).toFixed(3) }; });
+  return out;
+}
+
+// ----- sequencer (heartbeat-driven) -----
+var seq = { name:null, track:null, step:0 };
+var music = {};
+function scheduleStep(tr, step, t, spb){
+  var n;
+  if (tr.bass  && (n = tr.bass[step]))  bass(t, n, spb * (tr.bassDur || 1.6));
+  if (tr.lead  && (n = tr.lead[step]))  lead(t, n, spb * (tr.leadDur || 1.6), tr.leadType);
+  if (tr.bell  && (n = tr.bell[step]))  bell(t, n);
+  if (tr.snare && (n = tr.snare[step])) snare(t, n);
+  if (tr.hat   && (n = tr.hat[step]))   hat(t, n);
+}
+music.play = function(name, force){
+  var a = ctx(); if (!a) return;
+  if (seq.name === name && !force) return;
+  music.stop();
+  var tr = TRACKS[name]; if (!tr) return;
+  seq.name = name; seq.track = tr; seq.step = 0;
+  if (tr.drone) startDrone(tr.drone);
+  if (tr.bed) startBed();
+  if (tr.breath) startBreath();
+};
+music.stop = function(fade){
+  seq.name = null; seq.track = null;
+  stopLayers(fade);
+};
+music.current = function(){ return seq.name; };
+// One heartbeat. period: seconds until the next beat; dub: seconds until the
+// second, softer thump; strength: 0..1.6 (a hit sends an oversized beat).
+// The track advances four sixteenths from this beat.
+music.beat = function(period, dub, strength, silent){
+  if (!running()) return;
+  var t0 = actx.currentTime + 0.03;
+  if (!silent){
+    thump(t0, 0.35 + 0.65 * Math.min(1, strength));
+    thump(t0 + dub, 0.22 + 0.4 * Math.min(1, strength));
+    // the fire ducks under every beat so the heart is never drowned
+    if (fireBus){ fireBus.gain.setTargetAtTime(0.28, t0, 0.008); fireBus.gain.setTargetAtTime(0.7, t0 + 0.14, 0.09); }
+  }
+  var tr = seq.track; if (!tr) return;
+  var spb = period / 4, len = tr.bars * 16;
+  for (var k=0;k<4;k++){
+    scheduleStep(tr, seq.step, t0 + k*spb, spb);
+    seq.step = (seq.step + 1) % len;
+  }
+};
+// whispers: 0..1
+music.whisper = function(k){
+  if (!whisperGain || !running()) return;
+  whisperGain.gain.setTargetAtTime(Math.max(0.0001, k * 0.06), actx.currentTime, 0.4);
+};
+var pausedName = null;
+music.pause  = function(){ pausedName = seq.name; music.stop(0.2); };
+music.resume = function(){ if (pausedName) music.play(pausedName, true); pausedName = null; };
+
+window.BTD_AUDIO = {
+  sfx: sfx,
+  music: music,
+  unlock: ctx,
+  fire: { update: fireUpdate },
+  meter: meter,
+  setMuted: function(m){ muted = !!m; if (master) master.gain.value = muted ? 0 : MASTER_GAIN; },
+  // the beat heard from inside a closed fist
+  muffle: function(on){
+    if (!heartFilter || !running()) return;
+    heartFilter.frequency.setTargetAtTime(on ? 220 : 20000, actx.currentTime, 0.15);
+    heartBus.gain.setTargetAtTime(HEART_GAIN * (on ? 0.8 : 1), actx.currentTime, 0.15);
+  },
+  isMuted: function(){ return muted; }
+};
+
+})();
+</script>
+<script>
+// game.js — Beat the Devil.
+// A white heart, five bolts, and the Devil. Two of the bolts are for his eyes;
+// nothing but the title card will remind you. The heartbeat is the game's
+// clock: the floor, the embers, his aura and the music all pulse off it.
+(function(){
+"use strict";
+
+var AUDIO = window.BTD_AUDIO, sfx = AUDIO.sfx, music = AUDIO.music;
+
+// ---------- setup ----------
+var LW = 420, LH = 640;
+var cvs = document.getElementById('c');
+var ctx = cvs.getContext('2d');
+var stage = document.getElementById('stage');
+var wrap = document.getElementById('wrap');
+var monitor = document.getElementById('monitor');
+var scale = 1;
+// bezel extents in logical px at --s = 1 (must match style.css #monitor padding)
+var BEZEL_X = 26 * 2, BEZEL_Y = 24 + 44;
+
+var isTouch = (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ||
+              ('ontouchstart' in window);
+
+function resize(){
+  var aw = wrap.clientWidth - 12, ah = wrap.clientHeight - 12;
+  scale = Math.min(aw / (LW + BEZEL_X), ah / (LH + BEZEL_Y));
+  var w = Math.max(160, Math.floor(LW * scale));
+  var h = Math.max(240, Math.floor(LH * scale));
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cvs.width = Math.floor(w * dpr);
+  cvs.height = Math.floor(h * dpr);
+  cvs.style.width = w + 'px';
+  cvs.style.height = h + 'px';
+  stage.style.width = w + 'px';
+  stage.style.height = h + 'px';
+  monitor.style.setProperty('--s', (w / LW).toFixed(3));
+  ctx.setTransform(cvs.width / LW, 0, 0, cvs.height / LH, 0, 0);
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', function(){ setTimeout(resize, 120); });
+resize();
+
+var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
+document.getElementById('tip').innerHTML = STORY + (isTouch
+  ? 'Drag to move<br>Tap to fire'
+  : 'Arrows / WASD to move<br>Space to fire<br>P pause &middot; M mute');
+if (isTouch){
+  document.getElementById('start-hint').textContent = 'Tap to start';
+  document.getElementById('over-hint').textContent = 'Tap to try again';
+  document.getElementById('win-hint').textContent = 'Tap to play again';
+}
+
+// ---------- storage ----------
+var hi = 0;
+try { var v = localStorage.getItem('btd.hi'); if (v) hi = parseInt(v,10) || 0; } catch(e){}
+function saveHi(){ try { localStorage.setItem('btd.hi', String(hi)); } catch(e){} }
+
+// ---------- helpers ----------
+function rnd(a,b){ return a + Math.random()*(b-a); }
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function lerp(a,b,k){ return a + (b-a)*k; }
+function decay(v, rate, dt){ return Math.max(0, v - rate*dt); }
+function smooth(k){ k = clamp(k,0,1); return k*k*(3-2*k); }
+// attack/decay envelope: 0 → 1 over `rise`, back to 0 over `fall`
+function env(t, rise, fall){
+  if (t < 0) return 0;
+  if (t < rise) return t / rise;
+  return Math.max(0, 1 - (t - rise) / fall);
+}
+function rgba(r,g,b,a){ return 'rgba(' + (r|0) + ',' + (g|0) + ',' + (b|0) + ',' + a + ')'; }
+
+// ---------- constants ----------
+var AMMO = 5;        // bolts for the whole run; two are for his eyes, but nothing enforces it
+var BOLT_SPEED = 640;
+var FORK_SPEED = 520;
+// the palette lives in style.css; read it once, never hardcode hex in draw calls
+var cssVars = getComputedStyle(document.documentElement);
+function cssColor(name, fallback){ var v = cssVars.getPropertyValue(name).trim(); return v || fallback; }
+function hexRgb(hex){ var n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+var COLORS = {
+  void:     cssColor('--void', '#0a0620'),
+  midnight: cssColor('--midnight', '#1b1046'),
+  heart:    cssColor('--heart', '#9fe8ff'),
+  claw:     cssColor('--claw', '#c2140e'),
+  bone:     cssColor('--bone', '#fdf8f0'),
+  ember:    cssColor('--ember', '#ff2a00'),
+  sulfur:   cssColor('--sulfur', '#ffc321'),
+  ash:      cssColor('--ash', '#c79a8f'),
+  title:    cssColor('--title', '#ff5a1f')
+};
+var RGB = {}; Object.keys(COLORS).forEach(function(k){ RGB[k] = hexRgb(COLORS[k]); });
+function col(name, a){ var c = RGB[name]; return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
+var FLOOR = LH - 8;
+// how high the heart may fly: more room in the survive phase, below his chin in the fight
+function ceilingY(){ return G.phase === 'survive' ? LH * 0.25 : LH * 0.42; }
+// the tallest a floor flame may be and still leave 80 px of air above the ceiling
+function flameLimit(){ return LH - ceilingY() - 80; }
+
+// ---------- fire ----------
+// A tiling value-noise field, and a small palette-mapped fire texture rendered
+// once per frame. The face, his mouth and every column of hellfire draw
+// windows of it. Three layers scroll upward at different speeds.
+var FIRE = (function(){
+  var N = 128, tile = new Float32Array(N*N);
+  function grid(size){ var g = new Float32Array(size*size); for (var i=0;i<g.length;i++) g[i] = Math.random(); return g; }
+  function sampleGrid(g, size, x, y){
+    var x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+    fx = fx*fx*(3-2*fx); fy = fy*fy*(3-2*fy);
+    var xa = ((x0 % size) + size) % size, xb = (xa + 1) % size;
+    var ya = ((y0 % size) + size) % size, yb = (ya + 1) % size;
+    var v00 = g[ya*size+xa], v10 = g[ya*size+xb], v01 = g[yb*size+xa], v11 = g[yb*size+xb];
+    return (v00 + (v10-v00)*fx) + ((v01 + (v11-v01)*fx) - (v00 + (v10-v00)*fx)) * fy;
+  }
+  var g8 = grid(8), g16 = grid(16), g32 = grid(32);
+  var lo = 1e9, hi_ = -1e9;
+  for (var y=0;y<N;y++) for (var x=0;x<N;x++){
+    var u = x/N, v = y/N;
+    var val = sampleGrid(g8, 8, u*8, v*8) * 0.55 + sampleGrid(g16, 16, u*16, v*16) * 0.3 + sampleGrid(g32, 32, u*32, v*32) * 0.15;
+    tile[y*N+x] = val; if (val < lo) lo = val; if (val > hi_) hi_ = val;
+  }
+  for (var i=0;i<tile.length;i++) tile[i] = (tile[i] - lo) / (hi_ - lo);
+  // wrapped bilinear sample in tile pixels
+  function at(x, y){
+    var x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+    var xa = ((x0 % N) + N) % N, xb = (xa + 1) % N, ya = ((y0 % N) + N) % N, yb = (ya + 1) % N;
+    var a = tile[ya*N+xa], b = tile[ya*N+xb], c = tile[yb*N+xa], d = tile[yb*N+xb];
+    var t = a + (b-a)*fx, u2 = c + (d-c)*fx;
+    return t + (u2-t)*fy;
+  }
+  // palette: char black → dark red → orange → yellow → white
+  var pal = new Uint8ClampedArray(256*3);
+  var stops = [[0,0,0],[64,6,2],[168,26,4],[255,96,10],[255,190,40],[255,250,225]];
+  for (var p=0;p<256;p++){
+    var k = p/255 * (stops.length-1), s0 = Math.floor(k), s1 = Math.min(stops.length-1, s0+1), kk = k - s0;
+    for (var c2=0;c2<3;c2++) pal[p*3+c2] = stops[s0][c2] + (stops[s1][c2]-stops[s0][c2])*kk;
+  }
+  // a texture: W×H, layers scrolling up. shape(v) scales intensity by height
+  // (v = 0 at the top, 1 at the bottom). charK > 0 adds char patches.
+  function make(W, H){
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var cx = c.getContext('2d'), img = cx.createImageData(W, H), data = img.data;
+    return {
+      canvas: c, w: W, h: H,
+      render: function(t, mode){
+        var i = 0;
+        var thr = 0.79 + 0.035 * Math.sin(t * 0.7);     // char patches shrink and re-ignite
+        for (var y=0;y<H;y++){
+          var v = y / H;
+          for (var x=0;x<W;x++){
+            var n = at(x*0.9,        y*0.9 + t*38)  * 0.5
+                  + at(x*1.9 + 40,   y*1.9 + t*85)  * 0.32
+                  + at(x*3.7 + 90,   y*3.7 + t*150) * 0.18;
+            var inten, alpha = 255;
+            if (mode === 'face'){
+              inten = n * 1.25 - 0.08;
+              var ch = at(x*0.85 + 300, y*0.85 + t*6);
+              var ck = Math.max(0, Math.min(1, (ch - (thr - 0.07)) / 0.09)); ck = ck * ck * (3 - 2 * ck);   // soft-edged char
+              var rim = Math.max(0, Math.min(1, (ch - (thr - 0.16)) / 0.08)); rim = rim * rim * (3 - 2 * rim);
+              inten = inten * (1 - ck) + 0.02 * ck + 0.4 * rim * (1 - ck);   // the rim re-igniting
+            } else {
+              // a column: solid at the base, ragged and fading at the top
+              inten = n * (0.35 + 1.05 * v) - (1 - v) * 0.42;
+              alpha = inten < 0.06 ? 0 : Math.min(255, (inten - 0.06) * 900);
+            }
+            var pi = Math.max(0, Math.min(255, inten * 255)) | 0;
+            data[i] = pal[pi*3]; data[i+1] = pal[pi*3+1]; data[i+2] = pal[pi*3+2]; data[i+3] = alpha;
+            i += 4;
+          }
+        }
+        cx.putImageData(img, 0, 0);
+      }
+    };
+  }
+  // curl of the field: divergence-free swirl, for churning edges and drifting embers
+  function curl(x, y){
+    var e = 1.5;
+    var dx = (at(x + e, y) - at(x - e, y)) / (2 * e);
+    var dy = (at(x, y + e) - at(x, y - e)) / (2 * e);
+    return { x: dy, y: -dx };
+  }
+  return { at: at, curl: curl, make: make };
+})();
+var faceFire = FIRE.make(128, 96);
+var colFire  = FIRE.make(96, 144);
+
+// ---------- state ----------
+var G = {};
+function reset(){
+  G.mode = 'title';           // title | play | ending | over | won
+  G.t = 0;
+  G.score = 0;
+  G.lives = 3;
+  G.ammo = AMMO;
+  G.phase = 'survive';        // survive | devil
+  G.surv = 0;
+  G.SURV = 42;
+  G.prog = 0;
+  G.player = { x: LW/2, y: LH - 78, vx: 0, vy: 0, px: LW/2, py: LH - 78 };
+  G.bolts = []; G.forks = []; G.flames = []; G.parts = []; G.embers = []; G.texts = [];
+  G.devil = null;
+  G.invuln = 0;
+  G.shake = 0; G.flash = 0; G.white = 0; G.black = 0;
+  G.forkT = 2.4; G.walkT = 3.2; G.emberT = 6; G.jetT = 3.0; G.fireCd = 0;
+  G.lastWalkerHalf = 0;                    // -1 left, 1 right: jets and columns alternate halves
+  G.recoil = 0;
+  G.herald = 0;
+  G.lightning = 0; G.lightT = rnd(5, 9); G.boltPath = null;
+  G.watch = null; G.watched = 0;           // his eyes in the dark, twice
+  G.hold = 0;                              // silence before he lands
+  G.inferno = false;                       // after the arrival volley the fire steps up for good
+  G.arms = null;                           // his clawed arms, framing the arena
+  G.titleHearts = [];
+  for (var th=0; th<14; th++) G.titleHearts.push({ x: rnd(20, LW-20), y: rnd(0, LH), v: rnd(18, 42), s: rnd(5, 11), p: rnd(0, 6.28) });
+  G.taken = null;                          // the losing sequence
+  G.heartSilent = false;                   // after he takes it, the beat is never heard again
+  G.paused = false;
+  G.ending = null;
+  G.endT = 0;
+  G.heart = { bpm: 68, period: 60/68, since: 0, next: 60/68, dubAt: 0.28, dubDone: true,
+              scale: 1, lubScale: 1.14, pulse: 0, arr: 0, big: false, danger: 0, override: -1,
+              stop: 0, light: 1, settleT: 9, settleAmp: 0, flutter: 0 };   // stop: the dead moment after a hit; light: what it has not shed
+  // penalties last exactly as long as invulnerability: nothing impairs the heart while it can be hit
+  G.penalty = null;      // {kind:'fork'|'burn', t, dir}
+  G.embed = null;        // the pitchfork stuck in it
+  G.scars = [];          // cracks and char, permanent
+  G.loose = [];          // forks that have worked loose and tumble away
+  G.idleT = 0;
+  for (var i=0;i<26;i++) G.embers.push({ x: rnd(0,LW), y: rnd(0,LH), v: rnd(14,42), r: rnd(0.8,2.2), p: rnd(0,6.28) });
+}
+reset();
+// open with #debug to poke at the state from the console:
+// window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
+if (/debug/.test(location.hash)){
+  window.BTD_G = G;
+  window.BTD_VERSION = 14;
+  window.BTD_STEP = function(dt){ update(dt); draw(); };
+}
+
+// ---------- input ----------
+var keys = {};
+var fireQueued = false;
+var pointerDown = false, lastPX = 0, lastPY = 0, downT = 0, downMode = '', moved = 0;
+
+window.addEventListener('keydown', function(e){
+  var k = e.key, space = k === ' ' || e.code === 'Space';
+  if (space || ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].indexOf(k) >= 0) e.preventDefault();
+  if (e.repeat) return;
+  var lk = k.toLowerCase();
+  keys[lk] = true;
+  if (lk === 'm'){ toggleMute(); return; }
+  if (lk === 'p' || lk === 'escape'){ togglePause(); return; }
+  if (space || k === 'Enter'){
+    if (G.mode === 'play'){ if (!G.paused) fireQueued = true; }
+    else tryStart();
+  } else if (G.mode === 'title'){
+    AUDIO.unlock();
+    music.play('title');
+  }
+});
+window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
+window.addEventListener('blur', function(){ keys = {}; pointerDown = false; });
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden && G.mode === 'play' && !G.paused && !window.BTD_FREEZE) togglePause();
+});
+
+function toLogical(e){
+  var r = cvs.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * LW, y: (e.clientY - r.top) / r.height * LH };
+}
+stage.addEventListener('pointerdown', function(e){
+  if (e.target === muteBtn) return;
+  stage.setPointerCapture && stage.setPointerCapture(e.pointerId);
+  pointerDown = true;
+  var p = toLogical(e); lastPX = p.x; lastPY = p.y;
+  downT = performance.now(); downMode = G.mode; moved = 0;
+  if (G.mode === 'play'){ if (G.paused) togglePause(); }
+  else tryStart();
+});
+stage.addEventListener('pointermove', function(e){
+  if (!pointerDown) return;
+  var p = toLogical(e);
+  var dx = p.x - lastPX, dy = p.y - lastPY;
+  if (G.mode === 'play' && !G.paused){
+    G.player.x += dx;
+    G.player.y += dy;
+  }
+  moved += Math.abs(dx) + Math.abs(dy);
+  lastPX = p.x; lastPY = p.y;
+});
+function endPointer(){
+  if (pointerDown && downMode === 'play' && G.mode === 'play' && !G.paused &&
+      moved < 10 && performance.now() - downT < 300){
+    fireQueued = true;   // a tap (not a drag) fires
+  }
+  pointerDown = false;
+}
+stage.addEventListener('pointerup', endPointer);
+stage.addEventListener('pointercancel', endPointer);
+
+var muteBtn = document.getElementById('mute');
+function toggleMute(){
+  AUDIO.unlock();
+  AUDIO.setMuted(!AUDIO.isMuted());
+  muteBtn.textContent = AUDIO.isMuted() ? 'Sound off' : 'Sound on';
+  if (G.mode === 'title') music.play('title');
+}
+muteBtn.addEventListener('click', function(e){ e.stopPropagation(); toggleMute(); });
+
+function togglePause(){
+  if (G.mode !== 'play') return;
+  G.paused = !G.paused;
+  keys = {}; fireQueued = false;
+  sfx.pause();
+  if (G.paused) music.pause(); else music.resume();
+}
+
+var scrTitle = document.getElementById('scr-title');
+var scrOver  = document.getElementById('scr-over');
+var scrWin   = document.getElementById('scr-win');
+
+function tryStart(){
+  AUDIO.unlock();
+  if (G.mode === 'title' || G.mode === 'over' || G.mode === 'won'){
+    if (G.mode !== 'title' && G.endT < 0.9) return;
+    startGame();
+  }
+}
+function startGame(){
+  reset();
+  AUDIO.muffle(false);
+  G.mode = 'play';
+  scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true;
+  music.play('survive');
+}
+function showTitle(){
+  document.getElementById('hi-title').textContent = hi ? ('Best ' + hi) : '';
+  scrTitle.hidden = false;
+}
+showTitle();
+
+// ---------- the heartbeat ----------
+// Two-beat cycle: a lub (1.0 → 1.14 over ~90 ms) then a smaller dub. Rate
+// runs 68 → 150 bpm on danger: the nearest hazard's distance and the survive
+// meter. A hit gives one oversized beat, then ~2 s of arrhythmia.
+function nearestHazard(){
+  var p = G.player, best = 1e9, d;
+  G.forks.forEach(function(f){
+    if (f.state === 'fly' || f.state === 'stuck') d = Math.hypot(p.x - f.x, p.y - f.y);
+    else d = Math.hypot(p.x - f.tx, p.y - f.ty) + 60;   // being aimed at counts, less
+    if (d < best) best = d;
+  });
+  G.flames.forEach(function(fl){
+    if (fl.type === 'walker'){
+      d = Math.abs(p.x - fl.x); if (p.y < LH - fl.h) d = Math.hypot(d, (LH - fl.h) - p.y);
+    } else if (fl.type === 'ember'){
+      if (fl.state === 'fly') d = Math.hypot(p.x - fl.x, p.y - fl.y) + 30;
+      else d = fl.t > fl.fuse * 0.5 ? Math.hypot(p.x - fl.tx, p.y - fl.ty) : 1e9;
+    } else if (fl.type === 'breath'){
+      d = (p.x < LW/2 ? -1 : 1) === fl.side ? 40 : 1e9;
+    } else if (fl.type === 'jet'){
+      var jl = jetLen(fl);
+      if (jl > 0){ var jd = jetDir(fl); d = distToSeg(p.x, p.y, fl.ox, fl.oy, fl.ox + jd.x * jl, fl.oy + jd.y * jl) - 20; }
+      else d = Math.hypot(p.x - fl.tx, p.y - fl.ty) + 60;
+    }
+    if (d < best) best = d;
+  });
+  if (G.devil) G.devil.eyes.forEach(function(e){
+    if (e.charge > 0 || e.beam > 0){ d = Math.abs(p.x - e.lockX) + 20; if (d < best) best = d; }
+  });
+  return best;
+}
+function updateHeart(dt){
+  var h = G.heart, target;
+  if (h.override >= 0) target = h.override;
+  else if (G.mode === 'play' || G.mode === 'ending'){
+    var danger = 1 - clamp((nearestHazard() - 30) / 220, 0, 1);
+    if (G.phase === 'survive') danger = Math.max(danger, G.prog * 0.55);
+    else danger = Math.max(danger, 0.45);
+    if (G.lives === 1) danger = Math.max(danger, 0.55);
+    h.danger = danger;
+    target = 68 + 82 * danger;
+    if (G.penalty && G.penalty.kind === 'burn') target += 55;            // panicked
+    if (G.penalty && G.penalty.kind === 'fork') target *= 0.72;          // labored
+    if (G.ending && G.ending.kind === 'dead') target = 0;
+  } else if (G.mode === 'over') target = 46;
+  else if (G.mode === 'won') target = 84;
+  else target = 68;
+
+  if (target <= 0){ h.pulse = decay(h.pulse, 3, dt); h.scale = 1; return; }  // the heart is still
+  h.bpm += (target - h.bpm) * Math.min(1, dt * 1.2);
+  h.period = 60 / h.bpm;
+  if (h.arr > 0) h.arr -= dt;
+  h.settleT += dt; h.settleAmp = decay(h.settleAmp, 2.2, dt); h.flutter = decay(h.flutter, 2, dt);
+  if (h.stop > 0){ h.stop -= dt; h.pulse = decay(h.pulse, 6, dt); h.scale = 1; return; }   // stopped dead
+  if (G.hold > 0){ h.pulse = decay(h.pulse, 3, dt); h.scale = 1; return; }   // it skips a beat
+
+  h.since += dt;
+  if (!h.dubDone && h.since >= h.dubAt){ h.dubDone = true; h.pulse = Math.max(h.pulse, 0.55); }
+  if (h.since >= h.next){
+    h.since = 0; h.dubDone = false;
+    var big = h.big; h.big = false;
+    var dmg = (G.mode === 'play' || G.mode === 'ending') ? 3 - G.lives : 0;
+    var pen = G.penalty ? G.penalty.kind : '';
+    h.lubScale = big ? 1.32 : (pen === 'burn' ? 1.06 : (pen === 'fork' ? 1.24 : (dmg >= 2 ? 1.2 : 1.14)));
+    h.pulse = pen === 'burn' ? 0.7 : 1;                                   // fast and shallow
+    h.settleT = 0; h.settleAmp = big ? 1.6 : 1;
+    h.next = h.arr > 0 ? h.period * rnd(0.5, 1.7) : h.period;
+    if (dmg === 1 && Math.random() < 0.18) h.next *= rnd(0.75, 1.35);   // a stumble now and then
+    if (dmg >= 2) h.next *= rnd(0.62, 1.55);                              // never regular again
+    if (pen === 'fork' && Math.random() < 0.5) h.next *= 1.4;             // the hitch
+    if (h.flutterDue){ h.flutterDue = false; h.next = 0.19; h.flutter = 1; }   // the involuntary double-beat
+    h.dubAt = Math.min(pen === 'fork' ? 0.42 : (dmg >= 2 ? 0.34 : 0.28), h.next * 0.45);
+    music.beat(h.next, h.dubAt, big ? 1.6 : 0.25 + 0.75 * h.danger, G.heartSilent || (G.mode === 'title' && !music.current()));
+  }
+  h.scale = 1 + env(h.since, 0.09, 0.18) * (h.lubScale - 1)
+              + (h.dubDone ? env(h.since - h.dubAt, 0.07, 0.15) * 0.08 : 0);
+  h.pulse = decay(h.pulse, 3.5, dt);
+}
+
+// ---------- spawning ----------
+// Pitchforks are thrown, not dropped: aim (a thin line tracks you), lock
+// (the line snaps solid, aimed where you will be), throw (a fixed vector).
+// They stick in the floor and stay dangerous for a moment.
+var forkGroup = 0;
+function throwFork(kind, ox, oy){
+  var p = G.player;
+  if (ox == null){ ox = rnd(30, LW-30); oy = -14; }
+  var group = ++forkGroup;
+  function mk(tx, ty, track, spread, delay){
+    G.forks.push({ group: group, ox: ox, oy: oy, x: ox, y: oy, tx: tx, ty: ty, track: track, spread: spread || 0,
+                   state: 'aim', t: -(delay || 0), aimT: 0.45, lockT: 0.22,
+                   vx: 0, vy: 0, rot: 0, r: 11, grazed: false, stuckT: 0 });
+  }
+  if (kind === 'fan'){
+    mk(p.x, p.y, true, -0.26); mk(p.x, p.y, true, 0); mk(p.x, p.y, true, 0.26);
+  } else if (kind === 'bracket'){
+    // pins both sides of where you are now; commit before it locks
+    mk(clamp(p.x - 64, 24, LW-24), p.y, false); mk(clamp(p.x + 64, 24, LW-24), p.y, false);
+  } else {
+    mk(p.x, p.y, true);
+  }
+  sfx.aim();
+}
+// the arrival volley: fast, unaimed, straight out of his mouth
+function eruptForks(ox, oy, n){
+  for (var i=0;i<n;i++){
+    var ang = Math.PI * 0.22 + (i / (n-1)) * Math.PI * 0.56 + rnd(-0.06, 0.06);
+    var sp = 700 + rnd(-70, 70);
+    G.forks.push({ group: ++forkGroup, ox: ox, oy: oy, x: ox, y: oy, tx: 0, ty: 0, track: false, spread: 0,
+                   state: 'fly', t: 0, aimT: 0, lockT: 0,
+                   vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, rot: ang - Math.PI/2, r: 11, grazed: false, stuckT: 0 });
+  }
+}
+// how many hazards are live: fork volleys count once, every flame counts
+function hazardCount(){
+  var groups = {}, n = 0;
+  G.forks.forEach(function(f){ if (!groups[f.group]){ groups[f.group] = true; n++; } });
+  G.flames.forEach(function(f){ if (!(f.type === 'walker' && f.state === 'die')) n++; });
+  return n;
+}
+// survive phase: never more than two hazards of any kind at once. Skip, never queue.
+function mayspawn(){ return G.phase !== 'survive' || hazardCount() < 2; }
+// which halves currently have a jet aiming or firing from their wall
+function jetHalves(){
+  var h = {};
+  G.flames.forEach(function(f){ if (f.type === 'jet') h[f.side] = true; });
+  return h;
+}
+// which halves have a floor column still rising
+function risingHalves(){
+  var h = {};
+  G.flames.forEach(function(f){ if (f.type === 'walker' && f.state !== 'die' && f.age < 0.8) h[f.x < LW/2 ? -1 : 1] = true; });
+  return h;
+}
+// the x-interval a floor flame owns, including everywhere it may still walk
+function walkerSpan(fl){
+  var a = Math.min(fl.x, fl.targetX) - fl.w * 0.5 - 8, b = Math.max(fl.x, fl.targetX) + fl.w * 0.5 + 8;
+  return [Math.max(0, a), Math.min(LW, b)];
+}
+// invariant: at least 40 % of the width stays flame-free. Returns true if a
+// new flame spanning [a, b] would still leave that much.
+function flameFreeOK(a, b){
+  var spans = [[a, b]];
+  G.flames.forEach(function(fl){ if (fl.type === 'walker' && fl.state !== 'die') spans.push(walkerSpan(fl)); });
+  spans.sort(function(u, v){ return u[0] - v[0]; });
+  var covered = 0, curA = spans[0][0], curB = spans[0][1];
+  for (var i=1;i<spans.length;i++){
+    if (spans[i][0] <= curB) curB = Math.max(curB, spans[i][1]);
+    else { covered += curB - curA; curA = spans[i][0]; curB = spans[i][1]; }
+  }
+  covered += curB - curA;
+  return covered <= LW * 0.6;
+}
+// A floor flame. Its target x is locked at ignition (the heart's x, at most
+// `cap` px away); it walks there at 100 px/s and never moves again. Rises to
+// full height over 0.8 s. Skipped if it would break the flame-free invariant.
+function spawnWalker(x, cap){
+  var p = G.player;
+  if (x == null){
+    x = rnd(30, LW-30);
+    if (Math.abs(x - p.x) < 100) x = p.x + (p.x < LW/2 ? 1 : -1) * rnd(130, 190);
+    // never rise on a half a jet is working; alternate with it
+    var jh = jetHalves();
+    if (jh[x < LW/2 ? -1 : 1] && !jh[x < LW/2 ? 1 : -1]) x = LW - x;
+    x = clamp(x, 30, LW-30);
+  }
+  cap = cap == null ? 140 : cap;
+  var w = G.inferno ? 72 : 60;
+  var targetX = clamp(x + clamp(p.x - x, -cap, cap), 30, LW - 30);
+  var a = Math.min(x, targetX) - w * 0.5 - 8, b = Math.max(x, targetX) + w * 0.5 + 8;
+  if (!flameFreeOK(Math.max(0, a), Math.min(LW, b))) return false;
+  G.lastWalkerHalf = x < LW/2 ? -1 : 1;
+  var limit = flameLimit();
+  var hmax = Math.min(limit, G.phase === 'survive' ? rnd(300, 420) : rnd(220, 300));
+  G.flames.push({ type:'walker', x: x, targetX: targetX, h: 0, hmax: hmax, w: w,
+                  t: 0, age: 0, flare: 0, state:'walk', seed: Math.random() });
+  sfx.ignite(x);
+  return true;
+}
+// An angled flame jet from a wall. Same contract as the forks: the vent glows
+// and an aim line tracks the heart for 0.6 s, the line locks and flashes,
+// then a lance fires along that fixed vector: 40 px wide, 450 px long,
+// 0.3 s out, 0.5 s held, then it retracts. Always 15–35° above horizontal.
+// Aimed at where the heart is at lock time, not led. Returns false when both
+// halves have a column rising, so the caller can try again shortly.
+function spawnJet(){
+  var p = G.player, rising = risingHalves(), sides = [];
+  if (G.flames.some(function(f){ return f.type === 'jet'; })) return false;   // one at a time
+  if (!rising[-1]) sides.push(-1);
+  if (!rising[1]) sides.push(1);
+  if (!sides.length) return false;
+  // prefer the half opposite the last column, then the wall further from the heart
+  var side;
+  if (sides.length === 2) side = G.lastWalkerHalf ? -G.lastWalkerHalf : (p.x < LW/2 ? 1 : -1);
+  else side = sides[0];
+  var ox = side < 0 ? 0 : LW;
+  var dx = Math.max(60, Math.abs(p.x - ox));
+  var oy = clamp(p.y + dx * Math.tan(25 * Math.PI/180), 200, FLOOR - 12);
+  G.flames.push({ type:'jet', side: side, ox: ox, oy: oy, tx: p.x, ty: p.y, ang: 0,
+                  state:'aim', t: 0, aimT: 0.9, lockT: 0.22, len: 0, seed: Math.random() });
+  sfx.aim();
+  return true;
+}
+function jetDir(j){ return { x: -j.side * Math.cos(j.ang), y: -Math.sin(j.ang) }; }   // into the arena, upward
+function jetLen(j){
+  if (j.state === 'fire') return 450 * smooth(j.t / 0.3);
+  if (j.state === 'hold') return 450;
+  if (j.state === 'retract') return 450 * (1 - smooth(j.t / 0.3));
+  return 0;
+}
+function distToSeg(px, py, ax, ay, bx, by){
+  var vx = bx - ax, vy = by - ay, L2 = vx*vx + vy*vy || 1;
+  var k = clamp(((px - ax) * vx + (py - ay) * vy) / L2, 0, 1);
+  return Math.hypot(px - (ax + vx*k), py - (ay + vy*k));
+}
+// A fireball: thrown from the dark above (or his mouth) at where the heart is
+// now, not led. It tumbles in with a tail, lands, scorches a ring into the
+// floor that brightens and contracts over the fuse, then detonates.
+function spawnEmber(ox, oy){
+  var p = G.player;
+  var tx = p.x, ty = p.y;
+  if (ox == null){ ox = clamp(tx + rnd(-140, 140), 20, LW - 20); oy = -24; }
+  var dx = tx - ox, dy = ty - oy, dist = Math.hypot(dx, dy) || 1, sp = 430;
+  G.flames.push({ type:'ember', state:'fly', x: ox, y: oy, tx: tx, ty: ty, vx: dx / dist * sp, vy: dy / dist * sp,
+                  t: 0, fuse: 1.2, rot: rnd(0, 6.28), spin: rnd(5, 9) * (Math.random() < 0.5 ? -1 : 1), seed: Math.random() });
+  sfx.throwFork();
+}
+function spawnBreath(side){
+  G.flames.push({ type:'breath', side: side, t: 0, warn: 1.0, burn: 0.8 });
+  sfx.breathWarn();
+}
+function burst(x, y, color, n, spd, grav){
+  for (var i=0;i<(n||8);i++){
+    var a = rnd(0, Math.PI*2), s = rnd(40, spd||210);
+    G.parts.push({ x:x, y:y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: rnd(0.3,0.75), t:0, c: color, r: rnd(1.3,3.2), g: grav == null ? 260 : grav });
+  }
+}
+function addText(x, y, text, color, life, size){
+  G.texts.push({ x: clamp(x, 40, LW-40), y: y, text: text, c: color || COLORS.bone, t: 0, life: life || 0.9, size: size || 8 });
+}
+
+// ---------- devil ----------
+function makeDevil(){
+  return {
+    x: LW/2, y: -170, targetY: 138,
+    w: 268, h: 176,
+    sway: 0, swayAmp: 58,
+    state: 'wait', st: 0,      // wait | enter | arrive | open | attack | taken
+    cycle: 0, attack: '', rage: 0, kick: 0,
+    mouth: 0, mouthGlow: 0, turn: 0,
+    dying: false, dieT: 0, dead: false,
+    eyes: [
+      { dx: -56, open: false, flash: 0, dead: false, charge: 0, beam: 0, lockX: LW/2, wide: 0, ember: 0.15 },
+      { dx:  56, open: false, flash: 0, dead: false, charge: 0, beam: 0, lockX: LW/2, wide: 0, ember: 0.15 }
+    ]
+  };
+}
+function livingEyes(d){ return d.eyes.filter(function(e){ return !e.dead; }); }
+function anyEyeOpen(d){ return d.eyes.some(function(e){ return e.open && !e.dead; }); }
+function devilSpeed(d){ return Math.pow(1.2, d.rage); }
+
+// ---------- firing ----------
+function fire(){
+  var p = G.player;
+  if (G.fireCd > 0 || G.ammo <= 0) return;     // empty is just empty
+  G.ammo--;
+  G.bolts.push({ x: p.x, y: p.y - 14, vy: -BOLT_SPEED });
+  G.fireCd = 0.28;
+  G.recoil = 1;
+  sfx.shoot();
+}
+function boltLost(b, why){
+  addText(b.x, Math.max(30, b.y + 40), why || 'LOST', COLORS.ember, 0.9);
+  sfx.lost();
+  checkAmmo();
+}
+function boltWasted(b, why){
+  burst(b.x, b.y, COLORS.ash, 5, 140);
+  addText(b.x, b.y + 30, why, COLORS.sulfur, 1.0);
+  sfx.clank();
+  checkAmmo();
+}
+// Only at zero. One bolt and two eyes is already lost, and it plays on.
+function checkAmmo(){
+  if (G.phase !== 'devil' || !G.devil || G.devil.dying || G.mode !== 'play') return;
+  if (G.devil.state === 'wait' || G.devil.state === 'enter' || G.devil.state === 'arrive') return;
+  if (G.ammo + G.bolts.length === 0 && livingEyes(G.devil).length > 0 && G.devil.takeIn == null) G.devil.takeIn = 1.0;
+}
+
+// ---------- endings ----------
+function beginEnding(kind, dur){
+  G.mode = 'ending';
+  G.ending = { kind: kind, t: 0, dur: dur };
+  keys = {}; fireQueued = false;
+  if (G.devil) G.devil.eyes.forEach(function(e){ e.beam = 0; e.charge = 0; });
+}
+// He takes it. Input is cut; the heart keeps beating, slowing, and drifts —
+// no longer yours. His hand closes around it; the beat goes on inside the
+// fist. He turns and points at the player. The beat stops. Black.
+function loseHeart(){
+  var d = G.devil;
+  beginEnding('taken', 9.8);
+  d.state = 'taken';
+  d.eyes.forEach(function(e){ e.open = false; e.wide = 0; });
+  G.taken = { t: 0, bpm: G.heart.bpm, hand: { x: G.player.x, y: G.player.y, close: 0 }, point: 0, grabbed: false, stopped: false };
+  if (G.arms){ G.arms.l.mode = 'reach'; G.arms.r.mode = 'reach'; G.arms.reach = 0; }
+  // everything on screen burns out
+  G.forks.forEach(function(f){ burst(f.x, f.y, '#ff6a1f', 3, 90); });
+  G.forks.length = 0;
+  G.flames.forEach(function(fl){
+    if (fl.type === 'walker'){ fl.state = 'die'; fl.t = 0; }
+    else if (fl.type === 'ember'){ fl.state = 'bloom'; fl.t = fl.fuse + 0.5; }
+    else if (fl.type === 'jet'){ if (fl.len > 0){ fl.state = 'retract'; fl.t = 0; } else { fl.state = 'retract'; fl.t = 1; } }
+    else fl.t = fl.warn + fl.burn;
+  });
+  music.stop(1.2);
+  music.whisper(0);
+}
+function updateTaken(dt){
+  var T = G.taken, d = G.devil, p = G.player, h = G.heart;
+  T.t += dt;
+  var t = T.t;
+  // the heart slows all the way through, and stops
+  T.bpm += (36 - T.bpm) * Math.min(1, dt * 0.5);
+  h.override = t < 7.3 ? T.bpm : 0;
+  if (t >= 7.3 && !T.stopped){ T.stopped = true; G.heartSilent = true; }
+  if (!T.grabbed){
+    // adrift
+    p.x += Math.sin(t * 0.9) * 14 * dt;
+    p.y -= 12 * dt;
+  }
+  // both clawed hands come in from the sides and close around the heart
+  var hand = T.hand, A = G.arms;
+  hand.x = p.x; hand.y = p.y;
+  if (t > 1.0 && A){
+    A.reach = smooth((t - 1.0) / 1.6);
+    if (t > 1.05 && !T.rumbled){ T.rumbled = true; sfx.grab(); }
+  }
+  if (t > 2.6){
+    hand.close = smooth((t - 2.6) / 0.5);
+    if (!T.grabbed && hand.close >= 1){ T.grabbed = true; AUDIO.muffle(true); }
+  }
+  if (T.grabbed){
+    // the hands lift it toward him, and he turns to the player
+    var k2 = smooth((t - 4.2) / 1.2);
+    // lifted to just below his mouth, glowing, beating slowly, dimming until it goes out
+    p.x = lerp(p.x, d.x + (d.turn || 0) * 30, Math.min(1, dt * 2 * (t > 4.2 ? 1 : 0)));
+    p.y = lerp(p.y, d.y + 128, Math.min(1, dt * 2 * (t > 4.2 ? 1 : 0)));
+    T.glow = 1 - smooth((t - 3.0) / 4.3);
+    hand.x = p.x; hand.y = p.y;
+    d.turn = k2;
+    T.point = smooth((t - 4.8) / 1.5);   // the right hand lets go and points
+  }
+  if (t >= 7.6) G.black = 1;
+  if (t >= G.ending.dur){
+    G.ending = null;
+    gameOver('You had nothing left for him.', true);
+  }
+}
+function heartGaveOut(){
+  beginEnding('dead', 1.9);
+  G.shake = 1.4;
+  music.stop();
+}
+function devilDies(){
+  var d = G.devil;
+  d.dying = true; d.dieT = 0;
+  beginEnding('devil', 2.8);
+  G.white = 1; G.shake = 1.6;
+  music.stop();
+  sfx.kill();
+  sfx.roar();
+}
+function updateEnding(dt){
+  var E = G.ending, d = G.devil;
+  E.t += dt;
+  if (E.kind === 'taken'){ updateTaken(dt); return; }
+  if (d && !d.dying){ d.sway += dt; d.x = LW/2 + Math.sin(d.sway * 0.55) * d.swayAmp; }
+  if (E.kind === 'devil'){
+    d.dieT = E.t;
+    G.shake = Math.max(G.shake, 0.5);
+    if (Math.random() < 0.35)
+      burst(d.x + rnd(-110,110), d.y + rnd(-70,100), Math.random()<0.5 ? COLORS.ember : COLORS.sulfur, 2, 220, 60);
+    if (E.t > E.dur - 0.3 && !d.dead){ d.dead = true; G.white = 1; burst(d.x, d.y, COLORS.bone, 30, 420, 0); }
+  }
+  if (E.t >= E.dur){
+    G.ending = null;
+    if (E.kind === 'devil') victory();
+    else gameOver('Your heart gave out.');
+  }
+}
+function gameOver(why, quiet){
+  G.mode = 'over';
+  G.endT = 0;
+  G.score = Math.floor(G.score);
+  if (G.score > hi){ hi = G.score; saveHi(); }
+  document.getElementById('over-why').textContent = why;
+  scrOver.classList.toggle('low', !!quiet);
+  document.getElementById('over-score').textContent = 'Score ' + G.score;
+  document.getElementById('over-hi').textContent = 'Best ' + hi;
+  scrOver.hidden = false;
+  if (!quiet) sfx.over();
+  setTimeout(function(){ if (G.mode === 'over'){ AUDIO.muffle(false); G.heart.override = -1; music.play('dirge'); } }, quiet ? 2500 : 1000);
+}
+function victory(){
+  G.mode = 'won';
+  G.endT = 0;
+  var spare = G.ammo;
+  G.score = Math.floor(G.score + 10000 + G.lives * 2500 + spare * 1500);
+  if (G.score > hi){ hi = G.score; saveHi(); }
+  document.getElementById('win-why').textContent = spare
+    ? ('Two eyes. ' + spare + ' bolt' + (spare > 1 ? 's' : '') + ' to spare.')
+    : 'Two eyes. Not a bolt to spare.';
+  document.getElementById('win-score').textContent = 'Score ' + G.score;
+  document.getElementById('win-hi').textContent = 'Best ' + hi;
+  scrWin.hidden = false;
+  sfx.win();
+  setTimeout(function(){ if (G.mode === 'won') music.play('win'); }, 900);
+}
+
+// ---------- update ----------
+function update(dt){
+  G.t += dt;
+  G.shake = decay(G.shake, 3.4, dt);
+  G.flash = decay(G.flash, 3, dt);
+  G.white = decay(G.white, 2.2, dt);
+  G.lightning = decay(G.lightning, 2.0, dt);
+  G.recoil = decay(G.recoil, 8, dt);
+  if (G.herald > 0) G.herald -= dt;
+  if (G.hold > 0) G.hold -= dt;
+  if (G.devil) G.devil.kick = decay(G.devil.kick, 3, dt);
+  updateHeart(dt);
+
+  // embers rise faster as the phase darkens and with every beat
+  var emberK = 1 + G.prog * 1.3 + 0.8 * G.heart.pulse + (G.phase === 'devil' ? 0.6 : 0);
+  for (var i=0;i<G.embers.length;i++){
+    var em = G.embers[i];
+    em.y -= em.v * emberK * dt;
+    em.x += Math.sin(G.t*1.5 + em.p) * 10 * dt;
+    if (em.y < -6){ em.y = LH + 6; em.x = rnd(0, LW); }
+  }
+  stepParticles(dt);
+  stepTexts(dt);
+  for (var lf=G.loose.length-1; lf>=0; lf--){
+    var L = G.loose[lf]; L.t += dt; L.x += L.vx * dt; L.y += L.vy * dt; L.vy += 520 * dt; L.rot += L.spin * dt;
+    if (L.y > LH + 40 || L.t > 3) G.loose.splice(lf, 1);
+  }
+  if (G.mode === 'title'){
+    for (var ti=0; ti<G.titleHearts.length; ti++){
+      var th2 = G.titleHearts[ti];
+      th2.y -= th2.v * dt; th2.x += Math.sin(G.t * 0.8 + th2.p) * 8 * dt;
+      if (th2.y < -20){ th2.y = LH + 20; th2.x = rnd(20, LW-20); }
+    }
+  }
+  if (G.arms) updateArms(dt);
+  updateFireVoices();
+
+  if (G.mode === 'ending'){
+    updateEnding(dt);
+    moveHazards(dt, false);
+    return;
+  }
+  if (G.mode !== 'play'){ G.endT += dt; return; }
+
+  var p = G.player;
+
+  // penalties expire the moment the heart is vulnerable again
+  if (G.invuln > 0) G.invuln -= dt;
+  if (G.penalty){
+    G.penalty.t += dt;
+    if (G.invuln <= 0){
+      if (G.embed) releaseFork();
+      G.penalty = null;
+    }
+  }
+  // movement. embedded: slow, dragging the fork. burnt: fast and twitchy.
+  var pen = G.penalty ? G.penalty.kind : '';
+  var sp = 265 * (pen === 'fork' ? 0.65 : (pen === 'burn' ? 1.15 : 1)), mx = 0, my = 0;
+  if (keys['arrowleft'] || keys['a']) mx -= 1;
+  if (keys['arrowright']|| keys['d']) mx += 1;
+  if (keys['arrowup']   || keys['w']) my -= 1;
+  if (keys['arrowdown'] || keys['s']) my += 1;
+  if (pen === 'burn' && (mx || my)){ mx += rnd(-0.45, 0.45); my += rnd(-0.45, 0.45); }
+  if (mx || my){
+    var m = Math.hypot(mx,my) || 1;
+    p.x += mx/m * sp * dt;
+    p.y += my/m * sp * dt;
+    G.idleT = 0;
+  } else if (!pointerDown){
+    G.idleT += dt;
+    if (G.idleT > 3 && !G.heart.flutterDue){ G.heart.flutterDue = true; G.idleT = -2; }   // it flutters, then waits again
+  }
+  if (G.embed){ p.x += G.embed.dir.x * 18 * dt; p.y += G.embed.dir.y * 18 * dt; }
+  p.x = clamp(p.x, 16, LW-16);
+  p.y = clamp(p.y, ceilingY(), LH-30);
+  // smoothed velocity, so the forks can lead you
+  if (dt > 0){
+    p.vx = lerp(p.vx, (p.x - p.px) / dt, Math.min(1, dt * 12));
+    p.vy = lerp(p.vy, (p.y - p.py) / dt, Math.min(1, dt * 12));
+  }
+  p.px = p.x; p.py = p.y;
+
+  // firing
+  G.fireCd -= dt;
+  if (fireQueued){ fireQueued = false; if (G.invuln < 1.4) fire(); }
+
+  // bolts
+  for (var i=G.bolts.length-1;i>=0;i--){
+    var b = G.bolts[i];
+    b.y += b.vy * dt;
+    if (G.devil && (G.devil.state === 'open' || G.devil.state === 'attack')){
+      var d = G.devil, ey = d.y + 4;
+      if (b.y <= ey + 17 && b.y > ey - 40 && Math.abs(b.x - d.x) < d.w * 0.42){
+        // reached the brow line: an eye, or the bone between them
+        var struck = null;
+        for (var k=0;k<d.eyes.length;k++){
+          var e = d.eyes[k];
+          if (!e.dead && Math.abs(b.x - (d.x + e.dx)) < 22){ struck = e; break; }
+        }
+        G.bolts.splice(i,1);
+        if (struck && struck.open) eyeHit(d, struck);
+        else if (struck) boltWasted(b, 'NOT YET');
+        else boltWasted(b, 'WASTED');
+        continue;
+      }
+    }
+    if (b.y < -24){ G.bolts.splice(i,1); boltLost(b); }
+  }
+  if (G.mode !== 'play') return;   // a bolt may have ended the game
+
+  // phase logic
+  if (G.phase === 'survive'){
+    G.surv += dt;
+    G.score += dt * 10;
+    var prog = G.prog = G.surv / G.SURV;
+    music.whisper(prog > 0.7 ? (prog - 0.7) / 0.3 : 0);
+
+    // twice, his eyes open in the dark and watch. Nothing else happens.
+    if (G.watch){
+      G.watch.t += dt;
+      if (G.watch.t > G.watch.dur) G.watch = null;
+    } else if ((G.watched === 0 && prog > 0.33) || (G.watched === 1 && prog > 0.68)){
+      G.watched++;
+      G.watch = { t: 0, dur: 1.3 };
+      sfx.watch();
+    }
+
+    if (!G.watch){
+      G.forkT -= dt;
+      if (G.forkT <= 0){
+        G.forkT = rnd(1.9, 2.7) - prog * 0.8;
+        if (mayspawn()){
+          var r = Math.random();
+          throwFork(prog > 0.45 && r < 0.2 ? 'bracket' : (prog > 0.3 && r < 0.42 ? 'fan' : 'single'));
+        }
+      }
+      G.walkT -= dt;
+      if (G.walkT <= 0){ G.walkT = rnd(3.6, 5.2) - prog * 1.6; if (mayspawn()) spawnWalker(); }
+      // side jets: none in the first 40 %, then one every 7 s, 4.5 s in the last quarter
+      if (prog > 0.4){
+        G.jetT -= dt;
+        if (G.jetT <= 0){
+          var jetEvery = prog < 0.75 ? 7 : lerp(7, 4.5, (prog - 0.75) / 0.25);
+          G.jetT = (mayspawn() && spawnJet()) ? jetEvery : 0.3;
+        }
+      }
+      if (prog > 0.25){
+        G.emberT -= dt;
+        if (G.emberT <= 0){ G.emberT = rnd(2.3, 3.4) - prog * 0.6; if (mayspawn()) spawnEmber(); }
+      }
+    }
+
+    if (G.surv >= G.SURV){
+      // silence. the heart skips. then he lands.
+      G.phase = 'devil';
+      G.prog = 1;
+      G.devil = makeDevil();
+      G.hold = 1.4;
+      music.stop(0.5);
+      music.whisper(0);
+      G.forks.length = 0;
+    }
+  } else if (G.devil){
+    updateDevil(dt);
+    if (G.mode !== 'play') return;
+    var ds = G.devil.state;
+    if (ds === 'open' || ds === 'attack'){
+      G.jetT -= dt;
+      if (G.jetT <= 0){ G.jetT = spawnJet() ? rnd(2.2, 2.8) : 0.3; }
+    }
+    // lightning
+    if (G.devil.state !== 'wait'){
+      G.lightT -= dt;
+      if (G.lightT <= 0){
+        G.lightning = 1;
+        G.lightT = rnd(6, 12);
+        G.boltPath = makeLightning();
+        sfx.thunder();
+      }
+    }
+  }
+
+  moveHazards(dt, true);
+}
+
+function forkHazardPos(f){
+  return f.state === 'stuck' ? { x: f.x, y: f.y - 8 } : { x: f.x, y: f.y };
+}
+function moveHazards(dt, live){
+  var p = G.player;
+
+  // forks
+  for (var i=G.forks.length-1;i>=0;i--){
+    var f = G.forks[i];
+    f.t += dt;
+    if (f.t < 0) continue;                 // waiting its turn in a volley
+    if (f.state === 'aim'){
+      if (f.track){
+        f.tx = clamp(p.x + p.vx * 0.35, 16, LW-16);
+        f.ty = clamp(p.y + p.vy * 0.35, ceilingY(), LH-30);
+      }
+      f.rot = Math.atan2(f.ty - f.oy, f.tx - f.ox) - Math.PI/2;
+      if (f.t >= f.aimT){ f.state = 'lock'; f.t = 0; sfx.lock(); }
+    } else if (f.state === 'lock'){
+      if (f.t >= f.lockT){
+        var ang = Math.atan2(f.ty - f.oy, f.tx - f.ox) + f.spread;
+        f.vx = Math.cos(ang) * FORK_SPEED; f.vy = Math.sin(ang) * FORK_SPEED;
+        f.rot = ang - Math.PI/2;
+        f.state = 'fly'; f.t = 0;
+        sfx.throwFork();
+      }
+    } else if (f.state === 'fly'){
+      f.x += f.vx * dt; f.y += f.vy * dt;
+      if (f.y >= FLOOR - 6){
+        f.y = FLOOR - 6; f.state = 'stuck'; f.t = 0; f.baseRot = f.rot;
+        burst(f.x, FLOOR, '#ff6a1f', 3, 90);
+        sfx.impact(f.x, false);
+      } else if (f.x < -30 || f.x > LW + 30 || f.y < -60){
+        if (f.y > 0 && f.y < LH) sfx.impact(clamp(f.x, 0, LW), true);   // into the wall
+        G.forks.splice(i,1); continue;
+      }
+    } else {   // stuck: quivers, then burns out
+      f.rot = f.baseRot + Math.sin(f.t * 42) * 0.14 * Math.max(0, 1 - f.t / 1.2);
+      if (f.t > 1.5){ G.forks.splice(i,1); continue; }
+    }
+
+    // bolts can still break one
+    var hit = false;
+    for (var j=G.bolts.length-1;j>=0;j--){
+      var bb = G.bolts[j];
+      if (Math.abs(bb.x - f.x) < f.r + 5 && Math.abs(bb.y - f.y) < f.r + 12){
+        G.bolts.splice(j,1);
+        G.forks.splice(i,1);
+        G.score += 100;
+        burst(f.x, f.y, '#ff6a1f', 6, 180);
+        addText(f.x, f.y - 10, '+100', COLORS.ash, 0.6, 7);
+        sfx.pop();
+        hit = true;
+        checkAmmo();
+        break;
+      }
+    }
+    if (hit || !live || G.mode !== 'play') continue;
+    if (f.state !== 'fly' && f.state !== 'stuck') continue;
+    var hp = forkHazardPos(f);
+    if (hits(p, hp.x, hp.y, f.r)){ hurt('fork', hp.x, hp.y, f.vx || 0, f.vy || 1); break; }   // hurt() clears the forks
+    // graze: a near miss pays
+    if (f.state === 'fly' && !f.grazed && G.invuln <= 0 && Math.hypot(p.x - f.x, p.y - f.y) < f.r + 8 + 16){
+      f.grazed = true;
+      G.score += 50;
+      addText(p.x, p.y - 26, '+50', COLORS.sulfur, 0.6, 7);
+      sfx.graze();
+    }
+  }
+
+  // fire
+  for (var i=G.flames.length-1;i>=0;i--){
+    var fl = G.flames[i];
+    fl.t += dt;
+    var burn = false, burnAt = null;
+    if (fl.type === 'walker'){
+      fl.age += dt;
+      fl.hmax = Math.min(fl.hmax, flameLimit());          // the ceiling can drop mid-life (his arrival)
+      if (fl.state !== 'die') fl.h = fl.hmax * smooth(Math.min(1, fl.age / 0.8));   // the danger visibly climbs
+      if (fl.state === 'walk'){
+        // toward the x locked at ignition, then it stops. It never re-aims.
+        var dxw = fl.targetX - fl.x;
+        if (Math.abs(dxw) <= 100 * dt){ fl.x = fl.targetX; fl.state = 'stand'; }
+        else fl.x += Math.sign(dxw) * 100 * dt;
+        if (live && Math.abs(p.x - fl.x) < 14){ fl.state = 'erupt'; fl.t = 0; sfx.erupt(fl.x); G.shake = Math.max(G.shake, 0.6); }
+      } else if (fl.state === 'erupt'){
+        fl.flare = 1 - fl.t / 0.7;                            // a flare, not a climb: the height limit holds
+        if (fl.t > 0.7){ fl.state = 'stand'; fl.flare = 0; }
+      }
+      if (fl.state !== 'die' && fl.age > 6){ fl.state = 'die'; fl.t = 0; sfx.crackle(fl.x); }
+      if (fl.state === 'die'){
+        fl.h -= 420 * dt;
+        if (fl.h <= 0){ G.flames.splice(i,1); continue; }
+      }
+      // embers shed from the top and drift up on the turbulence
+      if (fl.h > 30 && Math.random() < 0.4)
+        G.parts.push({ x: fl.x + rnd(-fl.w*0.3, fl.w*0.3), y: LH - fl.h + rnd(-6, 24), vx: rnd(-12, 12), vy: rnd(-70, -30),
+                       life: rnd(0.7, 1.5), t: 0, c: Math.random() < 0.5 ? '#ffb060' : '#ff7a10', r: rnd(1.2, 2.4), g: -26, turb: 60 });
+      burn = Math.abs(p.x - fl.x) < fl.w * (0.5 + 0.2 * fl.flare) + 4 && p.y > LH - fl.h - 6;
+      if (burn) burnAt = [fl.x, p.y + 20];
+    } else if (fl.type === 'ember'){
+      if (fl.state === 'fly'){
+        fl.x += fl.vx * dt; fl.y += fl.vy * dt; fl.rot += fl.spin * dt;
+        // embers shed off the tail
+        if (Math.random() < 0.6){
+          var bv = Math.hypot(fl.vx, fl.vy) || 1;
+          G.parts.push({ x: fl.x - fl.vx / bv * rnd(8, 26) + rnd(-4, 4), y: fl.y - fl.vy / bv * rnd(8, 26) + rnd(-4, 4),
+                         vx: -fl.vx * 0.08 + rnd(-20, 20), vy: -fl.vy * 0.08 + rnd(-30, 0), life: rnd(0.4, 0.9), t: 0,
+                         c: Math.random() < 0.5 ? '#ffb060' : '#ff7a10', r: rnd(1, 2.2), g: -20, turb: 40 });
+        }
+        var remaining = Math.hypot(fl.tx - fl.x, fl.ty - fl.y);
+        if (remaining < 430 * dt * 1.1){
+          fl.x = fl.tx; fl.y = fl.ty; fl.state = 'ring'; fl.t = 0;
+          burst(fl.tx, fl.ty, '#ff7a10', 6, 140);
+          if (live) sfx.emberLand();
+        }
+        burn = Math.hypot(p.x - fl.x, p.y - fl.y) < 11 + 8;
+        if (burn) burnAt = [fl.x, fl.y];
+      } else if (fl.state === 'ring'){
+        // scorched into the floor: brightens and contracts, then goes off
+        if (fl.t > fl.fuse){
+          fl.state = 'bloom'; fl.t = 0; burst(fl.tx, fl.ty, '#ffb060', 8, 200);
+          if (live){ sfx.bloom(fl.tx); G.shake = Math.max(G.shake, 1.1 * (1 - clamp(Math.hypot(p.x - fl.tx, p.y - fl.ty) / 320, 0, 1))); }
+        }
+      } else {
+        if (fl.t > 0.8){ G.flames.splice(i,1); continue; }
+        if (fl.t < 0.5){
+          var br = 10 + 24 * Math.min(1, fl.t / 0.12);
+          burn = Math.hypot(p.x - fl.tx, p.y - fl.ty) < br + 6;
+          if (burn) burnAt = [fl.tx, fl.ty];
+        }
+      }
+    } else if (fl.type === 'jet'){
+      if (fl.state === 'aim'){
+        if (live){ fl.tx = p.x; fl.ty = p.y; }          // tracks, then freezes at lock: not led
+        if (fl.t >= fl.aimT){
+          fl.state = 'lock'; fl.t = 0;
+          var adx = Math.max(1, Math.abs(fl.tx - fl.ox)), ady = fl.oy - fl.ty;
+          fl.ang = clamp(Math.atan2(ady, adx), 15 * Math.PI/180, 35 * Math.PI/180);
+          sfx.lock();
+        }
+      } else if (fl.state === 'lock'){
+        if (fl.t >= fl.lockT){ fl.state = 'fire'; fl.t = 0; if (live) sfx.jet(); G.shake = Math.max(G.shake, 0.3); }
+      } else if (fl.state === 'fire'){
+        if (fl.t >= 0.3){ fl.state = 'hold'; fl.t = 0; }
+      } else if (fl.state === 'hold'){
+        if (fl.t >= 0.5){ fl.state = 'retract'; fl.t = 0; }
+      } else if (fl.t >= 0.3){ G.flames.splice(i,1); continue; }
+      fl.len = jetLen(fl);
+      if (fl.len > 0){
+        var jd2 = jetDir(fl);
+        burn = distToSeg(p.x, p.y, fl.ox, fl.oy, fl.ox + jd2.x * fl.len, fl.oy + jd2.y * fl.len) < 20 + 6;
+        if (burn) burnAt = [p.x + jd2.x * -20, p.y + jd2.y * -20];
+      }
+    } else if (fl.type === 'breath'){
+      if (fl.t > fl.warn + fl.burn){ G.flames.splice(i,1); continue; }
+      if (fl.t > fl.warn && !fl.roared){ fl.roared = true; sfx.breath(); G.shake = Math.max(G.shake, 0.6); }
+      if (fl.t > fl.warn && fl.t < fl.warn + fl.burn * 0.85){
+        burn = (p.x < LW/2 ? -1 : 1) === fl.side;
+        if (burn) burnAt = [p.x, p.y - 60];
+      }
+    }
+    if (live && burn) hurt('burn', burnAt ? burnAt[0] : p.x, burnAt ? burnAt[1] : p.y - 40);
+  }
+}
+
+// every burning thing gets a voice, louder when tall and near the heart
+var flameSeq = 0;
+function updateFireVoices(){
+  var p = G.player, list = [];
+  G.flames.forEach(function(fl){
+    if (!fl.id) fl.id = ++flameSeq;
+    if (fl.type === 'walker' && fl.h > 10) list.push({ id: fl.id, x: fl.x, h: Math.min(1, fl.h / 380), dist: Math.hypot(Math.max(0, Math.abs(p.x - fl.x) - fl.w/2), Math.max(0, (LH - fl.h) - p.y)) });
+    else if (fl.type === 'jet' && fl.len > 0){ var jd = jetDir(fl); list.push({ id: fl.id, x: fl.ox + jd.x * fl.len * 0.5, h: fl.len / 450, dist: distToSeg(p.x, p.y, fl.ox, fl.oy, fl.ox + jd.x * fl.len, fl.oy + jd.y * fl.len) }); }
+    else if (fl.type === 'breath' && fl.t > fl.warn && fl.t < fl.warn + fl.burn) list.push({ id: fl.id, x: LW/2 + fl.side * 105, h: 1, dist: (p.x < LW/2 ? -1 : 1) === fl.side ? 0 : 220 });
+  });
+  AUDIO.fire.update(list);
+}
+function stepParticles(dt){
+  for (var i=G.parts.length-1;i>=0;i--){
+    var q = G.parts[i];
+    q.t += dt;
+    if (q.t > q.life){ G.parts.splice(i,1); continue; }
+    if (q.turb){
+      var c = FIRE.curl(q.x * 0.6, q.y * 0.6 + G.t * 30);
+      q.vx += c.x * q.turb * dt * 20; q.vy += c.y * q.turb * dt * 20;
+      q.vx *= 1 - dt * 1.5;
+    }
+    q.x += q.vx * dt; q.y += q.vy * dt;
+    q.vy += q.g * dt;
+  }
+}
+function stepTexts(dt){
+  for (var i=G.texts.length-1;i>=0;i--){
+    var tx = G.texts[i];
+    tx.t += dt;
+    tx.y -= 18 * dt;
+    if (tx.t > tx.life) G.texts.splice(i,1);
+  }
+}
+
+function hits(p, x, y, r){
+  if (G.invuln > 0) return false;
+  return Math.hypot(p.x - x, p.y - y) < r + 8;
+}
+
+// kind: 'fork' (a pitchfork embeds), 'burn' (fire clings), or nothing.
+// hx, hy: where it came from, for the struck side and the fork's angle.
+function hurt(kind, hx, hy, vx, vy){
+  if (G.invuln > 0 || G.mode !== 'play') return;
+  var p = G.player;
+  G.lives--;
+  G.invuln = 2.0;
+  G.shake = 1.1;
+  G.flash = 1;
+  burst(p.x, p.y, COLORS.bone, 14, 260);
+  sfx.hurt();
+  G.forks.length = 0;
+  // the beat stops dead, restarts with a hard irregular thump, then arrhythmia;
+  // and it sheds light it will not get back
+  var h = G.heart;
+  h.stop = 0.2; h.big = true; h.arr = 2.0; h.next = h.since + rnd(0.05, 0.25);
+  h.light = Math.max(0.35, h.light - 0.22);
+  for (var li=0; li<16; li++)
+    G.parts.push({ x: p.x, y: p.y, vx: rnd(-90, 90), vy: rnd(-120, 20), life: rnd(0.5, 1.1), t: 0,
+                   c: Math.random() < 0.5 ? COLORS.heart : '#ffffff', r: rnd(1, 2.6), g: -10, turb: 30 });
+  if (G.arms) G.arms.creep = Math.max(0, 3 - G.lives);
+  // the penalty, and the scar it leaves
+  var dx = (hx == null ? 0 : hx - p.x), dy = (hy == null ? -1 : hy - p.y), dl = Math.hypot(dx, dy) || 1;
+  var dir = { x: dx / dl, y: dy / dl };
+  if (kind === 'fork'){
+    var vl = Math.hypot(vx || 0, vy || 0) || 1, tdir = { x: (vx || 0) / vl, y: (vy || 1) / vl };
+    G.penalty = { kind: 'fork', t: 0, dir: tdir };
+    G.embed = { ang: Math.atan2(tdir.y, tdir.x) - Math.PI/2, dir: tdir, t: 0 };
+    // a crack running in from the wound
+    var ex = -tdir.x * 0.8, ey = -tdir.y * 0.8, pts = [];
+    for (var ci=0; ci<5; ci++){ var u = ci/4; pts.push([ex + (0.15 - ex) * u + (ci && ci < 4 ? rnd(-0.18, 0.18) : 0), ey + (0.1 - ey) * u + (ci && ci < 4 ? rnd(-0.18, 0.18) : 0)]); }
+    G.scars.push({ kind: 'crack', pts: pts });
+  } else if (kind === 'burn'){
+    if (G.embed){ burnAwayFork(); }
+    G.penalty = { kind: 'burn', t: 0, dir: dir };
+    G.scars.push({ kind: 'char', x: dir.x * 0.5 + rnd(-0.15, 0.15), y: dir.y * 0.5 + rnd(-0.15, 0.15), r: rnd(0.28, 0.42), seed: Math.random() });
+  } else G.penalty = { kind: 'hit', t: 0, dir: dir };
+  if (G.lives <= 0){
+    burst(p.x, p.y, COLORS.ember, 20, 320);
+    heartGaveOut();
+  }
+}
+// the fork works loose and tumbles away
+function releaseFork(){
+  var em = G.embed, p = G.player; G.embed = null;
+  G.loose.push({ x: p.x, y: p.y, vx: em.dir.x * 60 + rnd(-40, 40), vy: -120 + rnd(-30, 30), rot: em.ang, spin: rnd(-6, 6), t: 0 });
+  sfx.stick();
+}
+// burnt while embedded: the fork burns away early
+function burnAwayFork(){
+  var p = G.player; G.embed = null;
+  burst(p.x, p.y, '#ff7a10', 10, 160);
+}
+
+// ---------- devil behaviour ----------
+function updateDevil(dt){
+  var d = G.devil, p = G.player;
+  d.st += dt;
+
+  if (d.state === 'wait'){
+    if (G.hold <= 0){
+      d.state = 'enter'; d.st = 0;
+      G.arms = makeArms();
+      G.shake = 1.4; G.herald = 2.0; G.lightning = 1; G.boltPath = makeLightning();
+      sfx.boss();
+      music.play('devil');
+    }
+    return;
+  }
+
+  d.sway += dt;
+  d.x = LW/2 + Math.sin(d.sway * 0.55) * d.swayAmp;
+
+  // a second to know, then he takes it
+  if (d.takeIn != null){ d.takeIn -= dt; if (d.takeIn <= 0){ loseHeart(); return; } }
+
+  if (d.state === 'enter'){
+    d.y += (d.targetY - d.y) * Math.min(1, dt * 2.2);
+    if (Math.abs(d.y - d.targetY) < 2){ d.state = 'arrive'; d.st = 0; }
+    return;
+  }
+
+  // embers in the sockets: dull, brighter when he is about to strike
+  d.eyes.forEach(function(e){
+    if (e.flash > 0) e.flash -= dt * 4;
+    var want = e.dead ? 0 : (e.charge > 0 ? 1 : (d.state === 'attack' && d.st < 0.7 ? 1 : (e.open ? 0.55 : 0.15)));
+    e.ember = lerp(e.ember, want, Math.min(1, dt * 6));
+  });
+
+  if (d.state === 'arrive'){
+    // mouth opens wide, the interior goes white, then the volley
+    if (!d.laughed){ d.laughed = true; d.laughLen = sfx.laughter() || 2.3; }
+    var L = d.laughLen, lb = laughBurst(d.st);
+    d.mouth = d.st < L ? 0.35 + 0.6 * lb : Math.min(1, d.mouth + dt * 4);
+    d.mouthGlow = d.st < L - 0.35 ? 0 : (d.st < L ? (d.st - (L - 0.35)) / 0.35 : Math.max(0, 1 - (d.st - L) / 0.3));
+    if (d.st >= L && !d.volleyed){
+      d.volleyed = true;
+      eruptForks(d.x, d.y + 70, 9);
+      G.shake = 1.6; G.inferno = true;
+      sfx.volley(); sfx.roar();
+    }
+    if (d.st > L + 0.8){
+      d.mouth = Math.max(0, 1 - (d.st - (L + 0.8)) / 0.3);
+    }
+    if (d.st > L + 1.2){
+      d.mouth = 0;
+      if (G.ammo + G.bolts.length === 0) d.takeIn = 0.8;   // he can see you have nothing
+      startAttack(d);
+    }
+    return;
+  }
+
+  if (d.state === 'open'){
+    // no new hazards while he's exposed: the window is about aim, not luck
+    var window_ = 1.9 - d.rage * 0.3;
+    if (d.st > window_){
+      d.eyes.forEach(function(e){ e.open = false; e.charge = 0; e.beam = 0; e.lockX = p.x; });
+      startAttack(d);
+    }
+    return;
+  }
+
+  // ----- attack -----
+  var a = d.attack, speed = devilSpeed(d), st = d.st * speed;
+  if (a === 'volley'){
+    if (d.thrown < 3 && st > d.thrown * 0.9){
+      throwFork(d.rage > 0 && d.thrown === 1 ? 'fan' : 'single', d.x, d.y + 60);
+      d.thrown++;
+    }
+    if (st > 3.4) openEye(d);
+  } else if (a === 'breath'){
+    d.mouth = st < 1.0 ? Math.min(1, st / 0.8) * 0.6 : Math.max(0, 1 - (st - 1.8) / 0.4);
+    if (st > 3.0) openEye(d);
+  } else if (a === 'beams'){
+    livingEyes(d).forEach(function(e){
+      if (e.charge < 1.0){
+        e.charge += dt * speed / 1.2;
+        e.lockX = e.lockX + (p.x - e.lockX) * Math.min(1, dt*3.2);
+      } else {
+        e.beam += dt;
+        if (e.beam < 0.75){
+          if (Math.abs(p.x - e.lockX) < 17 && p.y > d.y) hurt('burn', e.lockX, p.y - 60);
+        }
+      }
+    });
+    if (st > 3.0) openEye(d);
+  } else if (a === 'claw'){
+    // one hand winds up high on your side, then slams the floor there
+    var arm = G.arms[d.clawSide];
+    if (st < 1.0){ arm.mode = 'wind'; arm.k = st / 1.0; }
+    else if (st < 1.25){ arm.mode = 'slam'; arm.k = (st - 1.0) / 0.25; }
+    else if (st < 1.6){
+      if (arm.mode !== 'impact'){ arm.mode = 'impact'; G.shake = 1.2; sfx.stick(); sfx.thunder(); burst(arm.hx, FLOOR, COLORS.ash, 10, 240); }
+      arm.k = (st - 1.25) / 0.35;
+      var band = d.clawSide === 'l' ? p.x < 150 : p.x > LW - 150;
+      if (band && p.y > LH * 0.5) hurt();
+    } else { arm.mode = 'recover'; arm.k = Math.min(1, (st - 1.6) / 0.9); }
+    if (st > 2.8){ arm.mode = 'idle'; openEye(d); }
+  } else {   // fire: walkers from both edges, embers where you stand
+    if (!d.fired && st > 0.1){ d.fired = true; spawnWalker(34, 40); spawnWalker(LW - 34, 40); }
+    if (st > 1.2 && !d.embered){ d.embered = true; spawnEmber(d.x, d.y + 70); }
+    if (st > 2.2 && d.embered === true){ d.embered = 2; spawnEmber(d.x, d.y + 70); }
+    if (st > 3.6) openEye(d);
+  }
+}
+// the mouth follows the laugh's five bursts
+function laughBurst(st){
+  var bursts = [[0.0, 0.2], [0.3, 0.22], [0.64, 0.26], [1.04, 0.3], [1.52, 0.4]], k = 0;
+  bursts.forEach(function(b){ var u = (st - b[0]) / b[1]; if (u >= 0 && u <= 1) k = Math.max(k, Math.sin(u * Math.PI)); });
+  return k;
+}
+var ATTACKS = ['volley', 'breath', 'claw', 'beams', 'fire'];
+function startAttack(d){
+  d.state = 'attack'; d.st = 0;
+  d.cycle++;
+  d.attack = ATTACKS[d.cycle % ATTACKS.length];
+  d.thrown = 0; d.fired = false; d.embered = false; d.mouth = 0;
+  if (d.attack === 'breath') spawnBreath(G.player.x < LW/2 ? -1 : 1);
+  if (d.attack === 'claw'){
+    if (!G.arms) d.attack = 'volley';
+    else { d.clawSide = G.player.x < LW/2 ? 'l' : 'r'; sfx.breathWarn(); }
+  }
+}
+function openEye(d){
+  d.state = 'open';
+  d.st = 0; d.mouth = 0;
+  d.eyes.forEach(function(e){ e.charge = 0; e.beam = 0; e.open = false; });
+  var alive = livingEyes(d);
+  if (!alive.length) return;
+  var e = alive.length === 2 ? alive[d.cycle % 2] : alive[0];
+  e.open = true; e.flash = 1;
+  sfx.eyeOpen();
+}
+function eyeHit(d, e){
+  var ex = d.x + e.dx, ey = d.y + 4;
+  e.dead = true; e.open = false; e.ember = 0;
+  d.rage++;
+  d.kick = 1;                 // head snaps back
+  G.score += 3000;
+  G.shake = 1.3;
+  G.white = 0.6;
+  burst(ex, ey, COLORS.sulfur, 8, 220);
+  burst(ex, ey, COLORS.bone, 14, 320);
+  sfx.eye();
+  sfx.roar();
+  if (livingEyes(d).length === 0){ devilDies(); return; }
+  livingEyes(d).forEach(function(o){ o.wide = 1; });   // the other opens wider
+  addText(d.x, d.y + 118, 'YOU WILL PAY FOR THAT', COLORS.sulfur, 1.4, 8);
+  d.eyes.forEach(function(x){ x.charge = 0; x.beam = 0; x.lockX = G.player.x; });
+  startAttack(d);
+  checkAmmo();
+}
+function makeLightning(){
+  var pts = [], x = rnd(40, LW-40), y = -10;
+  var tx = G.devil ? G.devil.x + (Math.random()<0.5 ? -1 : 1) * G.devil.w*0.4 : LW/2;
+  var ty = G.devil ? G.devil.y - G.devil.h*0.6 : 120;
+  var n = 7;
+  for (var i=0;i<=n;i++){
+    var k = i/n;
+    pts.push({ x: x + (tx - x)*k + (i && i<n ? rnd(-26,26) : 0), y: y + (ty - y)*k });
+  }
+  return pts;
+}
+
+// ---------- drawing ----------
+function heartPath(x, y, s){
+  ctx.beginPath();
+  ctx.moveTo(x, y + s*0.72);
+  ctx.bezierCurveTo(x - s*1.30, y - s*0.24, x - s*0.62, y - s*1.28, x, y - s*0.46);
+  ctx.bezierCurveTo(x + s*0.62, y - s*1.28, x + s*1.30, y - s*0.24, x, y + s*0.72);
+  ctx.closePath();
+}
+
+// how much fire is under the heart right now, 0..1
+function fireBelow(p){ return fireLight(p.x, p.y).k; }
+// how much fire light falls on a point, and from which direction (unit vector toward the fire)
+function fireLight(x, y){
+  var best = { k: 0, dx: 0, dy: 1 };
+  G.flames.forEach(function(fl){
+    var nx, ny, kk;
+    if (fl.type === 'walker' && fl.h > 20){
+      nx = clamp(x, fl.x - fl.w * 0.5, fl.x + fl.w * 0.5); ny = clamp(y, LH - fl.h, LH);
+      kk = 1 - clamp(Math.hypot(x - nx, y - ny) / 170, 0, 1);
+    } else if (fl.type === 'jet' && fl.len > 0){
+      var jd = jetDir(fl), ex = fl.ox + jd.x * fl.len, ey = fl.oy + jd.y * fl.len;
+      var vx = ex - fl.ox, vy = ey - fl.oy, L2 = vx*vx + vy*vy || 1, kseg = clamp(((x - fl.ox) * vx + (y - fl.oy) * vy) / L2, 0, 1);
+      nx = fl.ox + vx * kseg; ny = fl.oy + vy * kseg;
+      kk = 0.8 * (1 - clamp(Math.hypot(x - nx, y - ny) / 150, 0, 1));
+    } else return;
+    if (kk > best.k){
+      var d = Math.hypot(nx - x, ny - y) || 1;
+      best = { k: kk, dx: (nx - x) / d, dy: (ny - y) / d };
+    }
+  });
+  return best;
+}
+function drawPlayer(){
+  var p = G.player, h = G.heart, t = G.t;
+  if (G.mode === 'play' && G.invuln > 0 && Math.floor(G.t * 14) % 2 === 0 && !(G.penalty && G.penalty.kind !== 'hit')) return;
+  var held = G.taken && G.taken.grabbed && G.mode === 'ending';
+  var y = p.y + G.recoil * 3, s = 11 * (window.BTD_HEART_SCALE || 1) * (held ? 1.8 : 1);   // BTD_HEART_SCALE: debug magnifier
+  var lit = fireBelow(p), fire = fireLight(p.x, p.y);
+  var pen = G.penalty, burn = pen && pen.kind === 'burn' ? pen : null;
+  // micro-motion: an asymmetric squash on each beat, a settle after, a faint drift
+  var e1 = env(h.since, 0.09, 0.2) * (h.lubScale - 1) / 0.14, e2 = h.dubDone ? env(h.since - h.dubAt, 0.07, 0.16) : 0;
+  var sx = 1 + 0.16 * e1 - 0.05 * e2, sy = 1 - 0.08 * e1 + 0.09 * e2;
+  var settle = Math.sin(h.settleT * 24) * 0.05 * h.settleAmp;
+  var dx = (FIRE.at(t * 5, 3) - 0.5) * 3.5, dy = (FIRE.at(t * 4.3, 80) - 0.5) * 3.5;
+  if (h.flutter > 0){ dx += rnd(-1.6, 1.6); dy += rnd(-1.6, 1.6); }
+  // a lean into the direction of travel, and a light trail when moving fast
+  var speed = Math.hypot(p.vx, p.vy);
+  var rot = settle + clamp(p.vx / 1400, -0.22, 0.22);
+  if (speed > 150 && Math.random() < 0.8)
+    G.parts.push({ x: p.x - p.vx / speed * 8 + rnd(-3, 3), y: y - p.vy / speed * 8 + rnd(-3, 3), vx: -p.vx * 0.05, vy: -p.vy * 0.05,
+                   life: rnd(0.18, 0.32), t: 0, c: col('heart', 0.5), r: rnd(1.5, 3), g: 0 });
+  if (burn && speed > 40 && Math.random() < 0.5)
+    G.parts.push({ x: p.x + rnd(-6, 6), y: y + rnd(-6, 6), vx: -p.vx * 0.06 + rnd(-8, 8), vy: -p.vy * 0.06 - 30, life: rnd(0.5, 1.0), t: 0,
+                   c: 'rgba(30,18,30,.55)', r: rnd(3, 6), g: -14, turb: 20 });
+  ctx.save();
+  if (lit > 0){
+    var ug = ctx.createRadialGradient(p.x, y + 14, 2, p.x, y + 14, 34);
+    ug.addColorStop(0, 'rgba(255,140,30,' + (0.55 * lit) + ')');
+    ug.addColorStop(1, 'rgba(255,60,0,0)');
+    ctx.fillStyle = ug;
+    ctx.fillRect(p.x - 40, y - 26, 80, 60);
+  }
+  drawGem(p.x + dx, y + dy, s, {
+    pulse: h.pulse, lit: lit, dmg: 3 - G.lives, light: h.light * (G.taken && G.taken.glow != null ? G.taken.glow : 1), fire: fire, scars: G.scars,
+    burnK: burn ? Math.max(0, 1 - pen.t / 0.6) : 0,
+    sx: sx, sy: sy, rot: rot, veins: true, leak: G.lives <= 1 || (pen && pen.kind === 'fork'),
+    breath: 0.82 + 0.18 * Math.sin(t * 1.1 + 0.7),                  // its own slower cycle
+    veinWave: h.since / 0.45
+  });
+  // the embedded fork, quivering, and the light leaking from the wound
+  if (G.embed){
+    var em = G.embed, q = Math.sin(em.t * 38) * 0.12 * Math.max(0, 1 - em.t / 1.2);
+    ctx.save();
+    ctx.translate(p.x + dx + em.dir.x * 4, y + dy + em.dir.y * 4);
+    ctx.rotate(em.ang + q);
+    ctx.translate(0, -12);          // tines in the heart, handle out along the arrival line
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowColor = COLORS.ember; ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#ff6a24'; ctx.lineWidth = 3;
+    forkShape();
+    ctx.restore();
+    if (Math.random() < 0.7)
+      G.parts.push({ x: p.x + em.dir.x * 6 + rnd(-3, 3), y: y + em.dir.y * 6 + rnd(-3, 3), vx: em.dir.x * 20 + rnd(-10, 10), vy: -18 + rnd(-10, 10),
+                     life: rnd(0.3, 0.7), t: 0, c: Math.random() < 0.6 ? COLORS.heart : '#ffffff', r: rnd(0.8, 1.8), g: -8, turb: 20 });
+  }
+  // flame clinging to the struck side, licking upward, shrinking as the timer runs out
+  if (burn){
+    var bk = Math.max(0, 1 - pen.t / 2.0), bx = p.x + dx + burn.dir.x * s * 0.9, by = y + dy + burn.dir.y * s * 0.6;
+    var fh = 26 * bk;
+    ctx.save();
+    ctx.shadowColor = '#ff6a10'; ctx.shadowBlur = 14;
+    var fg = ctx.createLinearGradient(0, by, 0, by - fh);
+    fg.addColorStop(0, 'rgba(255,220,120,.9)'); fg.addColorStop(0.5, 'rgba(255,110,10,.8)'); fg.addColorStop(1, 'rgba(255,40,10,0)');
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.moveTo(bx - 7 * bk, by + 3);
+    for (var i=1;i<=5;i++){ var k = i/5, e = (FIRE.at(k*50 + t*90, 40) - 0.5) * 8; ctx.lineTo(bx - 7 * bk * (1 - k) + e, by - fh * k); }
+    for (var j=5;j>=1;j--){ var k2 = j/5, e2 = (FIRE.at(k2*50 + t*95 + 300, 60) - 0.5) * 8; ctx.lineTo(bx + 7 * bk * (1 - k2) + e2, by - fh * k2); }
+    ctx.lineTo(bx + 7 * bk, by + 3);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    if (Math.random() < 0.4)
+      G.parts.push({ x: bx + rnd(-4, 4), y: by - fh * 0.6, vx: rnd(-8, 8), vy: rnd(-40, -20), life: rnd(0.3, 0.7), t: 0, c: '#ffb060', r: rnd(0.8, 1.6), g: -20, turb: 30 });
+  }
+  ctx.restore();
+}
+
+function boltShape(x, y, s){
+  ctx.beginPath();
+  ctx.moveTo(x + 1*s, y - 12*s);
+  ctx.lineTo(x - 4*s, y - 1*s);
+  ctx.lineTo(x - 0.5*s, y - 1*s);
+  ctx.lineTo(x - 2*s, y + 12*s);
+  ctx.lineTo(x + 4.5*s, y - 2*s);
+  ctx.lineTo(x + 0.5*s, y - 2*s);
+  ctx.closePath();
+}
+function drawBolt(b){
+  ctx.save();
+  ctx.shadowColor = COLORS.heart;
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = '#eefaff';
+  boltShape(b.x, b.y, 1);
+  ctx.fill();
+  ctx.restore();
+}
+
+function forkShape(){
+  ctx.beginPath(); ctx.moveTo(0,-17); ctx.lineTo(0,3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-9,3); ctx.lineTo(9,3); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-9,3); ctx.lineTo(-9,15);
+  ctx.moveTo(0,3);  ctx.lineTo(0,18);
+  ctx.moveTo(9,3);  ctx.lineTo(9,15);
+  ctx.stroke();
+}
+function drawFork(f){
+  if (f.t < 0) return;
+  ctx.save();
+  if (f.state === 'aim' || f.state === 'lock'){
+    var locked = f.state === 'lock';
+    var flick = locked && Math.floor(f.t * 30) % 2 === 0;
+    ctx.globalAlpha = locked ? (flick ? 0.95 : 0.6) : 0.18 + 0.12 * (f.t / f.aimT);
+    ctx.strokeStyle = locked ? COLORS.sulfur : COLORS.ember;
+    ctx.lineWidth = locked ? 1.5 : 1;
+    if (!locked) ctx.setLineDash([3, 9]);
+    ctx.beginPath(); ctx.moveTo(f.ox, f.oy); ctx.lineTo(f.tx, f.ty); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = locked ? 1 : 0.25 + 0.6 * (f.t / f.aimT);
+  }
+  var alpha = f.state === 'stuck' ? Math.min(1, (1.5 - f.t) / 0.4) : 1;
+  ctx.globalAlpha *= alpha;
+  ctx.translate(f.x, f.y);
+  ctx.rotate(f.rot);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = COLORS.ember;
+  ctx.shadowBlur = f.state === 'lock' ? 16 : 8;
+  ctx.strokeStyle = f.state === 'lock' ? '#ffb070' : '#ff6a24';
+  ctx.lineWidth = 3;
+  forkShape();
+  ctx.restore();
+}
+
+// a column of hellfire: turbulent edges from the noise field, the shared fire
+// texture inside, a glow, and heat shimmer above the tip
+// the edge of a flame: three octaves of curl noise scrolling up at different rates
+function flameEdge(k, seed, t, w){
+  var amp = w * (0.28 + 1.2 * k);
+  return (FIRE.curl(k * 40 + seed * 300, t * 45 + seed * 90).x * 0.55
+        + FIRE.curl(k * 95 + seed * 120, t * 105 + seed * 40).x * 0.32
+        + FIRE.curl(k * 210 + seed * 500, t * 220).x * 0.16) * amp * 4.5;
+}
+// light spilled on the floor around a column
+function floorSpill(x, w, h){
+  var r = w * 2.2 + h * 0.15;
+  var g = ctx.createRadialGradient(x, FLOOR, 2, x, FLOOR, r);
+  g.addColorStop(0, 'rgba(255,140,40,.42)');
+  g.addColorStop(0.5, 'rgba(255,90,20,.18)');
+  g.addColorStop(1, 'rgba(255,60,10,0)');
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.ellipse(x, FLOOR, r, r * 0.22, 0, 0, 6.2832); ctx.fill();
+  ctx.restore();
+}
+// thin smoke above the tip, darkening the violet behind it
+function smokePlume(x, top, w, seed, t){
+  ctx.save();
+  for (var i=0;i<8;i++){
+    var k = i / 8;
+    var c = FIRE.curl(seed * 200 + i * 9, t * 18 + i * 13);
+    var px = x + c.x * (60 + i * 30) * 4 + Math.sin(t * 0.7 + seed * 6 + i) * (6 + i * 5);
+    var py = top - 14 - i * 24 - (t * 12 + seed * 100) % 24;
+    var r = w * 0.32 + i * 6;
+    ctx.fillStyle = 'rgba(8,4,18,' + (0.26 * (1 - k)) + ')';
+    ctx.beginPath(); ctx.arc(px, py, r, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+}
+function flameColumn(x, h, w, seed, flare){
+  if (h < 4) return;
+  var t = G.t, top = LH - h;
+  w = w * (1 + 0.35 * (flare || 0));
+  smokePlume(x, top, w, seed, t);
+  floorSpill(x, w, h);
+  ctx.save();
+  // silhouette: the edge churns rather than waves
+  ctx.beginPath();
+  ctx.moveTo(x - w*0.5, LH + 4);
+  var steps = Math.max(8, Math.floor(h / 9)), i, k;
+  for (i=0;i<=steps;i++){
+    k = i/steps;
+    ctx.lineTo(x - w*0.5*(1 - k*0.5) + flameEdge(k, seed, t, w), LH - h*k);
+  }
+  for (i=steps;i>=0;i--){
+    k = i/steps;
+    ctx.lineTo(x + w*0.5*(1 - k*0.5) + flameEdge(k, seed + 0.37, t, w), LH - h*k);
+  }
+  ctx.closePath();
+  ctx.shadowColor = '#ff5a10'; ctx.shadowBlur = 26 + 20 * (flare || 0);
+  var sg = ctx.createLinearGradient(0, LH, 0, top);
+  sg.addColorStop(0, 'rgba(255,90,10,.6)');
+  sg.addColorStop(0.55, 'rgba(255,60,10,.35)');
+  sg.addColorStop(1, 'rgba(255,40,10,0)');
+  ctx.fillStyle = sg;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.clip();
+  var sx = Math.floor(seed * 60) % 60;
+  ctx.drawImage(colFire.canvas, sx, 0, 36, colFire.h, x - w*0.7, top - 10, w*1.4, h + 14);
+  if (flare){
+    ctx.fillStyle = 'rgba(255,240,200,' + (0.5 * flare) + ')';
+    ctx.fillRect(x - w, top - 20, w * 2, h + 30);
+  }
+  ctx.restore();
+  // heat shimmer: everything seen through and just above the flame is displaced sideways
+  var S = cvs.width / LW, sh = 7;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  for (var yy = Math.max(2, top - 70); yy < LH - 6; yy += sh){
+    var above = yy < top ? 1 - (top - yy) / 70 : 1;
+    var amp = yy < top ? 6 * above : 2.6;
+    var off = (FIRE.at(yy * 0.22 + seed * 200, t * 85) - 0.5) * 2 * amp;
+    var sy = Math.floor(yy * S), sxx = Math.max(0, Math.floor((x - w * 0.9) * S));
+    var sw = Math.floor(w * 1.8 * S), shh = Math.ceil(sh * S);
+    if (sy + shh > cvs.height) break;
+    ctx.drawImage(cvs, sxx, sy, sw, shh, sxx + off * S, sy, sw, shh);
+  }
+  ctx.restore();
+}
+function drawFlame(fl){
+  if (fl.type === 'walker'){
+    flameColumn(fl.x, fl.h, fl.w, fl.seed, fl.flare);
+  } else if (fl.type === 'ember'){
+    if (fl.state === 'fly') drawFireball(fl);
+    else if (fl.state === 'ring') drawScorchRing(fl);
+    else drawDetonation(fl);
+  } else if (fl.type === 'jet'){
+    drawJet(fl);
+  } else if (fl.type === 'breath' && fl.t > fl.warn){
+    var d = G.devil, bt2 = (fl.t - fl.warn) / fl.burn;
+    var top = d ? d.y + 62 : 0;
+    var x0 = fl.side < 0 ? 0 : LW/2, x1 = fl.side < 0 ? LW/2 : LW;
+    var mouthX = d ? d.x : LW/2;
+    ctx.save();
+    ctx.globalAlpha = bt2 < 0.15 ? bt2 / 0.15 : (bt2 > 0.8 ? (1 - bt2) / 0.2 : 1);
+    var outer = fl.side > 0 ? x1 + 20 : x0 - 20, inner = LW/2 + Math.sin(G.t*11)*6;
+    ctx.beginPath();
+    ctx.moveTo(mouthX - 30, top); ctx.lineTo(mouthX + 30, top);
+    ctx.lineTo(outer, top + 60 + Math.sin(G.t*13)*8);
+    ctx.lineTo(outer, LH);
+    ctx.lineTo(inner, LH);
+    ctx.lineTo(inner, top + 60);
+    ctx.closePath();
+    ctx.shadowColor = COLORS.ember; ctx.shadowBlur = 30;
+    ctx.fillStyle = 'rgba(255,110,10,.75)';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.clip();
+    ctx.globalAlpha *= 0.9;
+    ctx.drawImage(colFire.canvas, 0, 0, colFire.w, colFire.h, Math.min(x0, outer) - 20, top - 20, LW/2 + 60, LH - top + 40);
+    ctx.restore();
+  }
+}
+
+// a fireball in flight: white-hot core, orange body, a tail streaming
+// opposite the velocity, a soft halo, and a tumble
+function drawFireball(f){
+  var t = G.t, ang = Math.atan2(f.vy, f.vx);
+  ctx.save();
+  // halo
+  var hg = ctx.createRadialGradient(f.x, f.y, 2, f.x, f.y, 34);
+  hg.addColorStop(0, 'rgba(255,150,50,.35)'); hg.addColorStop(1, 'rgba(255,60,10,0)');
+  ctx.fillStyle = hg;
+  ctx.beginPath(); ctx.arc(f.x, f.y, 34, 0, 6.2832); ctx.fill();
+  ctx.translate(f.x, f.y);
+  ctx.rotate(ang);
+  // tail: tapering behind, edges churning
+  ctx.shadowColor = '#ff6a10'; ctx.shadowBlur = 18;
+  var tg = ctx.createLinearGradient(0, 0, -46, 0);
+  tg.addColorStop(0, 'rgba(255,200,90,.95)'); tg.addColorStop(0.4, 'rgba(255,110,10,.8)'); tg.addColorStop(1, 'rgba(255,40,10,0)');
+  ctx.fillStyle = tg;
+  ctx.beginPath();
+  ctx.moveTo(2, -9);
+  for (var i=1;i<=6;i++){ var k = i/6, e = (FIRE.at(k*60 + f.seed*300, t*80) - 0.5) * 10 * k; ctx.lineTo(-48 * k, -9 * (1 - k) + e); }
+  for (var j=6;j>=1;j--){ var k2 = j/6, e2 = (FIRE.at(k2*60 + f.seed*300 + 200, t*85) - 0.5) * 10 * k2; ctx.lineTo(-48 * k2, 9 * (1 - k2) + e2); }
+  ctx.lineTo(2, 9);
+  ctx.closePath(); ctx.fill();
+  // body, tumbling
+  ctx.rotate(f.rot);
+  var bg = ctx.createRadialGradient(-2, -2, 1, 0, 0, 12);
+  bg.addColorStop(0, '#fffbe8'); bg.addColorStop(0.35, '#ffd060'); bg.addColorStop(0.75, '#ff7a10'); bg.addColorStop(1, 'rgba(255,60,10,.6)');
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  for (var a=0;a<8;a++){ var r = 10 + (a % 2 ? 2 : -1), th = a / 8 * 6.2832; ctx.lineTo(Math.cos(th) * r, Math.sin(th) * r); }
+  ctx.closePath(); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(-1, -1, 4.5, 0, 6.2832); ctx.fill();
+  ctx.restore();
+}
+// the landing: a ring scorched into the floor, brightening and contracting to the detonation
+function drawScorchRing(f){
+  var k = f.t / f.fuse, r = lerp(42, 14, smooth(k));
+  var flick = 0.55 + 0.45 * Math.abs(Math.sin(f.t * (6 + k * 26)));
+  ctx.save();
+  ctx.shadowColor = '#ff6a10'; ctx.shadowBlur = 6 + 18 * k;
+  ctx.strokeStyle = rgba(255, 90 + 130 * k, 20 + 60 * k, 0.35 + 0.65 * k * flick);
+  ctx.lineWidth = 2 + 2.5 * k;
+  ctx.beginPath(); ctx.ellipse(f.tx, f.ty, r, r * 0.45, 0, 0, 6.2832); ctx.stroke();
+  // char inside the ring
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(20,6,4,' + (0.35 * k) + ')';
+  ctx.beginPath(); ctx.ellipse(f.tx, f.ty, r, r * 0.45, 0, 0, 6.2832); ctx.fill();
+  // the coal at the centre
+  ctx.fillStyle = k < 0.8 ? '#c8320a' : '#ffb070';
+  ctx.shadowColor = COLORS.ember; ctx.shadowBlur = 6 + 12 * k;
+  ctx.beginPath(); ctx.arc(f.tx, f.ty, 3 + 2.5 * k, 0, 6.2832); ctx.fill();
+  ctx.restore();
+}
+function drawDetonation(f){
+  var bt = f.t, br = 10 + 24 * Math.min(1, bt / 0.12);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - bt / 0.8);
+  var g = ctx.createRadialGradient(f.tx, f.ty, 1, f.tx, f.ty, br + 6);
+  g.addColorStop(0, '#ffe58a'); g.addColorStop(0.5, '#ff7a10'); g.addColorStop(1, 'rgba(255,26,0,0)');
+  ctx.fillStyle = g; ctx.shadowColor = COLORS.ember; ctx.shadowBlur = 16;
+  ctx.beginPath(); ctx.arc(f.tx, f.ty, br + 6, 0, 6.2832); ctx.fill();
+  // a shock ring racing out
+  ctx.strokeStyle = 'rgba(255,220,160,' + (0.8 * Math.max(0, 1 - bt / 0.35)) + ')';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(f.tx, f.ty, br + 10 + bt * 120, (br + 10 + bt * 120) * 0.5, 0, 0, 6.2832); ctx.stroke();
+  ctx.restore();
+}
+// the wall vent, its aim line, and the lance
+function drawJet(j){
+  var t = G.t, locked = j.state === 'lock', aiming = j.state === 'aim';
+  ctx.save();
+  // the vent: a notch in the wall that glows as it charges
+  var charge = aiming ? j.t / j.aimT : 1;
+  ctx.shadowColor = locked ? COLORS.sulfur : '#ff6a10';
+  ctx.shadowBlur = 8 + 18 * charge;
+  ctx.fillStyle = '#12040a';
+  ctx.beginPath(); ctx.ellipse(j.ox, j.oy, 10, 16, 0, 0, 6.2832); ctx.fill();
+  var vg = ctx.createRadialGradient(j.ox, j.oy, 1, j.ox, j.oy, 12);
+  vg.addColorStop(0, locked ? '#fff2c0' : rgba(255, 150 + 80*charge, 40, 0.95));
+  vg.addColorStop(1, 'rgba(255,60,0,0)');
+  ctx.fillStyle = vg;
+  ctx.beginPath(); ctx.ellipse(j.ox, j.oy, 9, 14, 0, 0, 6.2832); ctx.fill();
+  ctx.shadowBlur = 0;
+  if (aiming || locked){
+    // the aim line: thin and tracking, then solid and flashing along the fixed vector
+    var ex, ey;
+    if (locked){ var jd = jetDir(j); ex = j.ox + jd.x * 450; ey = j.oy + jd.y * 450; }
+    else { ex = j.tx; ey = j.ty; }
+    var flick = locked && Math.floor(j.t * 30) % 2 === 0;
+    ctx.globalAlpha = locked ? (flick ? 0.95 : 0.6) : 0.18 + 0.14 * charge;
+    ctx.strokeStyle = locked ? COLORS.sulfur : '#ff6a10';
+    ctx.lineWidth = locked ? 1.5 : 1;
+    if (!locked) ctx.setLineDash([3, 9]);
+    ctx.beginPath(); ctx.moveTo(j.ox, j.oy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    return;
+  }
+  var L = j.len;
+  if (L < 4){ ctx.restore(); return; }
+  // the lance, along its vector
+  ctx.translate(j.ox, j.oy);
+  ctx.rotate(Math.atan2(-Math.sin(j.ang), -j.side * Math.cos(j.ang)));
+  ctx.beginPath();
+  ctx.moveTo(0, -20);
+  var n = 10, i, k, e;
+  for (i=0;i<=n;i++){
+    k = i/n; e = (FIRE.at(k*80 + j.seed*300, t*70) - 0.5) * 14 * (0.3 + k);
+    ctx.lineTo(L * k, -20 * (1 - k*0.55) + e);
+  }
+  ctx.lineTo(L + 8 + (FIRE.at(t*60, j.seed*500) - 0.5) * 16, 0);
+  for (i=n;i>=0;i--){
+    k = i/n; e = (FIRE.at(k*80 + j.seed*300 + 400, t*72) - 0.5) * 14 * (0.3 + k);
+    ctx.lineTo(L * k, 20 * (1 - k*0.55) + e);
+  }
+  ctx.closePath();
+  ctx.shadowColor = '#ff5a10'; ctx.shadowBlur = 24;
+  var lg = ctx.createLinearGradient(0, 0, L, 0);
+  lg.addColorStop(0, 'rgba(255,240,180,.95)');
+  lg.addColorStop(0.5, 'rgba(255,110,10,.7)');
+  lg.addColorStop(1, 'rgba(255,40,10,0)');
+  ctx.fillStyle = lg;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.clip();
+  // the fire texture flows from the vent to the tip
+  ctx.rotate(Math.PI / 2);
+  var sx = Math.floor(j.seed * 60) % 60;
+  ctx.drawImage(colFire.canvas, sx, 0, 36, colFire.h, -24, -L - 10, 48, L + 14);
+  ctx.restore();
+}
+
+// his eyes in the dark, before he appears
+function drawWatch(){
+  var w = G.watch, k = env(w.t, 0.25, 1.05) ;
+  if (w.t > 0.25) k = Math.min(1, (w.dur - w.t) / 0.25);
+  var p = G.player;
+  ctx.save();
+  ctx.globalAlpha = clamp(k, 0, 1);
+  [-56, 56].forEach(function(dx){
+    var ex = LW/2 + dx + (p.x - LW/2) * 0.06, ey = 118;
+    coalEye(ex, ey, 20, 12 * Math.min(1, w.t * 4), 0.7, p);
+  });
+  ctx.restore();
+}
+// smoldering coal: near-black, with a dull red ember inside
+function coalEye(ex, ey, rx, ry, ember, p){
+  ctx.save();
+  ctx.fillStyle = '#080203';
+  ctx.beginPath(); ctx.ellipse(ex, ey, rx, ry, 0, 0, 6.2832); ctx.fill();
+  if (ember > 0.02 && ry > 2){
+    var px = p ? clamp((p.x - ex) / LW * 12, -7, 7) : 0;
+    var eg = ctx.createRadialGradient(ex + px, ey, 0.5, ex + px, ey, rx * 0.7);
+    eg.addColorStop(0, rgba(255, 120 + 100*ember, 40 + 80*ember, 0.95 * ember));
+    eg.addColorStop(0.5, rgba(200, 30, 6, 0.6 * ember));
+    eg.addColorStop(1, 'rgba(90,8,2,0)');
+    ctx.fillStyle = eg;
+    ctx.beginPath(); ctx.ellipse(ex, ey, rx, ry, 0, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function hornPath(x, y, dir){
+  ctx.beginPath();
+  ctx.moveTo(x, y + 4);
+  ctx.quadraticCurveTo(x + dir*38, y - 26, x + dir*22, y - 66);
+  ctx.quadraticCurveTo(x + dir*50, y - 30, x + dir*18, y + 10);
+  ctx.closePath();
+}
+// the skull: brow ridge, cheekbones, a narrowing jaw, a chin. Every anchor
+// drifts on the noise field so the outline wavers like heat. Asymmetric.
+function skullPoints(cx, cy, w, h, sk){
+  var t = G.t;
+  function n(i, amp){ return (FIRE.at(i * 23 + t * 30, i * 41 + t * 22) - 0.5) * amp; }
+  var P = [
+    [-0.47, -0.30], [-0.36, -0.66], [-0.12, -0.82], [0.14, -0.81], [0.38, -0.62], [0.49, -0.30],
+    [0.56, -0.20], [0.53, 0.02],
+    [0.45, 0.30], [0.31, 0.56], [0.14, 0.74], [0.02, 0.80],
+    [-0.11, 0.75], [-0.27, 0.58], [-0.42, 0.32], [-0.50, 0.04], [-0.55, -0.20]
+  ];
+  return P.map(function(q, i){ return { x: cx + q[0] * w + n(i, 10) + (q[1] > 0 ? sk * 0.3 * (1 + q[1]) : sk * 0.15), y: cy + q[1] * h + n(i + 40, 8) }; });
+}
+// a closed smooth curve through points (quadratics through the midpoints)
+function skullPath(pts){
+  var n = pts.length;
+  ctx.beginPath();
+  ctx.moveTo((pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+  for (var i=1;i<=n;i++){
+    var b = pts[i % n], c = pts[(i + 1) % n];
+    ctx.quadraticCurveTo(b.x, b.y, (b.x + c.x) / 2, (b.y + c.y) / 2);
+  }
+  ctx.closePath();
+}
+// the mouth: irregular, wider than tall, the lower lip fuller, one side wider
+function mouthPoints(mx, my, mw, mh, t){
+  var pts = [], n = 14;
+  for (var i=0;i<n;i++){
+    var th = i / n * 6.2832, c = Math.cos(th), sn = Math.sin(th);
+    var rx = mw * (1 + 0.1 * Math.cos(th * 2 + 0.6)) * (c < 0 ? 1.1 : 0.94);
+    var ry = mh * (sn > 0 ? 1.18 : 0.82) * (1 + 0.08 * Math.sin(th * 3 + 1.1));
+    var wob = (FIRE.at(i * 31 + t * 18, 500 + i * 9) - 0.5) * 7;
+    pts.push({ x: mx + c * (rx + wob), y: my + sn * (ry + wob * 0.5) });
+  }
+  return pts;
+}
+// Flesh on fire. Coal eyes. Fangs lit from below by his own mouth-fire.
+function drawDevil(d){
+  if (d.dead || d.state === 'wait') return;
+  var p = G.player;
+  var turn = d.turn || 0;
+  var cx = d.x + turn * 30, cy = d.y - d.kick * 26, w = d.w * (1 - 0.28 * turn), h = d.h;
+  var dieK = d.dying ? clamp(d.dieT / 2.5, 0, 1) : 0;
+  if (d.dying){ cx += rnd(-1,1) * 6 * dieK; cy += rnd(-1,1) * 4 * dieK; }
+  var sk = clamp((p.x - cx) / LW, -1, 1) * 26 + turn * 40;      // watching you
+  ctx.save();
+  ctx.globalAlpha = 1 - dieK * 0.85;
+
+  // aura: throbs with the heartbeat
+  var g = ctx.createRadialGradient(cx, cy, 12, cx, cy, w*0.95);
+  g.addColorStop(0, 'rgba(255,60,0,' + (0.20 + 0.18 * G.heart.pulse) + ')');
+  g.addColorStop(1, 'rgba(255,42,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(cx - w, cy - h, w*2, h*2.3);
+
+  // horns: char, with burning edges
+  [-1, 1].forEach(function(dir){
+    hornPath(cx + dir*w*0.40, cy - h*0.40, dir);
+    ctx.fillStyle = '#0c0203'; ctx.fill();
+    ctx.shadowColor = '#ff6a10'; ctx.shadowBlur = 10;
+    ctx.strokeStyle = 'rgba(255,110,30,.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.shadowBlur = 0;
+  });
+
+  // --- the skull: fire skin over bone. Brow ridge, cheekbones, a narrowing jaw, a chin.
+  var skull = skullPoints(cx, cy, w, h, sk);
+  ctx.save();
+  skullPath(skull);
+  ctx.shadowColor = '#ff4a00'; ctx.shadowBlur = 24;
+  ctx.fillStyle = '#3a0a04';
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.clip();
+  ctx.drawImage(faceFire.canvas, cx - w*0.6, cy - h*0.9, w*1.2, h*1.76);
+  // planes: the brow ridge lit on top and shadowed beneath
+  var browY = cy - h*0.27;
+  var bg = ctx.createLinearGradient(0, browY - 26, 0, browY + 34);
+  bg.addColorStop(0, 'rgba(255,210,130,.24)'); bg.addColorStop(0.32, 'rgba(255,210,130,0)');
+  bg.addColorStop(0.5, 'rgba(15,3,2,.55)'); bg.addColorStop(1, 'rgba(15,3,2,0)');
+  ctx.fillStyle = bg; ctx.fillRect(cx - w, browY - 26, w*2, 60);
+  // cheekbones catch the light
+  [-1, 1].forEach(function(dir){
+    var chx = cx + dir * w * 0.33 + sk * 0.35, chy = cy + h * 0.05;
+    var cg = ctx.createRadialGradient(chx, chy, 2, chx, chy, w * 0.2);
+    cg.addColorStop(0, 'rgba(255,225,150,.26)'); cg.addColorStop(1, 'rgba(255,225,150,0)');
+    ctx.fillStyle = cg; ctx.fillRect(chx - w*0.25, chy - w*0.25, w*0.5, w*0.5);
+    // the jaw falls into shadow toward its sides
+    var jg = ctx.createLinearGradient(cx + dir * w * 0.5, 0, cx + dir * w * 0.12, 0);
+    jg.addColorStop(0, 'rgba(12,2,2,.62)'); jg.addColorStop(1, 'rgba(12,2,2,0)');
+    ctx.fillStyle = jg; ctx.fillRect(Math.min(cx, cx + dir * w * 0.6), cy + h * 0.18, w * 0.6, h * 0.7);
+  });
+  // under the chin
+  var ug = ctx.createLinearGradient(0, cy + h*0.5, 0, cy + h*0.82);
+  ug.addColorStop(0, 'rgba(10,2,2,0)'); ug.addColorStop(1, 'rgba(10,2,2,.6)');
+  ctx.fillStyle = ug; ctx.fillRect(cx - w, cy + h*0.5, w*2, h*0.4);
+  var chg = ctx.createRadialGradient(cx + sk*0.4, cy + h*0.64, 1, cx + sk*0.4, cy + h*0.64, w*0.11);
+  chg.addColorStop(0, 'rgba(255,200,120,.2)'); chg.addColorStop(1, 'rgba(255,200,120,0)');
+  ctx.fillStyle = chg; ctx.fillRect(cx - w*0.2, cy + h*0.5, w*0.4, h*0.3);
+  ctx.restore();
+
+  // --- brows: heavy irregular ridges of the skull, lit on top, shadowed beneath
+  [-1, 1].forEach(function(dir){
+    var bx0 = cx + dir * w * 0.46 + sk * 0.5, by0 = cy - h * 0.36, bx1 = cx + dir * w * 0.09 + sk * 0.6, by1 = cy - h * 0.12;
+    var t2 = G.t;
+    function nn(i){ return (FIRE.at(i * 19 + t2 * 26 + (dir > 0 ? 300 : 0), i * 37) - 0.5) * 6; }
+    ctx.beginPath();
+    ctx.moveTo(bx0, by0 - 10 + nn(1));
+    ctx.bezierCurveTo(lerp(bx0, bx1, 0.3), by0 - 20 + nn(2), lerp(bx0, bx1, 0.7), by1 - 22 + nn(3), bx1, by1 - 6 + nn(4));
+    ctx.bezierCurveTo(bx1 - dir * 6, by1 + 8 + nn(5), lerp(bx0, bx1, 0.6), by0 + 16 + nn(6), bx0 - dir * 4, by0 + 10 + nn(7));
+    ctx.closePath();
+    var brg = ctx.createLinearGradient(0, by0 - 20, 0, by1 + 10);
+    brg.addColorStop(0, 'rgb(150,44,14)'); brg.addColorStop(0.5, 'rgb(84,16,6)'); brg.addColorStop(1, 'rgb(28,4,3)');
+    ctx.fillStyle = brg; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,160,80,.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(bx0, by0 - 8 + nn(1)); ctx.bezierCurveTo(lerp(bx0, bx1, 0.3), by0 - 18 + nn(2), lerp(bx0, bx1, 0.7), by1 - 20 + nn(3), bx1, by1 - 5 + nn(4)); ctx.stroke();
+  });
+
+  // --- eyes: deep-set sockets in shadow, a dull ember far inside
+  d.eyes.forEach(function(e){
+    var ex = cx + e.dx * (1 - 0.28*turn) + sk*0.6, ey = cy + 4;
+    var srx = 28, sry = 19;
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(ex, ey, srx, sry, 0, 0, 6.2832); ctx.clip();
+    var sg = ctx.createRadialGradient(ex, ey + 4, 2, ex, ey, srx * 1.05);
+    sg.addColorStop(0, '#020000'); sg.addColorStop(0.55, '#150303'); sg.addColorStop(1, 'rgb(76,16,7)');
+    ctx.fillStyle = sg; ctx.fillRect(ex - srx, ey - sry, srx*2, sry*2);
+    // the brow's shadow across the top of the socket
+    var shg = ctx.createLinearGradient(0, ey - sry, 0, ey + 2);
+    shg.addColorStop(0, 'rgba(0,0,0,.85)'); shg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = shg; ctx.fillRect(ex - srx, ey - sry, srx*2, sry + 2);
+    if (e.dead){
+      ctx.strokeStyle = 'rgba(0,0,0,.9)'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(ex - 16, ey - 5); ctx.lineTo(ex + 16, ey + 6); ctx.moveTo(ex - 16, ey + 6); ctx.lineTo(ex + 16, ey - 5); ctx.stroke();
+    } else {
+      var wide = 1 + 0.3 * e.wide;
+      var ry = e.open ? 12 * wide : (e.charge > 0 || e.beam > 0 ? 7 : 3.4);
+      var ember = e.flash > 0 ? 1 : e.ember;
+      coalEye(ex, ey + 3, 15 * wide, ry, ember * 0.85, p);
+      if (e.open){
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.ellipse(ex + clamp((p.x - ex) / LW * 12, -7, 7), ey + 3, 3, 9.5 * wide, 0, 0, 6.2832); ctx.fill();
+      }
+    }
+    ctx.restore();
+    // the lower rim, lit from the mouth below
+    ctx.strokeStyle = 'rgba(255,140,60,.4)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(ex, ey, srx, sry, 0, 0.35, 2.8); ctx.stroke();
+    if (e.open && !e.dead){
+      ctx.save();
+      ctx.globalAlpha = 0.5 + 0.4 * Math.sin(G.t * 12);
+      ctx.strokeStyle = COLORS.sulfur; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(ex, ey, srx + 5, sry + 5, 0, 0, 6.2832); ctx.stroke();
+      ctx.restore();
+    }
+  });
+
+  // --- the mouth: an irregular organic opening following the jaw, wider than tall.
+  // dark throat at the back, hot at the front edge; the fangs silhouette against it.
+  var mouth = d.mouth || 0, glow = d.mouthGlow || 0;
+  var mw = 64 + 10 * mouth, mh = 13 + 40 * mouth, mx = cx + sk, my = cy + 52 + mh * 0.5;
+  var mpts = mouthPoints(mx, my, mw, mh, G.t);
+  ctx.save();
+  skullPath(mpts);
+  ctx.shadowColor = '#ff8a20'; ctx.shadowBlur = 18 + 30 * glow;
+  ctx.fillStyle = '#160303'; ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.clip();
+  var tg = ctx.createRadialGradient(mx, my + mh * 0.55, 2, mx, my + mh * 0.15, mw * 1.05);
+  tg.addColorStop(0, 'rgba(255,220,120,.95)'); tg.addColorStop(0.35, 'rgba(255,110,10,.85)'); tg.addColorStop(0.75, 'rgba(120,20,4,.9)'); tg.addColorStop(1, 'rgba(12,2,2,1)');
+  ctx.fillStyle = tg; ctx.fillRect(mx - mw*1.2, my - mh*1.2, mw*2.4, mh*2.4);
+  ctx.globalAlpha = 0.55;
+  ctx.drawImage(colFire.canvas, 20, 30, 50, 100, mx - mw*1.1, my - mh*1.1, mw*2.2, mh*2.2);
+  ctx.globalAlpha = 1;
+  if (glow > 0){ ctx.fillStyle = 'rgba(255,250,235,' + (0.95 * glow) + ')'; ctx.fillRect(mx - mw*1.2, my - mh*1.2, mw*2.4, mh*2.4); }
+  ctx.restore();
+  // fangs, on top: long, uneven, lit from below by the mouth-fire
+  var lipY = my - mh * 0.78;
+  var fangs = [16, 27, 20, 31, 18, 29, 22];
+  for (var i=0;i<fangs.length;i++){
+    var tx = mx - 54 + i * 18 + (i % 2 ? 2 : -1), len = fangs[i], ly = lipY + Math.abs(i - 3) * 1.6;
+    var fg = ctx.createLinearGradient(0, ly, 0, ly + len);
+    fg.addColorStop(0, '#d8c4b0'); fg.addColorStop(1, glow > 0 ? '#fff4e0' : '#ff9a30');
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.moveTo(tx - 6, ly); ctx.quadraticCurveTo(tx - 4, ly + len * 0.6, tx + (i%2 ? 1.5 : -1.5), ly + len);
+    ctx.quadraticCurveTo(tx + 4, ly + len * 0.6, tx + 6, ly);
+    ctx.closePath(); ctx.fill();
+  }
+  // lower fangs, shorter, from the bottom lip
+  var lowY = my + mh * 0.72;
+  [-40, -14, 14, 40].forEach(function(ox, i){
+    var tx2 = mx + ox + (i % 2 ? 1 : -2), len2 = 10 + (i % 2 ? 4 : 0);
+    ctx.fillStyle = '#c9b09c';
+    ctx.beginPath();
+    ctx.moveTo(tx2 - 5, lowY); ctx.quadraticCurveTo(tx2 - 3, lowY - len2 * 0.6, tx2, lowY - len2);
+    ctx.quadraticCurveTo(tx2 + 3, lowY - len2 * 0.6, tx2 + 5, lowY);
+    ctx.closePath(); ctx.fill();
+  });
+  // the held heart underlights the fangs and the jaw
+  if (G.taken && G.taken.grabbed && G.mode === 'ending'){
+    var hl = G.heart.light * (G.taken.glow == null ? 1 : G.taken.glow), hp = G.player;
+    if (hl > 0.02){
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      var hg2 = ctx.createRadialGradient(hp.x, hp.y, 4, hp.x, hp.y, 150);
+      hg2.addColorStop(0, col('heart', 0.5 * hl)); hg2.addColorStop(1, col('heart', 0));
+      ctx.fillStyle = hg2; ctx.fillRect(hp.x - 150, hp.y - 150, 300, 150);
+      ctx.restore();
+    }
+  }
+
+  // cracks as he dies
+  if (dieK > 0.15){
+    ctx.strokeStyle = 'rgba(255,255,255,' + Math.min(1, dieK * 1.4) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    var seeds = [[-40,-60,-90,60],[30,-70,80,70],[0,-20,-30,110],[-70,0,60,10]];
+    seeds.forEach(function(s, si){
+      var n = 5;
+      ctx.moveTo(cx + s[0], cy + s[1]);
+      for (var k=1;k<=n;k++){
+        var kk = k/n * Math.min(1, dieK * 1.6);
+        ctx.lineTo(cx + s[0] + (s[2]-s[0])*kk + Math.sin(si * 7 + k * 13) * 14, cy + s[1] + (s[3]-s[1])*kk);
+      }
+    });
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // beams
+  d.eyes.forEach(function(e){
+    if (e.dead) return;
+    var ex = cx + e.dx + sk*0.6, ey = cy + 4;
+    if (e.charge > 0 && e.charge < 1.0){
+      ctx.save();
+      ctx.globalAlpha = 0.5 + 0.4*Math.sin(G.t*22);
+      ctx.strokeStyle = COLORS.sulfur;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4,6]);
+      ctx.beginPath();
+      ctx.moveTo(ex, ey); ctx.lineTo(e.lockX, LH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    } else if (e.beam > 0 && e.beam < 0.75){
+      var fade = e.beam > 0.55 ? (0.75 - e.beam)/0.2 : 1;
+      ctx.save();
+      ctx.globalAlpha = fade;
+      var bg = ctx.createLinearGradient(0, ey, 0, LH);
+      bg.addColorStop(0, 'rgba(255,255,255,.95)');
+      bg.addColorStop(0.3, 'rgba(255,195,33,.8)');
+      bg.addColorStop(1, 'rgba(255,42,0,.35)');
+      ctx.fillStyle = bg;
+      ctx.shadowColor = COLORS.sulfur;
+      ctx.shadowBlur = 24;
+      ctx.beginPath();
+      ctx.moveTo(ex - 8, ey);
+      ctx.lineTo(ex + 8, ey);
+      ctx.lineTo(e.lockX + 16, LH);
+      ctx.lineTo(e.lockX - 16, LH);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  });
+}
+
+// the heart: cyan glass with a white core, faceted like a cut stone
+// ---------- the heart: a living soul ----------
+// o: {alpha, pulse, lit, dmg, light, fire, scars, burnK, sx, sy, rot, veins, breath, leak}
+// dmg drains the colour and gutters the glow; scars are what has been done to
+// it: 'crack' from a pitchfork, 'char' from fire. They never heal.
+function drawGem(x, y, s, o){
+  o = o || {};
+  var dmg = o.dmg || 0, light = o.light == null ? 1 : o.light, pulse = o.pulse || 0, scars = o.scars || [];
+  var H = RGB.heart, grey = [143, 160, 176], k = dmg >= 2 ? 0.6 : (dmg === 1 ? 0.2 : 0);
+  var core = [lerp(H[0], grey[0], k), lerp(H[1], grey[1], k), lerp(H[2], grey[2], k)];
+  if (o.burnK){ core = [lerp(core[0], 255, o.burnK), lerp(core[1], 150, o.burnK), lerp(core[2], 40, o.burnK)]; }
+  var gutter = dmg >= 2 ? 0.35 + 0.65 * FIRE.at(G.t * 95, 17) : 1;
+  var breath = o.breath == null ? 1 : o.breath;                        // the slower cycle
+  var glow = light * gutter * (dmg === 1 ? 0.7 : 1) * breath;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(o.rot || 0);
+  ctx.scale(o.sx || 1, o.sy || 1);
+  ctx.globalAlpha = (o.alpha == null ? 1 : o.alpha) * (0.75 + 0.25 * glow);
+  ctx.shadowColor = rgba(core[0], core[1], core[2], 1);
+  ctx.shadowBlur = (10 + 14 * pulse) * glow;
+  var g = ctx.createRadialGradient(-s*0.25, -s*0.35, 1, 0, 0, s * (1.15 + 0.3 * breath));
+  g.addColorStop(0, dmg >= 2 ? '#dfe8ee' : '#ffffff');
+  g.addColorStop(0.32, rgba(core[0], core[1], core[2], 1));
+  g.addColorStop(1, rgba(core[0], core[1], core[2], 0.55));
+  ctx.fillStyle = g;
+  heartPath(0, 0, s);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  if (o.lit > 0){
+    var wg = ctx.createLinearGradient(0, -s * 0.4, 0, s * 0.8);
+    wg.addColorStop(0, col('sulfur', 0));
+    wg.addColorStop(1, col('sulfur', 0.65 * o.lit));
+    ctx.fillStyle = wg;
+    heartPath(0, 0, s); ctx.fill();
+  }
+  if (o.fire && o.fire.k > 0.02){
+    var rx = o.fire.dx * s * 1.1, ry = o.fire.dy * s * 1.1;
+    var fgr = ctx.createRadialGradient(rx, ry, 1, rx, ry, s * 1.5);
+    fgr.addColorStop(0, 'rgba(255,170,60,' + (0.7 * o.fire.k) + ')');
+    fgr.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = fgr;
+    heartPath(0, 0, s); ctx.fill();
+  }
+  // under the surface
+  ctx.save();
+  heartPath(0, 0, s);
+  ctx.clip();
+  if (o.veins){
+    // veins run out from the centre; each beat brightens them outward
+    var veins = [[0.0,-0.1, -0.5,-0.7, -0.95,-0.35], [0.0,-0.1, 0.5,-0.7, 0.95,-0.35], [0.0,0.0, -0.35,0.25, -0.6,0.5],
+                 [0.0,0.0, 0.35,0.25, 0.6,0.5], [0.0,0.0, 0.05,0.4, 0.0,0.75], [0.0,-0.2, -0.15,-0.55, -0.4,-1.0], [0.0,-0.2, 0.2,-0.5, 0.45,-1.0]];
+    var wave = o.veinWave == null ? 0 : o.veinWave;   // 0..1: how far the beat has travelled outward
+    ctx.lineCap = 'round';
+    veins.forEach(function(v){
+      for (var seg=0; seg<3; seg++){
+        var u0 = seg/3, u1 = (seg+1)/3;
+        var bright = Math.max(0, 1 - Math.abs(wave - (u0 + 0.17)) * 3.2);
+        ctx.strokeStyle = rgba(core[0], core[1], core[2], 0.18 + 0.6 * bright * glow);
+        ctx.lineWidth = Math.max(0.5, s * (0.075 - 0.02 * seg));
+        var ax = bez(v[0], v[2], v[4], u0), ay = bez(v[1], v[3], v[5], u0), bx = bez(v[0], v[2], v[4], u1), by = bez(v[1], v[3], v[5], u1);
+        var mx = bez(v[0], v[2], v[4], (u0+u1)/2), my = bez(v[1], v[3], v[5], (u0+u1)/2);
+        ctx.beginPath(); ctx.moveTo(ax*s, ay*s); ctx.quadraticCurveTo(mx*s*1.02, my*s*1.02, bx*s, by*s); ctx.stroke();
+      }
+    });
+  }
+  // facets
+  ctx.strokeStyle = 'rgba(255,255,255,.55)';
+  ctx.lineWidth = Math.max(0.6, s * 0.07);
+  ctx.beginPath();
+  ctx.moveTo(0, -s*0.5); ctx.lineTo(0, s*0.75);
+  ctx.moveTo(-s*1.1, -s*0.15); ctx.lineTo(0, s*0.2);
+  ctx.moveTo(s*1.1, -s*0.15); ctx.lineTo(0, s*0.2);
+  ctx.moveTo(-s*0.6, -s*1.1); ctx.lineTo(-s*0.25, -s*0.2);
+  ctx.moveTo(s*0.6, -s*1.1); ctx.lineTo(s*0.25, -s*0.2);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.45)';
+  ctx.beginPath(); ctx.ellipse(-s*0.45, -s*0.5, s*0.22, s*0.12, -0.6, 0, 6.2832); ctx.fill();
+  // the scars
+  scars.forEach(function(sc){
+    if (sc.kind === 'char'){
+      // a charred patch, black, ragged
+      ctx.fillStyle = 'rgba(12,4,6,.92)';
+      ctx.beginPath();
+      for (var a=0;a<10;a++){ var th = a/10*6.2832, rr = sc.r * s * (0.75 + 0.35 * FIRE.at(a*7 + sc.seed*200, sc.seed*90)); var px2 = sc.x*s + Math.cos(th)*rr, py2 = sc.y*s + Math.sin(th)*rr; if (a) ctx.lineTo(px2, py2); else ctx.moveTo(px2, py2); }
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(120,40,10,.5)'; ctx.lineWidth = Math.max(0.5, s * 0.04); ctx.stroke();
+    } else {
+      // a crack, dark with a lit edge
+      var cr = sc.pts;
+      ctx.lineWidth = Math.max(0.8, s * 0.1); ctx.strokeStyle = 'rgba(10,20,40,.85)';
+      ctx.beginPath(); cr.forEach(function(pt, i){ if (i) ctx.lineTo(pt[0]*s, pt[1]*s); else ctx.moveTo(pt[0]*s, pt[1]*s); }); ctx.stroke();
+      ctx.lineWidth = Math.max(0.5, s * 0.04); ctx.strokeStyle = 'rgba(255,255,255,' + (dmg >= 2 ? 0.5 + 0.4 * gutter : 0.4) + ')';
+      ctx.beginPath(); cr.forEach(function(pt, i){ if (i) ctx.lineTo(pt[0]*s + 0.6, pt[1]*s + 0.6); else ctx.moveTo(pt[0]*s + 0.6, pt[1]*s + 0.6); }); ctx.stroke();
+      if (o.leak && s > 8 && Math.random() < 0.35){
+        var pt2 = cr[Math.floor(Math.random() * cr.length)];
+        G.parts.push({ x: x + pt2[0]*s, y: y + pt2[1]*s, vx: rnd(-14, 14), vy: rnd(-30, -8), life: rnd(0.4, 0.9), t: 0,
+                       c: Math.random() < 0.6 ? COLORS.heart : '#ffffff', r: rnd(0.8, 1.8), g: -6, turb: 20 });
+      }
+    }
+  });
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,' + (0.75 * (0.6 + 0.4 * glow)) + ')';
+  ctx.lineWidth = Math.max(0.7, s * 0.09);
+  heartPath(0, 0, s);
+  ctx.stroke();
+  ctx.restore();
+}
+function bez(a, b, c, u){ return (1-u)*(1-u)*a + 2*(1-u)*u*b + u*u*c; }
+// cyan hearts drifting up behind the title
+function drawTitleHearts(){
+  for (var i=0;i<G.titleHearts.length;i++){
+    var th = G.titleHearts[i];
+    drawGem(th.x, th.y, th.s, { alpha: 0.3 + 0.3 * Math.abs(Math.sin(G.t * 0.6 + th.p)) });
+  }
+}
+
+// ---------- his arms ----------
+// Two clawed arms reach in from the edges and frame the arena. Dark muscled
+// red, unlit and wet. They hunt the heart:
+// breathing, a slow flex. One attack: a hand winds up, then slams its side.
+// At the end they are what close around the heart.
+function makeArms(){
+  return {
+    present: 0, reach: 0, creep: Math.max(0, 3 - G.lives),   // each life lost, they come further in
+    l: { side: -1, hx: -140, hy: LH*0.56, rot: 0, curl: 0.3, spread: 0.6, mode: 'idle', k: 0, breath: rnd(0, 6) },
+    r: { side:  1, hx: LW + 140, hy: LH*0.56, rot: 0, curl: 0.3, spread: 0.6, mode: 'idle', k: 0, breath: rnd(0, 6) }
+  };
+}
+function updateArms(dt){
+  var A = G.arms, p = G.player, T = G.taken;
+  A.present = Math.min(1, A.present + dt / 1.4);
+  ['l', 'r'].forEach(function(key){
+    var a = A[key], side = a.side, t = G.t;
+    var inward = 64 + 24 * A.creep;
+    var edgeX = side < 0 ? inward : LW - inward;
+    var restX = lerp(side < 0 ? -140 : LW + 140, edgeX, smooth(A.present));
+    // hunting: the hand leans to the heart's height, the fingers point at it,
+    // spread when it is far and curl toward it when near, never quite closing
+    var toward = Math.atan2(p.y - a.hy, (p.x - a.hx) * -side);
+    var dist = Math.hypot(p.x - a.hx, p.y - a.hy);
+    var restY = LH * 0.6 + clamp(p.y - LH * 0.6, -70, 40) * 0.5 + Math.sin(t * 0.9 + a.breath) * 6;
+    var breathe = 0.06 * Math.sin(t * 0.55 + a.breath);
+    var near = 1 - clamp((dist - 60) / 260, 0, 1);
+    var tcurl = 0.22 + 0.5 * near + breathe, tspread = 0.35 + 0.45 * (1 - near);
+    var lean = near * 16;
+    var tx = restX - side * lean, ty = restY, trot = clamp(toward, -0.75, 0.75) * 0.8, ease = 3;
+    // an occasional scrape along the frame edge
+    if (a.scrapeAt == null) a.scrapeAt = t + rnd(3, 7);
+    if (t > a.scrapeAt){
+      var sk = (t - a.scrapeAt) / 1.1;
+      if (sk >= 1){ a.scrapeAt = t + rnd(4, 8); }
+      else { tx = restX + side * 26; ty = restY - 40 + 80 * smooth(sk); tcurl = 0.7; trot = -side * 0.5; tspread = 0.2; if (sk < 0.05 && !a.scraped){ a.scraped = true; sfx.stick(); } }
+    } else a.scraped = false;
+    if (a.mode === 'wind'){                 // rises, opens, trembles
+      tx = edgeX - side * 24; ty = restY - 210 * smooth(a.k) + Math.sin(t * 38) * 2.5 * a.k;
+      tcurl = 0; tspread = 1; trot = -side * 0.5 * a.k; ease = 4;
+    } else if (a.mode === 'slam'){
+      tx = edgeX - side * 12; ty = lerp(restY - 210, FLOOR - 34, smooth(a.k)); tcurl = 0.1; tspread = 1; trot = -side * 0.5; ease = 30;
+    } else if (a.mode === 'impact'){
+      tx = edgeX - side * 12; ty = FLOOR - 34 + Math.sin(t * 50) * 1.5; tcurl = 0.15; tspread = 1; trot = -side * 0.5; ease = 30;
+    } else if (a.mode === 'recover'){
+      ease = 2.5;
+    } else if (a.mode === 'reach' && T){    // the ending: close around the heart
+      var k = A.reach;
+      tx = lerp(restX, T.hand.x - side * 46, k); ty = lerp(restY, T.hand.y + 6, k);
+      tcurl = 0.15 + 0.85 * T.hand.close; tspread = 0.5; ease = 5;
+      if (T.grabbed){ tx = T.hand.x - side * 46; ty = T.hand.y + 6; ease = 12; }
+      // the forearm comes up from its lower corner, so the hands cup the heart from below
+      var cX = side < 0 ? -90 : LW + 90, cY = LH + 40;
+      var up = side < 0 ? Math.atan2(-(cY - ty), -(cX - tx)) : Math.atan2(-(cY - ty), cX - tx);
+      trot = lerp(0, up, k);
+    }
+    a.hx = lerp(a.hx, tx, Math.min(1, dt * ease));
+    a.hy = lerp(a.hy, ty, Math.min(1, dt * ease));
+    a.curl = lerp(a.curl, tcurl, Math.min(1, dt * 5));
+    a.spread = lerp(a.spread == null ? tspread : a.spread, tspread, Math.min(1, dt * 4));
+    a.rot = lerp(a.rot, trot, Math.min(1, dt * 6));
+  });
+}
+// a point on a Catmull-Rom spline through pts at u in 0..1
+function spline(pts, u){
+  var n = pts.length - 1, f = u * n, i = Math.min(n - 1, Math.floor(f)), k = f - i;
+  var p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n, i + 2)];
+  var k2 = k * k, k3 = k2 * k;
+  return {
+    x: 0.5 * ((2*p1.x) + (-p0.x + p2.x)*k + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*k2 + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*k3),
+    y: 0.5 * ((2*p1.y) + (-p0.y + p2.y)*k + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*k2 + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*k3)
+  };
+}
+// One finger: three tapering segments along a smooth arc, no visible joints,
+// knuckles bunching when flexed, a curved black talon a third of its length.
+// Local frame: +x is the direction the hand reaches; -y is the upper surface.
+function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, C, Cdd, sheen){
+  var L = [len*0.4, len*0.33, len*0.27], bend = bendSign * curl * 1.05;
+  var J = [{x:x0, y:y0}], ang = a1;
+  for (var i=0;i<3;i++){ ang += (i === 0 ? bend * 0.5 : bend); J.push({ x: J[i].x + Math.cos(ang) * L[i], y: J[i].y + Math.sin(ang) * L[i] }); }
+  var n = 20, pts = [], left = [], right = [];
+  for (var k=0;k<=n;k++) pts.push(spline(J, k/n));
+  for (k=0;k<=n;k++){
+    var u = k/n, a = pts[Math.max(0, k-1)], b = pts[Math.min(n, k+1)];
+    var tx = b.x - a.x, ty = b.y - a.y, tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+    var bunch = curl * 0.28 * (Math.exp(-Math.pow((u - 0.4) / 0.08, 2)) + Math.exp(-Math.pow((u - 0.73) / 0.08, 2)));
+    var r = lerp(r0, r1, u) * (1 + bunch);
+    left.push({ x: pts[k].x + ty * r, y: pts[k].y - tx * r });      // upper surface
+    right.push({ x: pts[k].x - ty * r, y: pts[k].y + tx * r });     // underside
+  }
+  var tipAng = ang + bendSign * (0.3 + curl * 0.5), tip = pts[n], cl = len * 0.33;
+  // the finger, one unbroken outline
+  ctx.beginPath();
+  ctx.moveTo(left[0].x, left[0].y);
+  for (k=1;k<=n;k++) ctx.lineTo(left[k].x, left[k].y);
+  for (k=n;k>=0;k--) ctx.lineTo(right[k].x, right[k].y);
+  ctx.closePath();
+  ctx.fillStyle = C; ctx.fill();
+  // the underside, shaded to near-black, and the joint creases
+  ctx.save(); ctx.clip();
+  var ug = ctx.createLinearGradient(left[8].x, left[8].y, right[8].x, right[8].y);
+  ug.addColorStop(0, 'rgba(0,0,0,0)'); ug.addColorStop(0.55, 'rgba(0,0,0,.18)'); ug.addColorStop(1, 'rgba(0,0,0,.6)');
+  ctx.fillStyle = ug; ctx.fillRect(-400, -400, 800, 800);
+  [0.4, 0.73].forEach(function(u){
+    var kk = Math.round(u * n), c = pts[kk], rr = right[kk];
+    var cg = ctx.createRadialGradient(rr.x, rr.y, 0.5, rr.x, rr.y, r0 * 1.4);
+    cg.addColorStop(0, 'rgba(0,0,0,' + (0.35 + 0.45 * curl) + ')'); cg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(rr.x, rr.y, r0 * 1.4, 0, 6.2832); ctx.fill();
+  });
+  // a dull sheen along the upper surface only
+  ctx.strokeStyle = sheen; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(left[1].x, left[1].y);
+  for (k=2;k<=n-4;k++) ctx.lineTo(lerp(left[k].x, pts[k].x, 0.25), lerp(left[k].y, pts[k].y, 0.25));
+  ctx.stroke();
+  ctx.restore();
+  // the talon: curved, black, from the tip
+  var dx = Math.cos(tipAng), dy = Math.sin(tipAng), nx = -dy, ny = dx;
+  ctx.fillStyle = '#150406';
+  ctx.beginPath();
+  ctx.moveTo(tip.x + nx * r1 * 0.9, tip.y + ny * r1 * 0.9);
+  ctx.quadraticCurveTo(tip.x + dx * cl * 0.55 + nx * r1 * 0.7, tip.y + dy * cl * 0.55 + ny * r1 * 0.7,
+                       tip.x + dx * cl + nx * bendSign * cl * 0.28, tip.y + dy * cl + ny * bendSign * cl * 0.28);
+  ctx.quadraticCurveTo(tip.x + dx * cl * 0.5 - nx * r1 * 0.3, tip.y + dy * cl * 0.5 - ny * r1 * 0.3,
+                       tip.x - nx * r1 * 0.9, tip.y - ny * r1 * 0.9);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,120,110,.25)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tip.x + nx * r1 * 0.5, tip.y + ny * r1 * 0.5);
+  ctx.quadraticCurveTo(tip.x + dx * cl * 0.5 + nx * r1 * 0.4, tip.y + dy * cl * 0.5 + ny * r1 * 0.4, tip.x + dx * cl * 0.85 + nx * bendSign * cl * 0.2, tip.y + dy * cl * 0.85 + ny * bendSign * cl * 0.2);
+  ctx.stroke();
+  return J;
+}
+// Dark red flesh, near-black in the creases and undersides, a dull sheen on
+// the upper surfaces. No straight edge anywhere.
+function drawArm(a){
+  var C = COLORS.claw, Cd = 'rgb(96,9,7)', Cdd = 'rgb(26,2,2)', sheen = 'rgba(255,150,140,.2)';
+  var curl = a.curl, spread = a.spread == null ? 0.6 : a.spread;
+  ctx.save();
+  ctx.translate(a.hx, a.hy);
+  ctx.scale(a.side < 0 ? 1 : -1, 1);      // local +x reaches into the arena
+  ctx.rotate(a.rot);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // --- forearm: two muscle groups, tapering to the wrist, shaded darker below,
+  //     a curved rim light along the top. Nothing straight.
+  var wr = 26;
+  var ag = ctx.createLinearGradient(0, -84, 0, 92);
+  ag.addColorStop(0, 'rgb(150,26,14)'); ag.addColorStop(0.22, C); ag.addColorStop(0.62, Cd); ag.addColorStop(1, Cdd);
+  ctx.fillStyle = ag;
+  ctx.beginPath();
+  ctx.moveTo(-38, -wr);
+  ctx.bezierCurveTo(-72, -wr - 16, -112, -70, -176, -78);      // the extensor rises
+  ctx.bezierCurveTo(-246, -86, -340, -76, -440, -66);
+  ctx.bezierCurveTo(-472, -30, -472, 46, -440, 78);
+  ctx.bezierCurveTo(-336, 88, -238, 98, -166, 86);             // the flexor hangs below
+  ctx.bezierCurveTo(-112, 76, -70, wr + 20, -38, wr + 2);
+  ctx.bezierCurveTo(-24, wr - 8, -24, -wr + 6, -38, -wr);
+  ctx.closePath(); ctx.fill();
+  // the crease between the two muscles, deepest mid-forearm
+  ctx.strokeStyle = 'rgba(18,2,2,.6)'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(-64, 12); ctx.bezierCurveTo(-150, 2, -250, -6, -380, 10); ctx.stroke();
+  // the underside, darker still
+  var und = ctx.createLinearGradient(0, 30, 0, 96);
+  und.addColorStop(0, 'rgba(0,0,0,0)'); und.addColorStop(1, 'rgba(0,0,0,.45)');
+  ctx.save(); ctx.beginPath();
+  ctx.moveTo(-38, wr + 2); ctx.bezierCurveTo(-70, wr + 20, -112, 76, -166, 86); ctx.bezierCurveTo(-238, 98, -336, 88, -440, 78);
+  ctx.lineTo(-440, 20); ctx.bezierCurveTo(-330, 30, -160, 24, -38, 12); ctx.closePath();
+  ctx.fillStyle = und; ctx.fill(); ctx.restore();
+  // a curved rim light following the extensor's crest, fading at both ends
+  [[0, 0.1], [1, 0.28], [2, 0.14]].forEach(function(seg){
+    var i = seg[0], a1 = seg[1];
+    var pts = [[-52, -30], [-120, -58], [-200, -70], [-300, -70], [-400, -62]];
+    ctx.strokeStyle = 'rgba(255,160,140,' + a1 + ')'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[i][0], pts[i][1] + 6);
+    ctx.quadraticCurveTo((pts[i][0] + pts[i+1][0]) / 2, Math.min(pts[i][1], pts[i+1][1]) + 2, pts[i+1][0], pts[i+1][1] + 6);
+    if (i < 2) ctx.quadraticCurveTo((pts[i+1][0] + pts[i+2][0]) / 2, Math.min(pts[i+1][1], pts[i+2][1]) + 2, pts[i+2][0], pts[i+2][1] + 6);
+    ctx.stroke();
+  });
+  // --- the back of the hand: widening from the wrist, a rounded knuckle ridge
+  var hg = ctx.createRadialGradient(4, -14, 3, 8, 6, 62);
+  hg.addColorStop(0, C); hg.addColorStop(0.7, Cd); hg.addColorStop(1, Cdd);
+  ctx.fillStyle = hg;
+  ctx.beginPath();
+  ctx.moveTo(-38, -wr);
+  ctx.bezierCurveTo(-12, -52, 26, -50, 46, -32);
+  ctx.bezierCurveTo(58, -12, 58, 16, 46, 34);
+  ctx.bezierCurveTo(28, 52, -12, 54, -38, wr + 2);
+  ctx.bezierCurveTo(-24, wr - 8, -24, -wr + 6, -38, -wr);
+  ctx.closePath(); ctx.fill();
+  // knuckles bunch when flexed; tendons ridge when the fingers extend
+  var ext = 1 - curl;
+  for (var i=0;i<4;i++){
+    var ky = -22 + i * 15;
+    if (curl > 0.25){
+      var kg = ctx.createRadialGradient(40, ky, 1, 40, ky, 9 * curl);
+      kg.addColorStop(0, 'rgba(255,120,110,' + (0.16 * curl) + ')'); kg.addColorStop(0.6, 'rgba(0,0,0,0)'); kg.addColorStop(1, 'rgba(0,0,0,' + (0.3 * curl) + ')');
+      ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(40, ky, 9 * curl, 0, 6.2832); ctx.fill();
+    }
+    if (ext > 0.3){
+      ctx.strokeStyle = 'rgba(0,0,0,' + (0.28 * ext) + ')'; ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.moveTo(-26, ky * 0.55); ctx.quadraticCurveTo(10, ky * 0.9 + 1.5, 40, ky + 1.5); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,150,140,' + (0.22 * ext) + ')'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(-26, ky * 0.55 - 1.5); ctx.quadraticCurveTo(10, ky * 0.9 - 1, 40, ky - 1); ctx.stroke();
+    }
+  }
+  // --- four fingers, fanning by `spread`, curling by `curl`
+  var bases = [[-30, -0.62], [-10, -0.26], [10, 0.12], [30, 0.5]];
+  for (i=0;i<4;i++){
+    var by = bases[i][0] * 0.85, a1 = bases[i][1] * spread;
+    var bx = 44 - Math.abs(by) * 0.18;
+    drawFinger(bx, by, a1, 68 - Math.abs(i - 1.5) * 5, curl, 8.5 - Math.abs(i - 1.5) * 0.5, 5.2, 1, C, Cdd, sheen);
+  }
+  // --- the thumb: opposed, from the underside, curling up toward the fingers
+  drawFinger(6, 34, 1.15 - curl * 0.35, 54, curl * 0.9 + 0.15, 9, 5.6, -1, C, Cdd, sheen);
+  // the held heart underlights the fingers
+  if (G.taken && G.taken.grabbed && G.mode === 'ending'){
+    var hl = G.heart.light * (G.taken.glow == null ? 1 : G.taken.glow);
+    if (hl > 0.02){
+      var wx = G.player.x - a.hx, wy = G.player.y - a.hy; if (a.side > 0) wx = -wx;
+      var cr = Math.cos(-a.rot), sr = Math.sin(-a.rot), lx2 = wx * cr - wy * sr, ly2 = wx * sr + wy * cr;
+      var hg3 = ctx.createRadialGradient(lx2, ly2, 3, lx2, ly2, 110);
+      hg3.addColorStop(0, col('heart', 0.55 * hl)); hg3.addColorStop(1, col('heart', 0));
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = hg3; ctx.fillRect(lx2 - 110, ly2 - 110, 220, 220); ctx.restore();
+    }
+  }
+  // light spill: brighter and warm-rimmed on the side facing a fire
+  var fl = fireLight(a.hx, a.hy);
+  if (fl.k > 0.03){
+    var lx = fl.dx * (a.side < 0 ? 1 : -1) * 70, ly = fl.dy * 70;
+    var sg = ctx.createRadialGradient(lx, ly, 4, lx * 0.3, ly * 0.3, 130);
+    sg.addColorStop(0, 'rgba(255,150,50,' + (0.45 * fl.k) + ')');
+    sg.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = sg;
+    ctx.fillRect(-140, -90, 260, 180);
+  }
+  ctx.restore();
+}
+function drawArms(front){
+  var A = G.arms, T = G.taken && G.mode === 'ending' ? G.taken : null;
+  if (A.present <= 0) return;
+  drawArm(A.l);
+  if (!(T && T.point > 0)) drawArm(A.r);       // the right hand is busy pointing
+  if (front && T && T.grabbed){
+    // the beat, seen through the closed hands
+    var pg = ctx.createRadialGradient(T.hand.x, T.hand.y, 2, T.hand.x, T.hand.y, 44);
+    pg.addColorStop(0, col('heart', 0.45 * G.heart.pulse));
+    pg.addColorStop(1, col('heart', 0));
+    ctx.fillStyle = pg;
+    ctx.fillRect(T.hand.x - 50, T.hand.y - 50, 100, 100);
+  }
+}
+// his other hand, pointing straight out of the screen: the arm up from the
+// lower right, a fist of curled fingers, the index foreshortened toward you
+// as shrinking curved segments ending in a talon.
+function drawPointingHand(k){
+  if (k <= 0) return;
+  var s = 0.35 + 1.25 * k, C = COLORS.claw, Cd = 'rgb(96,9,7)', Cdd = 'rgb(26,2,2)';
+  var cx = lerp(LW + 60, LW/2 + 30, k), cy = lerp(LH * 0.7, LH * 0.5, k);
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, k * 3);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // the arm from the lower right corner, muscled, narrowing to the wrist
+  var ang = Math.atan2(cy - (LH + 60), cx - (LW + 120));
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(ang);
+  var ag = ctx.createLinearGradient(0, -60 * s, 0, 60 * s);
+  ag.addColorStop(0, 'rgb(150,26,14)'); ag.addColorStop(0.3, C); ag.addColorStop(0.7, Cd); ag.addColorStop(1, Cdd);
+  ctx.fillStyle = ag;
+  ctx.beginPath();
+  ctx.moveTo(0, -26 * s);
+  ctx.bezierCurveTo(-60 * s, -40 * s, -140 * s, -64 * s, -260 * s, -60 * s);
+  ctx.bezierCurveTo(-300 * s, -30 * s, -300 * s, 40 * s, -260 * s, 66 * s);
+  ctx.bezierCurveTo(-150 * s, 78 * s, -60 * s, 48 * s, 0, 28 * s);
+  ctx.bezierCurveTo(14 * s, 10 * s, 14 * s, -14 * s, 0, -26 * s);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,160,140,.18)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-40 * s, -30 * s); ctx.quadraticCurveTo(-150 * s, -58 * s, -240 * s, -54 * s); ctx.stroke();
+  ctx.restore();
+  // the fist: a curved back of the hand with the three lesser fingers curled under
+  ctx.save();
+  ctx.translate(cx + 16 * s, cy + 18 * s);
+  ctx.scale(s, s);
+  var fg = ctx.createRadialGradient(-10, -14, 4, 4, 6, 60);
+  fg.addColorStop(0, C); fg.addColorStop(0.7, Cd); fg.addColorStop(1, Cdd);
+  ctx.fillStyle = fg;
+  ctx.beginPath();
+  ctx.moveTo(-40, -22);
+  ctx.bezierCurveTo(-20, -48, 30, -46, 46, -22);
+  ctx.bezierCurveTo(58, -2, 54, 26, 36, 40);
+  ctx.bezierCurveTo(10, 52, -30, 50, -44, 26);
+  ctx.bezierCurveTo(-54, 8, -52, -8, -40, -22);
+  ctx.closePath(); ctx.fill();
+  for (var i=0;i<3;i++){
+    var ky = -6 + i * 16;
+    drawFinger(40, ky, 0.5 + i * 0.15, 46 - i * 3, 1.0, 8, 5.2, 1, C, Cdd, 'rgba(255,150,140,.2)');
+  }
+  // the thumb across the curled fingers
+  drawFinger(-6, 30, 0.3, 40, 0.9, 8.5, 5.4, -1, C, Cdd, 'rgba(255,150,140,.2)');
+  ctx.restore();
+  // the index, foreshortened toward the viewer: curved segments growing toward the tip
+  var segs = [[0, 22], [0.45, 26], [0.85, 30]];
+  segs.forEach(function(sg){
+    var fx = cx - 8 * s * sg[0], fy = cy - 16 * s * sg[0], r = sg[1] * s * 0.6;
+    var g = ctx.createRadialGradient(fx - r * 0.35, fy - r * 0.45, 1, fx, fy, r);
+    g.addColorStop(0, 'rgb(190,40,24)'); g.addColorStop(0.55, C); g.addColorStop(1, 'rgb(60,6,5)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(fx, fy, r, r * 0.86, -0.3, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(fx, fy, r, r * 0.86, -0.3, 0.3, 2.4); ctx.stroke();   // the crease beneath
+  });
+  // the fingertip and its talon, coming straight at you
+  var tx = cx - 8 * s, ty = cy - 16 * s, tr = 19 * s;
+  var tg = ctx.createRadialGradient(tx - tr * 0.4, ty - tr * 0.4, 1, tx, ty, tr);
+  tg.addColorStop(0, 'rgb(200,48,30)'); tg.addColorStop(0.6, C); tg.addColorStop(1, 'rgb(70,8,6)');
+  ctx.fillStyle = tg;
+  ctx.beginPath(); ctx.ellipse(tx, ty, tr, tr * 0.9, -0.3, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = '#150406';
+  ctx.beginPath();
+  ctx.moveTo(tx - 9 * s, ty - 2 * s);
+  ctx.bezierCurveTo(tx - 6 * s, ty - 14 * s, tx + 6 * s, ty - 14 * s, tx + 9 * s, ty - 2 * s);
+  ctx.bezierCurveTo(tx + 5 * s, ty - 7 * s, tx - 5 * s, ty - 7 * s, tx - 9 * s, ty - 2 * s);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,170,150,.28)';
+  ctx.beginPath(); ctx.ellipse(tx - 6 * s, ty - 8 * s, 4 * s, 2.2 * s, -0.6, 0, 6.2832); ctx.fill();
+  ctx.restore();
+}
+
+function drawQuiver(){
+  // five bolts, right-aligned under the HI score, all the same
+  var x0 = LW - 12 - 4, y = 47;
+  for (var i=0;i<AMMO;i++){
+    var x = x0 - (AMMO - 1 - i) * 13;
+    ctx.save();
+    if (i >= G.ammo){
+      ctx.strokeStyle = 'rgba(253,248,240,.2)';
+      ctx.lineWidth = 1;
+      boltShape(x, y, 0.75);
+      ctx.stroke();
+    } else {
+      ctx.shadowColor = COLORS.heart; ctx.shadowBlur = 8;
+      ctx.fillStyle = '#eefaff';
+      boltShape(x, y, 0.75);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function drawHUD(){
+  ctx.save();
+  ctx.font = "10px 'Press Start 2P', monospace";
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(253,248,240,.9)';
+  ctx.textAlign = 'left';
+  ctx.fillText(String(Math.floor(G.score)).padStart(6,'0'), 12, 12);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(199,154,143,.9)';
+  ctx.fillText('HI ' + String(hi).padStart(6,'0'), LW - 12, 12);
+
+  // lives, beating too
+  for (var i=0;i<G.lives;i++) drawGem(18 + i*20, 44, 6.5 * (1 + (G.heart.scale - 1) * 0.6), { alpha: 0.9, pulse: G.heart.pulse * 0.5 });
+
+  drawQuiver();
+
+  // meter
+  var bx = 12, bw = LW - 24, by = 68, bh = 6;
+  ctx.strokeStyle = 'rgba(253,248,240,.28)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+  if (G.phase === 'survive'){
+    var k = clamp(G.surv / G.SURV, 0, 1);
+    var mg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    mg.addColorStop(0, COLORS.ember);
+    mg.addColorStop(1, COLORS.sulfur);
+    ctx.fillStyle = mg;
+    ctx.fillRect(bx + 1, by + 1, (bw - 2) * k, bh - 2);
+    ctx.font = "7px 'Press Start 2P', monospace";
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(199,154,143,.85)';
+    ctx.fillText('SURVIVE', LW/2, by + 12);
+  } else if (G.devil && !G.devil.dying){
+    var alive = livingEyes(G.devil).length;
+    ctx.fillStyle = COLORS.ember;
+    ctx.fillRect(bx + 1, by + 1, (bw - 2) * (alive / 2), bh - 2);
+    ctx.font = "7px 'Press Start 2P', monospace";
+    ctx.textAlign = 'center';
+    var open = anyEyeOpen(G.devil);
+    if (G.devil.state === 'open' || G.devil.state === 'attack'){
+      var label = open ? 'HIS EYE IS OPEN' : 'HIS EYES ARE SHUT';
+      var tw = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(4,1,10,.7)';
+      ctx.fillRect(LW/2 - tw/2 - 5, by + 9, tw + 10, 13);
+      ctx.fillStyle = open ? 'rgba(255,195,33,.95)' : 'rgba(199,154,143,.85)';
+      ctx.fillText(label, LW/2, by + 12);
+    }
+  }
+  ctx.restore();
+}
+
+function drawTexts(){
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  G.texts.forEach(function(tx){
+    var k = tx.t / tx.life;
+    ctx.globalAlpha = k < 0.6 ? 1 : (1 - k) / 0.4;
+    ctx.font = tx.size + "px 'Press Start 2P', monospace";
+    ctx.fillStyle = 'rgba(4,1,10,.7)';
+    ctx.fillText(tx.text, tx.x + 1, tx.y + 1);
+    ctx.fillStyle = tx.c;
+    ctx.fillText(tx.text, tx.x, tx.y);
+  });
+  ctx.restore();
+}
+
+function drawHerald(){
+  var k = clamp(G.herald / 2.0, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = k < 0.3 ? k / 0.3 : 1;
+  ctx.font = "20px 'Press Start 2P', monospace";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = COLORS.heart; ctx.shadowBlur = 24;
+  ctx.fillStyle = COLORS.title;
+  var jx = rnd(-1,1) * 2, jy = rnd(-1,1) * 2;
+  ctx.fillText("HE'S HERE", LW/2 + jx, LH*0.5 + jy);
+  ctx.restore();
+}
+
+function drawLightning(){
+  var k = G.lightning;
+  ctx.save();
+  var sky = ctx.createLinearGradient(0, 0, 0, LH * 0.8);
+  sky.addColorStop(0, 'rgba(255,230,200,' + (k * 0.14) + ')');
+  sky.addColorStop(1, 'rgba(255,230,200,0)');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, LW, LH * 0.8);
+  if (k > 0.55 && G.boltPath){
+    ctx.globalAlpha = (k - 0.55) / 0.45;
+    ctx.strokeStyle = '#fff4e0';
+    ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 14;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    G.boltPath.forEach(function(pt, i){ if (i) ctx.lineTo(pt.x, pt.y); else ctx.moveTo(pt.x, pt.y); });
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// darkness closes in over the survive phase: radius 0.72 → 0.5
+function drawVignette(){
+  var r = lerp(0.72, 0.5, G.prog);
+  var g = ctx.createRadialGradient(LW/2, LH/2, LH * r * 0.55, LW/2, LH/2, LH * (r + 0.1));
+  g.addColorStop(0, col('void', 0));
+  g.addColorStop(1, col('void', 0.86));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, LW, LH);
+  if (G.lives === 1 && (G.mode === 'play' || G.mode === 'ending')){
+    var a = 0.10 + 0.2 * G.heart.pulse;
+    var rg = ctx.createRadialGradient(LW/2, LH/2, LH*0.3, LW/2, LH/2, LH*0.7);
+    rg.addColorStop(0, 'rgba(255,42,0,0)');
+    rg.addColorStop(1, 'rgba(255,42,0,' + a + ')');
+    ctx.fillStyle = rg;
+    ctx.fillRect(0, 0, LW, LH);
+  }
+}
+
+function drawPaused(){
+  ctx.save();
+  ctx.fillStyle = 'rgba(4,1,10,.72)';
+  ctx.fillRect(0, 0, LW, LH);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = "14px 'Press Start 2P', monospace";
+  ctx.fillStyle = COLORS.sulfur;
+  ctx.shadowColor = COLORS.sulfur; ctx.shadowBlur = 12;
+  ctx.fillText('PAUSED', LW/2, LH/2 - 12);
+  ctx.shadowBlur = 0;
+  ctx.font = "7px 'Press Start 2P', monospace";
+  ctx.fillStyle = COLORS.ash;
+  ctx.fillText(isTouch ? 'Tap to resume' : 'P to resume', LW/2, LH/2 + 14);
+  ctx.restore();
+}
+
+function draw(){
+  var prog = G.prog, pulse = G.heart.pulse;
+  if (G.black >= 1){
+    ctx.fillStyle = '#000'; ctx.fillRect(-20, -20, LW+40, LH+40);
+    return;
+  }
+  // the fire textures, once per frame
+  var needFire = G.flames.length || (G.devil && G.devil.state !== 'wait' && !G.devil.dead);
+  if (needFire){ colFire.render(G.t, 'column'); }
+  if (G.devil && G.devil.state !== 'wait' && !G.devil.dead) faceFire.render(G.t, 'face');
+
+  ctx.save();
+  if (G.shake > 0){
+    ctx.translate(rnd(-1,1) * G.shake * 7, rnd(-1,1) * G.shake * 7);
+  }
+
+  // background: the violet night drains toward black as the phase wears on
+  var V = RGB.void, M = RGB.midnight;
+  ctx.fillStyle = rgba(lerp(V[0], 2, prog), lerp(V[1], 0, prog), lerp(V[2], 8, prog), 1);
+  ctx.fillRect(-20, -20, LW+40, LH+40);
+  // violet mist above the floor line, breathing with the heart; fire warms it once he is here
+  var mist = 0.55 + 0.25 * pulse;
+  var hg = ctx.createLinearGradient(0, LH, 0, LH - 260);
+  hg.addColorStop(0, rgba(M[0], M[1], M[2], mist));
+  hg.addColorStop(1, rgba(M[0], M[1], M[2], 0));
+  ctx.fillStyle = hg;
+  ctx.fillRect(-20, LH - 260, LW + 40, 280);
+  if (G.inferno || G.phase === 'devil'){
+    var fglow = (G.inferno ? 0.32 : 0.12) + 0.16 * pulse;
+    var fg2 = ctx.createLinearGradient(0, LH, 0, LH - (G.inferno ? 300 : 200));
+    fg2.addColorStop(0, col('ember', fglow));
+    fg2.addColorStop(1, col('ember', 0));
+    ctx.fillStyle = fg2;
+    ctx.fillRect(-20, LH - 300, LW + 40, 320);
+  }
+  if (G.mode === 'title') drawTitleHearts();
+
+  // embers
+  ctx.save();
+  for (var i=0;i<G.embers.length;i++){
+    var em = G.embers[i];
+    ctx.globalAlpha = 0.2 + 0.35 * Math.abs(Math.sin(G.t + em.p)) + 0.25 * pulse;
+    ctx.fillStyle = prog < 0.5 ? '#ff7a10' : '#e0501a';
+    ctx.beginPath();
+    ctx.arc(em.x, em.y, em.r, 0, 6.2832);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // the floor line
+  ctx.strokeStyle = G.inferno ? col('ember', 0.4 + 0.4 * pulse) : col('heart', 0.18 + 0.3 * pulse);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, FLOOR); ctx.lineTo(LW, FLOOR);
+  ctx.stroke();
+
+  if (G.lightning > 0 && G.phase === 'devil') drawLightning();
+  if (G.watch) drawWatch();
+
+  var taken = G.taken && G.mode === 'ending';
+  if (G.devil) drawDevil(G.devil);
+  if (G.arms && !taken) drawArms();
+  G.flames.forEach(drawFlame);
+  G.forks.forEach(drawFork);
+  G.loose.forEach(function(L){
+    ctx.save(); ctx.translate(L.x, L.y); ctx.rotate(L.rot); ctx.globalAlpha = Math.max(0, 1 - L.t / 3);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#c85a24'; ctx.lineWidth = 3; forkShape(); ctx.restore();
+  });
+  G.bolts.forEach(drawBolt);
+
+  // particles
+  G.parts.forEach(function(q){
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - q.t / q.life);
+    ctx.fillStyle = q.c;
+    ctx.fillRect(q.x - q.r/2, q.y - q.r/2, q.r, q.r);
+    ctx.restore();
+  });
+
+  var playerVisible = G.mode === 'play' || (G.mode === 'ending' && G.ending.kind !== 'dead');
+  if (taken && G.taken.grabbed){ if (G.arms) drawArms(true); drawPlayer(); }   // cupped: the heart over the fingers
+  else { if (playerVisible) drawPlayer(); if (taken && G.arms) drawArms(true); }
+  if (taken) drawPointingHand(G.taken.point);
+  drawTexts();
+
+  ctx.restore();
+
+  if (G.mode !== 'title') drawVignette();
+  if (G.mode === 'play') drawHUD();
+  if (G.herald > 0) drawHerald();
+  if (G.flash > 0){
+    ctx.fillStyle = 'rgba(255,42,0,' + (G.flash * 0.4) + ')';
+    ctx.fillRect(0, 0, LW, LH);
+  }
+  if (G.white > 0){
+    ctx.fillStyle = 'rgba(255,255,255,' + (G.white * 0.55) + ')';
+    ctx.fillRect(0, 0, LW, LH);
+  }
+  if (G.paused) drawPaused();
+}
+
+// ---------- loop ----------
+var last = performance.now();
+function frame(now){
+  var dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  try {
+    if (!G.paused && !window.BTD_FREEZE) update(dt);   // BTD_FREEZE: debug, holds the state for a screenshot
+    draw();
+  } catch(err){
+    console.error(err);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
