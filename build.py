@@ -1,5 +1,6 @@
 """Bundle index.html + style.css + audio.js + game.js into one self-contained
-HTML file at dist/beat-the-devil.html (for publishing as a single artifact)."""
+dist/index.html. dist/ is the deployable site root: nothing else is needed
+(the only external reference is Google Fonts, fetched at runtime)."""
 import pathlib, re
 
 root = pathlib.Path(__file__).parent
@@ -17,7 +18,9 @@ for name in ('audio.js', 'game.js'):
 
 assert 'href="style.css"' not in html and 'src="game.js' not in html and 'src="audio.js' not in html
 
-out = root / 'dist' / 'beat-the-devil.html'
+out = root / 'dist' / 'index.html'
 out.parent.mkdir(exist_ok=True)
 out.write_text(html, encoding='utf-8', newline='\n')
+# the old single-file name, so no stale copy lingers beside the real one
+(out.parent / 'beat-the-devil.html').unlink(missing_ok=True)
 print('wrote', out, len(html), 'bytes')

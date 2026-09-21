@@ -190,7 +190,7 @@ that fixed the look.
 
 ## Checking a change
 
-1. `python build.py` must produce a single-file `dist/beat-the-devil.html`.
+1. `python build.py` must produce a single-file `dist/index.html`.
 2. Run the bot: with `#debug`, `BTD_BOT(8)` should reach the devil every run;
    losses should be column hits, never jets or forks stacked past the cap.
 3. Step the penalty: `hurt('fork')`, then `BTD_STEP` 2.0 s; `G.penalty` and

@@ -131,7 +131,7 @@ whole run, and two of them are for his eyes.
 - `audio.js`   — Web Audio synth: sound effects and the music sequencer, which
                  is slaved to the heartbeat (survive, devil, title, dirge, win)
 - `game.js`    — the game: heartbeat clock, fire renderer, input, hazards, devil AI, endings, rendering
-- `build.py`   — bundles everything into `dist/beat-the-devil.html`, one self-contained file
+- `build.py`   — bundles everything into `dist/index.html`; `dist/` is the deployable site root
 
 No build step, no assets. Plain HTML/CSS/JS; all audio is synthesised at runtime.
 
@@ -205,4 +205,5 @@ throws if a pattern's length doesn't match `bars * 16`.
 python build.py
 ```
 
-writes `dist/beat-the-devil.html` with the CSS and both scripts inlined.
+writes `dist/index.html` with the CSS and both scripts inlined. Point a static
+host (Cloudflare Pages, etc.) at `dist/` and that one file is the whole site.
