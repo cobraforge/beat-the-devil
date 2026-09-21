@@ -110,6 +110,12 @@ var sfx = {
     tone({freq:200, slide:50, dur:0.35, vol:0.5, type:'sawtooth'});
     noise({dur:0.3, vol:0.4});
   },
+  // a short wet thud under the hit: a low body, a squelch through a closing lowpass
+  wet: function(){
+    tone({freq:95, slide:42, dur:0.14, vol:0.45, type:'sine'});
+    noise({dur:0.09, vol:0.3, type:'lowpass', freq:700, slide:140, q:1.6, attack:0.006});
+    noise({dur:0.05, vol:0.14, type:'bandpass', freq:420, q:3});
+  },
   grab: function(){ noise({dur:0.6, vol:0.22, freq:600, slide:120, attack:0.2}); tone({freq:70, slide:38, dur:0.7, vol:0.3, type:'sine', attack:0.15}); },
   volley: function(){ explosion(210, 1.3); noise({dur:0.5, vol:0.5, type:'highpass', freq:800, slide:5000}); },
   // fire: ignite crackle, eruption, breath warning growl, breath roar, ember hiss, bloom

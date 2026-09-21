@@ -41,6 +41,17 @@ timer. There is no penalty that outlives invulnerability and no
 invulnerability without its penalty.
 
 - Fork embedded: 65 % speed, drags the fork, laboured beat. Released at 2.0 s.
+  On impact the fork's momentum also **shoves** the heart along its line of
+  travel: 380 px/s decaying exponentially (e-folding 0.25 s, cut at 0.35 s),
+  about 72 px in all, with the controls dimmed to 40 % at the start of it and
+  never cut. The shove replaces the old constant drift; they do not stack.
+  It is clamped only at the playfield's edges (the walls, the ceiling, the
+  safe lower edge) — **it may carry the heart into a standing flame.** That is
+  deliberate: where you are when a fork lands is part of the decision the
+  lock stage (rule 4) asks for, and a shove that politely stopped short of
+  fire would make the fork's direction meaningless. The wound bleeds: a spray
+  along the fork's direction, a drip that tapers as the fork works loose,
+  splats on the floor, and a stain that stays.
 - Burnt: 115 % speed with ±0.45 input jitter, clinging flame, panicked beat.
   A burn replaces an embedded fork (it burns away).
 - Both leave a permanent scar on the heart (crack / char) that persists across
@@ -56,7 +67,9 @@ the start of it is still a threat at the end.
 
 **In code.** `hurt()` sets both; the movement block in `update()` checks `if (G.invuln <= 0)`
 and only then clears `G.penalty` (calling `releaseFork()` if needed). Never
-give `G.penalty` its own duration.
+give `G.penalty` its own duration. The shove is `G.shove` with `SHOVE_V`,
+`SHOVE_TAU`, `SHOVE_T`; the blood is `bleed()`, `woundPoint()`, the `blood`
+flag on particles and `G.splats`.
 
 ---
 
@@ -152,10 +165,24 @@ is `dev/bot.js` (`BTD_BOT(runs, opts)`); rerun it after any change here.
 
 **Rule.** His arms, hands, fingers, the pointing hand and everything that
 closes around the heart are drawn with curves only — beziers, quadratics and
-Catmull-Rom splines. No `lineTo` in a limb, no polygonal knuckles, no
-tendons or joint circles. Fingers are `drawFinger` curls tapering to a talon;
-the forearm is two muscle groups with a crease between them and a curved rim
-light; the hand is a curved back with fingers curled under.
+Catmull-Rom splines. No `lineTo` in a limb, no polygonal knuckles drawn as
+shapes. Knuckles are swellings of the finger's own outline; tendons and veins
+are raised ridges (a light line over a shadow line), never joints.
+
+**Orientation.** He faces the player, so the arm from the screen's left is
+his right hand and the arm from the right is his left; the two are mirror
+images across the centreline. On both: the palm faces the heart, the thumb
+rides the upper edge and curls over the top, the four fingers hang from the
+lower edge and curl down and in, talons hooking toward the heart. The same
+holds when the hands close on the heart at the ending — thumb over its top,
+fingers wrapping beneath. (The first version rooted the thumb on the lower
+edge, so both hands were upside down before mirroring.)
+
+**Anatomy.** Long gnarled fingers with pronounced knuckle bulges; a thick
+muscled wrist and forearm; rough cracked hide (the `hideOver` multiply, top
+tier only); deep red darkening to the fingertips; long black glossy hooked
+talons, at least a third of the finger; lit from the fire below — warm rim on
+the lower edges, deep shadow between the fingers.
 
 **Why.** The first arms were segmented — jointed tubes with drawn knuckles —
 and read as a cartoon robot. The horror comes from the arms looking like

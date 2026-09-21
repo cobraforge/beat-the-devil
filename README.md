@@ -72,6 +72,24 @@ whole run, and two of them are for his eyes.
 
 ## Look
 
+- **His face.** Red muscle over bone, not a skull: a static fibre texture
+  under a heavy brow shelf with a furrow, small eyes burning deep beneath it
+  (a red slit when open), flared nostrils, a snarl of long canines over rows
+  of teeth with a fire-lit throat, thick ridged horns sweeping out from the
+  temples and hooking down past the cheeks, and the traps and shoulders
+  fading into the dark behind. The head is cached as a sprite keyed on its
+  pose (`headSprite`); the eyes, the throat's flash, the aura and the beams
+  are drawn live over it.
+- **His hands.** Mirror images: thumb over the top, four fingers hanging from
+  the lower edge and hooking toward the heart. Each arm is rendered once into
+  a local-frame sprite and re-rendered only when its pose steps
+  (`armSprite`), so its sway costs nothing.
+- **A fork hit.** The fork's momentum shoves the heart along its line (~72 px
+  over 0.35 s, controls dimmed not cut, clamped only at the playfield's
+  edges — into fire is allowed), blood sprays along it, drips while the fork
+  is in and leaves splats on the floor, and a stain stays on the heart. A wet
+  thud sits under the hit.
+
 - The palette is CSS custom properties on `:root` in `style.css` (`--void`,
   `--midnight`, `--heart`, `--claw`, `--title`, ...). `game.js` reads them once
   at start into `COLORS` / `RGB` and never hardcodes hex in draw calls. Fire
@@ -183,13 +201,15 @@ object), `BTD_STEP(dt)` (advance one frame by hand) and `BTD_VERSION`. Set
 `window.BTD_HEART_SCALE = 5` to magnify the heart for a look at its damage.
 Handy for jumping to the fight: `BTD_G.surv = 41.9`.
 
-With `#debug` a frame-time overlay sits in the bottom-left: rolling average,
+With `#debug` a frame-time overlay sits in the bottom-left (the backtick key
+toggles it without reloading): fps with the window's low, rolling average,
 p95 and max rAF interval, time in update+draw, device pixel ratio, particle
 and flame counts. `BTD_PERF()` returns the same numbers (`BTD_PERF(true)`
 resets the ring), `BTD_TIER(n)` pins a quality tier, `BTD_WANT(n)` requests
 one the safe way, `window.BTD_LOCK_TIER = true` stops the adaptive step,
 `window.BTD_NOSHADOW = true` and `window.BTD_SKIP = {devil: true}` leave
-effects or drawing blocks out to measure their cost.
+effects or drawing blocks out to measure their cost, and
+`window.BTD_ZOOM = {x, y, w, h}` magnifies a region of the canvas for a look.
 
 ## Measuring performance
 
