@@ -82,11 +82,6 @@ function later(ms, fn){ setTimeout(fn, ms); }
 
 // ---------- sound effects ----------
 var sfx = {
-  shoot: function(){
-    noise({dur:0.05, vol:0.18, type:'highpass', freq:3000});
-    tone({freq:700, slide:2400, dur:0.07, vol:0.16});
-    tone({freq:180, slide:60, dur:0.09, vol:0.22, type:'triangle'});
-  },
   click: function(){
     tone({freq:1400, dur:0.03, vol:0.12});
     tone({freq:300, slide:120, dur:0.05, vol:0.12, type:'triangle'});
@@ -102,6 +97,13 @@ var sfx = {
   stick: function(){ noise({dur:0.07, vol:0.14, freq:500}); tone({freq:140, slide:50, dur:0.09, vol:0.14, type:'sine'}); },
   graze: function(){ tone({freq:2400, slide:3400, dur:0.05, vol:0.11, type:'sine'}); },
   lost:  function(){ tone({freq:640, slide:180, dur:0.28, vol:0.16}); },
+  // the bolt leaving: a hard transient, a body that drops, a tail of air
+  shoot: function(){
+    tone({freq:1200, slide:260, dur:0.09, vol:0.3, type:'triangle'});
+    tone({freq:320, slide:120, dur:0.16, vol:0.22, type:'sine'});
+    noise({dur:0.05, vol:0.22, type:'highpass', freq:3200, slide:900});
+    noise({dur:0.012, vol:0.3, type:'highpass', freq:6000});
+  },
   clank: function(){
     noise({dur:0.08, vol:0.25, type:'bandpass', freq:3000});
     tone({freq:1800, slide:900, dur:0.1, vol:0.18});
@@ -218,6 +220,12 @@ var TRACKS = {
   // Devil fight: tritones, a sawtooth drone and the rumble underneath.
   devil: {
     bars: 4, bed: true, breath: true, drone: 38, leadType: 'sawtooth', leadDur: 3.2,
+    arp: parse([
+      'D4 A4 D5 A4 F4 A4 D5 A4 D4 A4 D5 A4 Ab4 A4 D5 A4',
+      'D4 A4 D5 A4 F4 A4 D5 A4 Eb4 Ab4 C5 Ab4 D4 A4 D5 A4',
+      'F4 C5 F5 C5 D4 A4 D5 A4 F4 C5 F5 C5 Ab4 C5 F5 C5',
+      'Bb3 F4 Bb4 F4 A3 E4 A4 E4 Ab3 Eb4 Ab4 Eb4 G3 D4 G4 D4'
+    ]),
     bass: parse([
       'D2 D2 . D2 D2 D2 . Ab2 D2 D2 . D2 Ab2 . A2 .',
       'D2 D2 . D2 D2 D2 . Ab2 F2 F2 . F2 Eb2 . D2 .',
@@ -291,27 +299,92 @@ Object.keys(TRACKS).forEach(function(k){
 });
 
 // ----- instruments -----
+// ----- sends -----
+// One delay and one plate, fed from the instruments. Both sit on musicBus, so
+// they duck with the music and never fight the heartbeat.
+var delaySend = null, plateSend = null;
+function sends(){
+  if (delaySend) return;
+  var a = actx;
+  // a dotted-eighth echo that feeds back a little, darkening as it repeats
+  var d = a.createDelay(1.2); d.delayTime.value = 0.34;
+  var fb = a.createGain(); fb.gain.value = 0.34;
+  var damp = a.createBiquadFilter(); damp.type = 'lowpass'; damp.frequency.value = 1800;
+  var dOut = a.createGain(); dOut.gain.value = 0.5;
+  d.connect(damp); damp.connect(fb); fb.connect(d); damp.connect(dOut); dOut.connect(musicBus);
+  delaySend = a.createGain(); delaySend.gain.value = 1; delaySend.connect(d);
+  // a small plate: a short noise impulse, exponentially decaying
+  var len = Math.floor(a.sampleRate * 1.8), buf = a.createBuffer(2, len, a.sampleRate);
+  for (var c=0;c<2;c++){ var ch = buf.getChannelData(c); for (var i=0;i<len;i++) ch[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3.2) * (i < 900 ? i/900 : 1); }
+  var cv = a.createConvolver(); cv.buffer = buf;
+  var pOut = a.createGain(); pOut.gain.value = 0.42; cv.connect(pOut); pOut.connect(musicBus);
+  plateSend = a.createGain(); plateSend.gain.value = 1; plateSend.connect(cv);
+}
+// a touch of timing and level humanising, so nothing is machine-exact
+function hum(){ return 0.985 + Math.random() * 0.03; }
+function drift(){ return (Math.random() - 0.5) * 0.008; }
+
 function bass(t, n, dur){
-  tone({freq:midi(n),    t:t, dur:dur, vol:0.34, type:'square',   filter:700, bus:musicBus});
-  tone({freq:midi(n-12), t:t, dur:dur, vol:0.22, type:'triangle', bus:musicBus});
+  sends();
+  t += drift();
+  var a = actx, f0 = midi(n);
+  // a plucked square through a filter that opens and shuts, over a sub sine
+  var o = a.createOscillator(); o.type = 'square'; o.frequency.value = f0;
+  var o2 = a.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = f0; o2.detune.value = -8;
+  var flt = a.createBiquadFilter(); flt.type = 'lowpass'; flt.Q.value = 6;
+  flt.frequency.setValueAtTime(260, t);
+  flt.frequency.linearRampToValueAtTime(1500 * hum(), t + 0.035);
+  flt.frequency.exponentialRampToValueAtTime(320, t + dur * 0.8);
+  var g = a.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.3 * hum(), t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(flt); o2.connect(flt); flt.connect(g); g.connect(musicBus);
+  o.start(t); o2.start(t); o.stop(t + dur + 0.05); o2.stop(t + dur + 0.05);
+  tone({freq:f0/2, t:t, dur:dur * 0.9, vol:0.26, type:'sine', bus:musicBus});
 }
 function lead(t, n, dur, type){
-  tone({freq:midi(n), t:t, dur:dur, vol:0.10, type:type||'square', detune:-6, filter:2600, bus:musicBus});
-  tone({freq:midi(n), t:t, dur:dur, vol:0.10, type:type||'square', detune: 6, filter:2600, bus:musicBus});
+  sends();
+  t += drift();
+  var f0 = midi(n), v = 0.075 * hum();
+  // three detuned voices and a fifth under them, into the delay and the plate
+  [[-9, v], [0, v], [9, v]].forEach(function(d){
+    tone({freq:f0, t:t, dur:dur, vol:d[1], type:type||'sawtooth', detune:d[0], filter:2300, bus:musicBus});
+  });
+  tone({freq:f0 * 0.6667, t:t, dur:dur * 0.8, vol:0.035, type:'square', filter:1600, bus:musicBus});
+  tone({freq:f0, t:t, dur:dur, vol:0.05, type:type||'sawtooth', filter:2300, bus:delaySend});
+  tone({freq:f0, t:t, dur:dur, vol:0.04, type:type||'sawtooth', filter:2300, bus:plateSend});
 }
 function bell(t, n){
-  tone({freq:midi(n),   t:t, dur:1.6, vol:0.16, type:'sine', attack:0.01, bus:musicBus});
-  tone({freq:midi(n)*3, t:t, dur:0.7, vol:0.04, type:'sine', attack:0.01, bus:musicBus});
+  sends();
+  var f0 = midi(n);
+  tone({freq:f0,       t:t, dur:2.2, vol:0.15, type:'sine', attack:0.006, bus:musicBus});
+  tone({freq:f0*2.76,  t:t, dur:0.9, vol:0.035, type:'sine', attack:0.004, bus:musicBus});   // inharmonic partials: struck metal
+  tone({freq:f0*5.4,   t:t, dur:0.4, vol:0.02, type:'sine', attack:0.002, bus:musicBus});
+  tone({freq:f0,       t:t, dur:1.6, vol:0.06, type:'sine', attack:0.006, bus:plateSend});
+  tone({freq:f0,       t:t, dur:1.2, vol:0.05, type:'sine', attack:0.006, bus:delaySend});
 }
 function snare(t, v){
-  noise({t:t, dur:0.14, vol:0.28*v, type:'bandpass', freq:1900, bus:musicBus});
-  tone({freq:210, slide:110, t:t, dur:0.09, vol:0.22*v, type:'triangle', bus:musicBus});
+  sends();
+  t += drift();
+  v *= hum();
+  noise({t:t, dur:0.16, vol:0.24*v, type:'highpass', freq:1400, bus:musicBus});
+  noise({t:t, dur:0.055, vol:0.2*v, type:'bandpass', freq:2600, q:1.2, bus:musicBus});
+  tone({freq:230, slide:120, t:t, dur:0.1, vol:0.2*v, type:'triangle', bus:musicBus});
+  noise({t:t, dur:0.12, vol:0.09*v, type:'highpass', freq:1800, bus:plateSend});
 }
-function hat(t, v){ noise({t:t, dur:0.035, vol:0.12*v, type:'highpass', freq:7000, bus:musicBus}); }
+function hat(t, v){
+  t += drift();
+  var open = Math.random() < 0.12;
+  noise({t:t, dur:open ? 0.14 : 0.03, vol:(open ? 0.07 : 0.1) * v * hum(), type:'highpass', freq:8200, bus:musicBus});
+}
 // the heartbeat itself: lub, then a softer dub
 function thump(t, v){
-  tone({freq:64, slide:36, t:t, dur:0.24, vol:0.75*v, type:'sine', bus:heartBus});
-  noise({t:t, dur:0.05, vol:0.06*v, freq:300, bus:heartBus});
+  // the muscle: a sine that drops fast, a softer second body, and the
+  // valve's slap on top
+  tone({freq:64, slide:34, t:t, dur:0.26, vol:0.72*v, type:'sine', bus:heartBus});
+  tone({freq:96, slide:52, t:t, dur:0.12, vol:0.22*v, type:'sine', bus:heartBus});
+  noise({t:t, dur:0.055, vol:0.07*v, type:'lowpass', freq:320, bus:heartBus});
 }
 
 // ----- sustained layers (drone, rumble bed, breathing, whispers) -----
@@ -545,8 +618,15 @@ function meter(){
 // ----- sequencer (heartbeat-driven) -----
 var seq = { name:null, track:null, step:0 };
 var music = {};
+function arp(t, n, dur){
+  sends();
+  var f0 = midi(n);
+  tone({freq:f0, t:t + drift(), dur:dur, vol:0.055 * hum(), type:'square', filter:3200, bus:musicBus});
+  tone({freq:f0, t:t, dur:dur, vol:0.03, type:'square', filter:3200, bus:delaySend});
+}
 function scheduleStep(tr, step, t, spb){
   var n;
+  if (tr.arp   && (n = tr.arp[step]))   arp(t, n, spb * 0.9);
   if (tr.bass  && (n = tr.bass[step]))  bass(t, n, spb * (tr.bassDur || 1.6));
   if (tr.lead  && (n = tr.lead[step]))  lead(t, n, spb * (tr.leadDur || 1.6), tr.leadType);
   if (tr.bell  && (n = tr.bell[step]))  bell(t, n);

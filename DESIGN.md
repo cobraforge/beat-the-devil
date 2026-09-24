@@ -95,8 +95,15 @@ at the phase transition. The locked target exists because a column that
 tracks the heart is a homing attack the player cannot outthink; once it
 stands, dodging is a matter of geometry.
 
+**The picture must match the box.** A column's danger is the rectangle
+`|x - fl.x| < w/2`, from `LH - h` to the floor. The fire is drawn as tongues,
+so the *hot* part — the orange and yellow layers — has to reach close to `h`
+and stay inside `w`; only the dull red outer layer dissolves above it. A
+prettier fire that burned lower than its hitbox would be a trap.
+
 **In code.** `ceilingY()`, `flameLimit()`, `spawnWalker()`,
-`moveHazards()` (`fl.hmax = Math.min(fl.hmax, flameLimit())`).
+`moveHazards()` (`fl.hmax = Math.min(fl.hmax, flameLimit())`), and the layer
+heights in `flameColumn()`.
 
 ---
 
