@@ -72,6 +72,21 @@ whole run, and two of them are for his eyes.
 
 ## Look
 
+- **The cabinet.** A 13-inch composite monitor of the early-80s home-computer
+  kind: cream shell with vents pressed into the top, a deep surround with the
+  tube recessed behind it, and a dark lower panel carrying the maker's plate,
+  a control door with four knobs and the power lamp. The glass has a curved
+  sheen, a shadow mask and dark corners. `BEZEL_X`/`BEZEL_Y` in `game.js` must
+  match the cabinet's padding in `style.css`.
+- **Fire.** Not a pillar: three layers of tongues (dull red outer, orange,
+  yellow-white core), each tapering hard and wandering on the curl field,
+  each fading toward its tip so there is no hard edge; a white-hot bed at the
+  floor, licks that pinch off and rise, and sparks. The hot layers fill the
+  hitbox (see `DESIGN.md` rule 3).
+- **The heart.** It fills slowly between beats, squeezes hard on the lub,
+  again smaller on the dub, then rings out like jelly; each squeeze throws off
+  a pressure wave. Veins brighten outward with the beat.
+
 - **His face.** Red muscle over bone, not a skull: a static fibre texture
   under a heavy brow shelf with a furrow, small eyes burning deep beneath it
   (a red slit when open), flared nostrils, a snarl of long canines over rows
@@ -238,6 +253,16 @@ and the fight from 49 to 19; on the GPU path the game never leaves the top
 tier.
 
 ## Sound
+
+The music runs through two sends — a dotted-eighth delay that darkens as it
+repeats, and a short plate — fed by the lead, the bell, the snare and the
+arpeggio. The bass is a plucked square over a sub sine with a filter that
+opens and shuts; the lead is three detuned voices with a fifth beneath; the
+bell has inharmonic partials; hats open at random. Every voice is nudged a few
+milliseconds and a few percent either way so nothing lands machine-exact. The
+fight adds a sixteenth-note arpeggio. The heartbeat itself is a sine that
+drops fast, a shorter second body and the valve's slap.
+
 
 All synthesised in `audio.js`, no asset files. Buses: sfx, music, the
 heartbeat (its own bus, lowpass-muffled inside his fist), and fire.

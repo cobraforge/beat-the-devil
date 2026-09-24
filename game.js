@@ -16,7 +16,7 @@ var wrap = document.getElementById('wrap');
 var monitor = document.getElementById('monitor');
 var scale = 1;
 // bezel extents in logical px at --s = 1 (must match style.css #monitor padding)
-var BEZEL_X = 26 * 2, BEZEL_Y = 24 + 44;
+var BEZEL_X = 38 * 2, BEZEL_Y = 36 + 78;
 
 var isTouch = (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ||
               ('ontouchstart' in window);
@@ -297,7 +297,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 17;
+  window.BTD_VERSION = 19;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -1157,7 +1157,7 @@ function moveHazards(dt, live){
         if (fl.h <= 0){ G.flames.splice(i,1); continue; }
       }
       // embers shed from the top and drift up on the turbulence
-      if (fl.h > 30 && Math.random() < 0.4)
+      if (fl.h > 30 && Math.random() < 0.22)
         addPart({ x: fl.x + rnd(-fl.w*0.3, fl.w*0.3), y: LH - fl.h + rnd(-6, 24), vx: rnd(-12, 12), vy: rnd(-70, -30),
                        life: rnd(0.7, 1.5), t: 0, c: Math.random() < 0.5 ? '#ffb060' : '#ff7a10', r: rnd(1.2, 2.4), g: -26, turb: 60 });
       burn = Math.abs(p.x - fl.x) < fl.w * (0.5 + 0.2 * fl.flare) + 4 && p.y > LH - fl.h - 6;
@@ -1571,15 +1571,19 @@ function drawPlayer(){
   var y = p.y + G.recoil * 3, s = 11 * (window.BTD_HEART_SCALE || 1) * (held ? 1.8 : 1);   // BTD_HEART_SCALE: debug magnifier
   var lit = fireBelow(p), fire = fireLight(p.x, p.y);
   var pen = G.penalty, burn = pen && pen.kind === 'burn' ? pen : null;
-  // micro-motion: an asymmetric squash on each beat, a settle after, a faint drift
-  var e1 = env(h.since, 0.09, 0.2) * (h.lubScale - 1) / 0.14, e2 = h.dubDone ? env(h.since - h.dubAt, 0.07, 0.16) : 0;
-  var sx = 1 + 0.16 * e1 - 0.05 * e2, sy = 1 - 0.08 * e1 + 0.09 * e2;
+  // It is a muscle, not a gem. Each beat: a slow fill, a hard squeeze on the
+  // lub, a smaller one on the dub, then the flesh rings out like jelly.
+  var e1 = env(h.since, 0.07, 0.22) * (h.lubScale - 1) / 0.14, e2 = h.dubDone ? env(h.since - h.dubAt, 0.07, 0.16) : 0;
+  var fill = Math.sin(Math.PI * clamp(h.since / Math.max(0.25, h.next), 0, 1)) * 0.05;   // diastole: it swells between beats
+  var ring = Math.exp(-h.since * 8.5) * Math.sin(h.since * 46) * 0.075;                  // and rings after the squeeze
+  var sx = 1 + 0.24 * e1 - 0.06 * e2 + ring - fill * 0.4;
+  var sy = 1 - 0.15 * e1 + 0.12 * e2 - ring + fill;
   var settle = Math.sin(h.settleT * 24) * 0.05 * h.settleAmp;
   var dx = (FIRE.at(t * 5, 3) - 0.5) * 3.5, dy = (FIRE.at(t * 4.3, 80) - 0.5) * 3.5;
   if (h.flutter > 0){ dx += rnd(-1.6, 1.6); dy += rnd(-1.6, 1.6); }
   // a lean into the direction of travel, and a light trail when moving fast
   var speed = Math.hypot(p.vx, p.vy);
-  var rot = settle + clamp(p.vx / 1400, -0.22, 0.22);
+  var rot = settle + clamp(p.vx / 1400, -0.22, 0.22) + ring * 0.7;
   if (speed > 150 && Math.random() < 0.8)
     addPart({ x: p.x - p.vx / speed * 8 + rnd(-3, 3), y: y - p.vy / speed * 8 + rnd(-3, 3), vx: -p.vx * 0.05, vy: -p.vy * 0.05,
                    life: rnd(0.18, 0.32), t: 0, c: col('heart', 0.5), r: rnd(1.5, 3), g: 0 });
@@ -1593,6 +1597,15 @@ function drawPlayer(){
     ug.addColorStop(1, 'rgba(255,60,0,0)');
     ctx.fillStyle = ug;
     ctx.fillRect(p.x - 40, y - 26, 80, 60);
+  }
+  // the wave the squeeze throws off, once per beat
+  if (!held && h.since < 0.42 && G.mode !== 'title'){
+    var rk = h.since / 0.42, rr = s * (1.1 + 2.6 * rk);
+    ctx.save();
+    ctx.globalAlpha = (1 - rk) * (1 - rk) * 0.3 * h.light;
+    ctx.strokeStyle = col('heart', 1); ctx.lineWidth = Math.max(0.6, 2.2 * (1 - rk));
+    ctx.beginPath(); ctx.ellipse(p.x + dx, y + dy, rr, rr * 0.86, 0, 0, 6.2832); ctx.stroke();
+    ctx.restore();
   }
   drawGem(p.x + dx, y + dy, s, {
     pulse: h.pulse, lit: lit, dmg: 3 - G.lives, light: h.light * (G.taken && G.taken.glow != null ? G.taken.glow : 1), fire: fire, scars: G.scars,
@@ -1729,42 +1742,145 @@ function smokePlume(x, top, w, seed, t){
   }
   ctx.restore();
 }
-function flameColumn(x, h, w, seed, flare){
-  if (h < 4) return;
-  var t = G.t, top = LH - h;
-  w = w * (1 + 0.35 * (flare || 0));
-  if (Q.smoke) smokePlume(x, top, w, seed, t);
-  floorSpill(x, w, h);
-  ctx.save();
-  // silhouette: the edge churns rather than waves
-  ctx.beginPath();
-  ctx.moveTo(x - w*0.5, LH + 4);
-  var steps = Math.max(8, Math.floor(h / (9 * Q.edge))), i, k;
-  for (i=0;i<=steps;i++){
-    k = i/steps;
-    ctx.lineTo(x - w*0.5*(1 - k*0.5) + flameEdge(k, seed, t, w), LH - h*k);
+// ---------- fire ----------
+// A fire is not a shape, it is several tongues of different heights rising,
+// leaning, pinching off and dying, seen as a gradient from a dull red edge to
+// a white core. So: three layers (outer red, mid orange, inner yellow-white),
+// each a set of tongues that taper hard toward their tips and wander on the
+// curl field; licks that detach above them; a white-hot bed at the floor.
+// The hitbox is unchanged — `w` and `h` still describe the danger.
+
+// one tongue, as a closed path: base half-width hw, height hgt, leaning by
+// `lean`, its tip wandering. u is the tongue's own phase so no two agree.
+function tongueCentre(x, lean, u, t, wob, k){
+  // the tip curls further than the body: k^1.7 on the lean, and the curl
+  // field pushes the whole spine sideways more the higher it goes
+  return x + lean * Math.pow(k, 1.7) + FIRE.curl(u * 90 + k * 46, t * 62 + u * 40).x * wob * Math.pow(k, 1.3) * 4.2;
+}
+function tongueHalf(hw, u, t, k, side){
+  // widest in the lower third, pinching to nothing at the tip
+  var prof = Math.pow(1 - k, 1.25) * (1 + 0.55 * Math.sin(Math.PI * k));
+  return hw * prof * (1 + 0.3 * (FIRE.at(u * 50 + side * 311 + k * 34, t * 72) - 0.5));
+}
+// one tongue as a closed path, sides curved through their sample points
+function tonguePath(x, base, hw, hgt, lean, u, t, wob){
+  var N = 10, i, k, c, half, pts = [];
+  for (i = 0; i <= N; i++){
+    k = i / N; c = tongueCentre(x, lean, u, t, wob, k);
+    pts.push([c - tongueHalf(hw, u, t, k, 0), base - hgt * k, c + tongueHalf(hw, u, t, k, 1), base - hgt * k]);
   }
-  for (i=steps;i>=0;i--){
-    k = i/steps;
-    ctx.lineTo(x + w*0.5*(1 - k*0.5) + flameEdge(k, seed + 0.37, t, w), LH - h*k);
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (i = 1; i <= N; i++){                        // up the left side, curved
+    var a2 = pts[i-1], b2 = pts[i];
+    ctx.quadraticCurveTo(a2[0], (a2[1] + b2[1]) / 2, (a2[0] + b2[0]) / 2, (a2[1] + b2[1]) / 2);
+    ctx.lineTo(b2[0], b2[1]);
+  }
+  for (i = N - 1; i >= 0; i--){                    // and down the right
+    var a3 = pts[i+1], b3 = pts[i];
+    ctx.quadraticCurveTo(a3[2], (a3[3] + b3[3]) / 2, (a3[2] + b3[2]) / 2, (a3[3] + b3[3]) / 2);
+    ctx.lineTo(b3[2], b3[3]);
   }
   ctx.closePath();
-  drawGlow(x, LH - h * 0.45, 40, [255, 90, 16], 0.8 + 0.5 * (flare || 0), w * 2.6 + 30, h + 90);
-  var sg = ctx.createLinearGradient(0, LH, 0, top);
-  sg.addColorStop(0, 'rgba(255,90,10,.6)');
-  sg.addColorStop(0.55, 'rgba(255,60,10,.35)');
-  sg.addColorStop(1, 'rgba(255,40,10,0)');
-  ctx.fillStyle = sg;
+}
+// a detached lick: a small teardrop that rises, shrinks and goes out
+function drawLick(x, y, r, a, c){
+  ctx.fillStyle = c;
+  ctx.beginPath();
+  ctx.moveTo(x - r, y);
+  ctx.quadraticCurveTo(x - r * 0.9, y - r * 1.1, x, y - r * 2.4);
+  ctx.quadraticCurveTo(x + r * 0.9, y - r * 1.1, x + r, y);
+  ctx.quadraticCurveTo(x, y + r * 0.7, x - r, y);
+  ctx.closePath();
+  ctx.globalAlpha = a;
   ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.clip();
-  var win = Math.floor(colFire.w * 0.375), sx = Math.floor(seed * (colFire.w - win)) % (colFire.w - win);
-  ctx.drawImage(colFire.canvas, sx, 0, win, colFire.h, x - w*0.7, top - 10, w*1.4, h + 14);
-  if (flare){
-    ctx.fillStyle = 'rgba(255,240,200,' + (0.5 * flare) + ')';
-    ctx.fillRect(x - w, top - 20, w * 2, h + 30);
+  ctx.globalAlpha = 1;
+}
+function flameColumn(x, h, w, seed, flare){
+  if (h < 4) return;
+  var t = G.t, top = LH - h, fl = flare || 0;
+  w = w * (1 + 0.35 * fl);
+  if (Q.smoke) smokePlume(x, top, w, seed, t);
+  floorSpill(x, w, h);
+  var glowK = 0.8 + 0.5 * fl;
+  drawGlow(x, LH - h * 0.42, 40, [255, 96, 20], glowK, w * 2.8 + 30, h + 90);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  // three layers, outermost first: each is a set of tongues, shorter and
+  // narrower and hotter as they go in. The flicker is per tongue, not global.
+  // heights are measured against the hitbox (LH-h to the floor, w wide), so
+  // what the player reads as fire is what actually burns
+  var layers = [
+    { n: 5, hw: 0.34, hh: 1.02, a: 0.30, c: '196,38,6',   sp: 0.52 },
+    { n: 4, hw: 0.26, hh: 0.86, a: 0.34, c: '255,116,12', sp: 0.44 },
+    { n: 3, hw: 0.17, hh: 0.60, a: 0.42, c: '255,208,96', sp: 0.32 }
+  ];
+  for (var li = 0; li < layers.length; li++){
+    var L = layers[li];
+    for (var i = 0; i < L.n; i++){
+      var u = seed * 7.3 + li * 2.1 + i * 1.7;
+      // each tongue breathes on its own cycle, and sits off centre
+      var puff = 0.62 + 0.38 * FIRE.at(u * 60, t * 95);
+      var hgt = h * L.hh * puff * (1 + 0.25 * fl);
+      var hw = w * L.hw * (0.6 + 0.5 * FIRE.at(u * 33 + 70, t * 48));
+      var off = (i - (L.n - 1) / 2) * w * L.sp * 0.42 + (FIRE.at(u * 21, t * 26) - 0.5) * w * 0.2;
+      var lean = (FIRE.curl(u * 40, t * 30).x) * w * 1.6;
+      tonguePath(x + off, LH + 3, hw, hgt, lean, u, t, w * 0.5);
+      // fire dissolves as it rises: full at the root, gone before the tip
+      var a0 = L.a * (0.75 + 0.35 * puff);
+      var tgg = ctx.createLinearGradient(0, LH + 3, 0, LH + 3 - hgt);
+      tgg.addColorStop(0, 'rgba(' + L.c + ',' + a0 + ')');
+      tgg.addColorStop(0.55, 'rgba(' + L.c + ',' + (a0 * 0.85) + ')');
+      tgg.addColorStop(0.88, 'rgba(' + L.c + ',' + (a0 * 0.3) + ')');
+      tgg.addColorStop(1, 'rgba(' + L.c + ',0)');
+      ctx.fillStyle = tgg;
+      ctx.fill();
+    }
+  }
+  // the bed: white-hot where it meets the floor, and wider than the tongues
+  var bg = ctx.createRadialGradient(x, LH + 2, 1, x, LH + 2, w * 0.9);
+  bg.addColorStop(0, 'rgba(255,240,200,' + (0.5 + 0.4 * fl) + ')');
+  bg.addColorStop(0.35, 'rgba(255,150,40,.36)');
+  bg.addColorStop(1, 'rgba(255,60,10,0)');
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.ellipse(x, LH + 2, w * 0.9, h * 0.22 + 14, 0, 0, 6.2832); ctx.fill();
+  // licks that have pinched off and are rising above the tips
+  var licks = Q.smoke ? 3 : 2;
+  for (i = 0; i < licks; i++){
+    var lu = seed * 11 + i * 3.7;
+    var ph = (t * (0.55 + 0.2 * i) + lu) % 1;                     // 0..1, its life
+    var ly = top + h * 0.22 - ph * (h * 0.42 + 40);
+    var lx = x + (FIRE.curl(lu * 30, t * 24).x) * w * 2.2 + (i - 1) * w * 0.28;
+    var lr = (3 + w * 0.055) * (1 - ph * 0.8);
+    if (lr > 0.7) drawLick(lx, ly, lr, (1 - ph) * (1 - ph) * 0.45 * (0.6 + 0.6 * fl), ph < 0.45 ? 'rgba(255,170,50,1)' : 'rgba(210,60,12,1)');
   }
   ctx.restore();
+
+  // the noise texture, only where the fire already is, for detail inside it
+  if (Q.hide){
+    ctx.save();
+    ctx.beginPath();
+    tonguePath(x, LH + 3, w * 0.58, h * 1.02, 0, seed * 7.3, t, w * 0.5);
+    ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.5;
+    var win = Math.floor(colFire.w * 0.375), sx = Math.floor(seed * (colFire.w - win)) % (colFire.w - win);
+    ctx.drawImage(colFire.canvas, sx, 0, win, colFire.h, x - w * 0.8, top - 10, w * 1.6, h + 14);
+    ctx.restore();
+  }
+  if (fl){
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(255,230,170,' + (0.35 * fl) + ')';
+    ctx.beginPath(); ctx.ellipse(x, LH - h * 0.3, w * 1.1, h * 0.55, 0, 0, 6.2832); ctx.fill();
+    ctx.restore();
+  }
+  // sparks torn off the tips
+  if (Math.random() < (0.5 + fl) * 0.22){
+    addPart({ x: x + rnd(-w * 0.5, w * 0.5), y: LH - h * rnd(0.35, 0.95), vx: rnd(-26, 26), vy: rnd(-90, -34),
+              life: rnd(0.5, 1.2), t: 0, c: Math.random() < 0.6 ? '#ffc766' : '#ff8a20', r: rnd(0.9, 2), g: -18, turb: 42 });
+  }
   if (Q.shimmer) heatShimmer(x, top, w, seed, t);
 }
 // heat shimmer: everything seen through and just above the flame is displaced
@@ -2004,6 +2120,24 @@ function skullPath(pts){
   ctx.closePath();
 }
 // the mouth: irregular, wider than tall, the lower lip fuller, one side wider
+// The snarl's opening: it follows the jaw, wider than tall, lopsided, with
+// irregular curvature. The gum lines are the same curves the teeth stand on.
+// how tall the opening is at u: full in the middle, nothing at the corners
+function gumSpan(u){ return Math.pow(Math.max(0, 1 - u * u), 0.58); }
+function gumTopAt(my, mh, u){ return my - mh * gumSpan(u) * (0.92 + 0.16 * u) + u * 4 - mh * 0.04; }
+function gumBotAt(my, mh, u){ return my + mh * gumSpan(u) * (1.04 - 0.12 * u + 0.18 * Math.max(0, u)) + u * 3 + mh * 0.04; }
+function snarlPoints(mx, my, mw, mh){
+  var pts = [], N = 15, i, u;
+  for (i = 0; i <= N; i++){
+    u = -1 + 2 * i / N;
+    pts.push({ x: mx + u * mw, y: gumTopAt(my, mh, u) + (FIRE.at(i * 37, 210) - 0.5) * 4 });
+  }
+  for (i = N - 1; i >= 1; i--){
+    u = -1 + 2 * i / N;
+    pts.push({ x: mx + u * mw * 0.97, y: gumBotAt(my, mh, u) + (FIRE.at(i * 29 + 80, 310) - 0.5) * 5 });
+  }
+  return pts;
+}
 function mouthPoints(mx, my, mw, mh, t){
   var pts = [], n = 14;
   for (var i=0;i<n;i++){
@@ -2031,8 +2165,8 @@ function fleshPatternGet(){
   for (var y=0;y<H;y++) for (var x=0;x<W;x++){
     // fibres: the field stretched along y; a coarser mottle over it; wet specks
     var f = FIRE.at(x * 1.5, y * 0.35) * 0.55 + FIRE.at(x * 3.4 + 90, y * 0.8 + 40) * 0.3 + FIRE.at(x * 0.5 + 300, y * 0.5) * 0.15;
-    var v = Math.pow(clamp((f - 0.3) / 0.48, 0, 1), 1.2) * 0.75 + 0.12;
-    var r = 30 + 150 * v, g = 4 + 30 * v * v, b = 4 + 20 * v * v;
+    var v = Math.pow(clamp((f - 0.3) / 0.48, 0, 1), 1.4) * 0.62 + 0.06;
+    var r = 22 + 132 * v, g = 3 + 24 * v * v, b = 3 + 16 * v * v;
     var spec = FIRE.at(x * 5 + 700, y * 5 + 200);
     if (spec > 0.78 && v > 0.55){ var k = (spec - 0.78) / 0.22; r += 70 * k; g += 60 * k; b += 55 * k; }
     d[i] = Math.min(255, r); d[i+1] = Math.min(255, g); d[i+2] = Math.min(255, b); d[i+3] = 255; i += 4;
@@ -2044,10 +2178,14 @@ function fleshPatternGet(){
 // the head's outline: broad at the brow and cheekbones, a heavy squared jaw,
 // a short chin. Skewed toward the heart by sk.
 function headPoints(cx, cy, w, h, sk){
+  // widest across the brow and the cheekbones, then the jaw pulls in hard:
+  // a wedge, not a dome. The chin is narrow.
   var P = [
-    [-0.50, -0.36], [-0.42, -0.66], [-0.18, -0.86], [0.18, -0.86], [0.42, -0.66], [0.50, -0.36],
-    [0.58, -0.16], [0.55, 0.14], [0.50, 0.40], [0.37, 0.68], [0.15, 0.81], [0, 0.84],
-    [-0.15, 0.81], [-0.37, 0.68], [-0.50, 0.40], [-0.55, 0.14], [-0.58, -0.16]
+    [-0.52, -0.40], [-0.44, -0.70], [-0.18, -0.88], [0.18, -0.88], [0.44, -0.70], [0.52, -0.40],
+    [0.60, -0.20], [0.58, 0.04],                       // the brow's outer corner and the temple
+    [0.44, 0.26], [0.28, 0.52], [0.13, 0.72], [0, 0.78],   // the jaw, narrowing
+    [-0.13, 0.72], [-0.28, 0.52], [-0.44, 0.26],
+    [-0.58, 0.04], [-0.60, -0.20]
   ];
   return P.map(function(q){ return { x: cx + q[0] * w + (q[1] > 0 ? sk * 0.3 * (1 + q[1]) : sk * 0.15), y: cy + q[1] * h }; });
 }
@@ -2139,61 +2277,110 @@ function drawHeadBody(cx, cy, w, h, sk, mouth, turn){
   var vg = ctx.createRadialGradient(cx + sk * 0.4, cy + h * 0.25, w * 0.1, cx + sk * 0.2, cy, w * 0.62);
   vg.addColorStop(0, 'rgba(255,120,60,.14)'); vg.addColorStop(0.55, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.6)');
   ctx.fillStyle = vg; ctx.fillRect(cx - w, cy - h, w * 2, h * 2);
-  // the brow ridge: a heavy continuous shelf, lit on its crest, black beneath
-  var browY = cy - h * 0.30;
-  var bg = ctx.createLinearGradient(0, browY - 30, 0, browY + 40);
-  bg.addColorStop(0, 'rgba(255,190,140,.22)'); bg.addColorStop(0.3, 'rgba(255,190,140,0)');
-  bg.addColorStop(0.42, 'rgba(0,0,0,.8)'); bg.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = bg; ctx.fillRect(cx - w, browY - 30, w * 2, 70);
-  // the whole upper face in the brow's shade; the nose bridge catching a little light
-  var tg2 = ctx.createLinearGradient(0, cy - h, 0, cy + h * 0.2);
-  tg2.addColorStop(0, 'rgba(0,0,0,.5)'); tg2.addColorStop(0.7, 'rgba(0,0,0,.18)'); tg2.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = tg2; ctx.fillRect(cx - w, cy - h, w * 2, h * 1.2);
-  ctx.strokeStyle = 'rgba(255,170,120,.18)'; ctx.lineWidth = 7; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(cx + sk * 0.55, browY + 12); ctx.quadraticCurveTo(cx + sk * 0.58, cy + h * 0.1, cx + sk * 0.6, cy + h * 0.2); ctx.stroke();
-  // the shelf itself: a thick ridge across the brow, lit along its crest
+  // ---- the brow: a shelf that overhangs. It is lit along its crest, and the
+  // shadow it throws falls straight down into the sockets beneath it.
+  var browY = cy - h * 0.26;
+  function browEdge(u){                 // u: -1..1 across the face
+    return browY - 16 * (1 - u * u * 0.55) + Math.abs(u) * 10;
+  }
   ctx.save();
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 16;
-  ctx.beginPath(); ctx.moveTo(cx - w * 0.5 + sk * 0.3, browY - 4); ctx.quadraticCurveTo(cx + sk * 0.5, browY + 16, cx + w * 0.5 + sk * 0.3, browY - 4); ctx.stroke();
-  ctx.strokeStyle = 'rgb(140,32,18)'; ctx.lineWidth = 13;
-  ctx.beginPath(); ctx.moveTo(cx - w * 0.5 + sk * 0.3, browY - 14); ctx.quadraticCurveTo(cx + sk * 0.5, browY + 2, cx + w * 0.5 + sk * 0.3, browY - 14); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,170,120,.3)'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(cx - w * 0.46 + sk * 0.3, browY - 20); ctx.quadraticCurveTo(cx + sk * 0.5, browY - 5, cx + w * 0.46 + sk * 0.3, browY - 20); ctx.stroke();
+  // the shadow first, cast down from under the shelf
+  var shd = ctx.createLinearGradient(0, browY - 2, 0, browY + h * 0.34);
+  shd.addColorStop(0, 'rgba(0,0,0,.92)'); shd.addColorStop(0.35, 'rgba(0,0,0,.6)'); shd.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shd;
+  ctx.beginPath();
+  ctx.moveTo(cx - w * 0.56 + sk * 0.3, browEdge(-1));
+  ctx.quadraticCurveTo(cx - w * 0.3 + sk * 0.4, browEdge(-0.5) + 6, cx + sk * 0.5, browEdge(0) + 10);
+  ctx.quadraticCurveTo(cx + w * 0.3 + sk * 0.4, browEdge(0.5) + 6, cx + w * 0.56 + sk * 0.3, browEdge(1));
+  ctx.lineTo(cx + w * 0.56 + sk * 0.3, browY + h * 0.34);
+  ctx.lineTo(cx - w * 0.56 + sk * 0.3, browY + h * 0.34);
+  ctx.closePath(); ctx.fill();
+  // the ridge itself: two swellings meeting over the nose, filled, not stroked
+  [-1, 1].forEach(function(dir){
+    var x0 = cx + dir * w * 0.54 + sk * 0.28, x1 = cx + dir * w * 0.06 + sk * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x0, browEdge(dir) + 4);
+    ctx.bezierCurveTo(cx + dir * w * 0.4 + sk * 0.3, browY - 34, cx + dir * w * 0.2 + sk * 0.45, browY - 32, x1, browY - 20);
+    ctx.bezierCurveTo(cx + dir * w * 0.2 + sk * 0.45, browY - 8, cx + dir * w * 0.36 + sk * 0.35, browY + 4, x0, browEdge(dir) + 6);
+    ctx.closePath();
+    var brg = ctx.createLinearGradient(0, browY - 34, 0, browY + 8);
+    brg.addColorStop(0, 'rgb(128,30,16)'); brg.addColorStop(0.45, 'rgb(86,18,10)'); brg.addColorStop(1, 'rgb(24,5,4)');
+    ctx.fillStyle = brg; ctx.fill();
+    // the crest catches what light there is
+    ctx.strokeStyle = 'rgba(255,175,125,.35)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x0 - dir * 6, browEdge(dir) + 2);
+    ctx.bezierCurveTo(cx + dir * w * 0.4 + sk * 0.3, browY - 31, cx + dir * w * 0.22 + sk * 0.45, browY - 29, x1, browY - 18);
+    ctx.stroke();
+  });
+  // the furrow: a deep notch between the brows with two creases climbing out
+  ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx + sk * 0.5 - 3, browY - 30); ctx.quadraticCurveTo(cx + sk * 0.5, browY - 14, cx + sk * 0.52 - 2, browY + 2); ctx.stroke();
+  ctx.lineWidth = 3;
+  [-1, 1].forEach(function(dir){
+    ctx.beginPath();
+    ctx.moveTo(cx + sk * 0.5 + dir * 7, browY - 24);
+    ctx.quadraticCurveTo(cx + sk * 0.5 + dir * 13, browY - 38, cx + sk * 0.5 + dir * 26, browY - 44);
+    ctx.stroke();
+  });
   ctx.restore();
-  // the furrow between the brows, and the creases fanning from it
-  ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(cx + sk * 0.5, browY - 26); ctx.quadraticCurveTo(cx + sk * 0.5 - 3, browY - 8, cx + sk * 0.55, browY + 6); ctx.stroke();
-  ctx.lineWidth = 2;
+  // the temples fall away behind the brow's corners
   [-1, 1].forEach(function(dir){
-    ctx.beginPath(); ctx.moveTo(cx + sk * 0.5 + dir * 6, browY - 22); ctx.quadraticCurveTo(cx + sk * 0.5 + dir * 20, browY - 30, cx + sk * 0.5 + dir * 44, browY - 30); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx + sk * 0.5 + dir * 8, browY - 10); ctx.quadraticCurveTo(cx + sk * 0.5 + dir * 26, browY - 14, cx + sk * 0.5 + dir * 52, browY - 10); ctx.stroke();
+    var tgx = ctx.createRadialGradient(cx + dir * w * 0.56, cy - h * 0.40, w * 0.04, cx + dir * w * 0.56, cy - h * 0.40, w * 0.46);
+    tgx.addColorStop(0, 'rgba(0,0,0,.72)'); tgx.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = tgx; ctx.fillRect(cx - w, cy - h, w * 2, h);
   });
-  // cheekbones catch the light from below; the jaw's sides fall into shadow
+  // ---- cheekbones: a lit wedge with a hollow under it, and the jaw pulling in
   [-1, 1].forEach(function(dir){
-    var chx = cx + dir * w * 0.36 + sk * 0.35, chy = cy + h * 0.08;
-    var cg = ctx.createRadialGradient(chx, chy + 8, 2, chx, chy, w * 0.22);
-    cg.addColorStop(0, 'rgba(255,170,110,.3)'); cg.addColorStop(1, 'rgba(255,170,110,0)');
-    ctx.fillStyle = cg; ctx.fillRect(chx - w*0.25, chy - w*0.25, w*0.5, w*0.5);
-    var jg = ctx.createLinearGradient(cx + dir * w * 0.56, 0, cx + dir * w * 0.2, 0);
-    jg.addColorStop(0, 'rgba(8,1,1,.7)'); jg.addColorStop(1, 'rgba(8,1,1,0)');
-    ctx.fillStyle = jg; ctx.fillRect(Math.min(cx, cx + dir * w * 0.6), cy - h * 0.1, w * 0.6, h * 0.95);
-    // the masseter, a ridge of muscle from the cheekbone to the jaw angle
-    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(cx + dir * w * 0.44 + sk * 0.3, cy + h * 0.1); ctx.quadraticCurveTo(cx + dir * w * 0.47 + sk * 0.3, cy + h * 0.32, cx + dir * w * 0.38 + sk * 0.35, cy + h * 0.5); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,150,110,.2)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(cx + dir * w * 0.42 + sk * 0.3, cy + h * 0.1); ctx.quadraticCurveTo(cx + dir * w * 0.45 + sk * 0.3, cy + h * 0.32, cx + dir * w * 0.36 + sk * 0.35, cy + h * 0.5); ctx.stroke();
+    var chx = cx + dir * w * 0.34 + sk * 0.35, chy = cy + h * 0.02;
+    ctx.save();
+    ctx.beginPath();                       // the bone: a wedge from the temple to the muzzle
+    ctx.moveTo(cx + dir * w * 0.54 + sk * 0.3, cy - h * 0.12);
+    ctx.quadraticCurveTo(chx + dir * w * 0.06, chy - h * 0.02, cx + dir * w * 0.12 + sk * 0.5, cy + h * 0.14);
+    ctx.quadraticCurveTo(chx, chy + h * 0.10, cx + dir * w * 0.5 + sk * 0.3, cy + h * 0.02);
+    ctx.closePath();
+    var cgg = ctx.createLinearGradient(0, cy - h * 0.12, 0, cy + h * 0.16);
+    cgg.addColorStop(0, 'rgba(255,170,110,.06)'); cgg.addColorStop(0.5, 'rgba(255,160,100,.26)'); cgg.addColorStop(1, 'rgba(255,150,90,.04)');
+    ctx.fillStyle = cgg; ctx.fill();
+    ctx.restore();
+    // the hollow beneath it
+    var hol = ctx.createRadialGradient(chx - dir * w * 0.02, cy + h * 0.26, w * 0.02, chx - dir * w * 0.02, cy + h * 0.26, w * 0.26);
+    hol.addColorStop(0, 'rgba(0,0,0,.6)'); hol.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = hol; ctx.fillRect(cx - w, cy, w * 2, h * 0.7);
+    // the jaw's side, falling away as it narrows toward the chin
+    var jg = ctx.createLinearGradient(cx + dir * w * 0.5, 0, cx + dir * w * 0.1, 0);
+    jg.addColorStop(0, 'rgba(6,1,1,.8)'); jg.addColorStop(1, 'rgba(6,1,1,0)');
+    ctx.fillStyle = jg; ctx.fillRect(Math.min(cx, cx + dir * w * 0.6), cy + h * 0.1, w * 0.6, h * 0.8);
   });
-  // the nose: flat, the nostrils flared, dark slits angled out
-  var nx = cx + sk * 0.6, ny = cy + h * 0.26;
-  var ng = ctx.createRadialGradient(nx, ny - 8, 2, nx, ny, 30);
-  ng.addColorStop(0, 'rgba(255,160,110,.2)'); ng.addColorStop(1, 'rgba(255,160,110,0)');
-  ctx.fillStyle = ng; ctx.fillRect(nx - 30, ny - 30, 60, 60);
+  // ---- the muzzle: narrow, coming forward between the cheek hollows
+  var muz = ctx.createRadialGradient(cx + sk * 0.6, cy + h * 0.30, w * 0.03, cx + sk * 0.6, cy + h * 0.30, w * 0.26);
+  muz.addColorStop(0, 'rgba(255,150,100,.22)'); muz.addColorStop(0.6, 'rgba(255,120,70,.05)'); muz.addColorStop(1, 'rgba(0,0,0,.4)');
+  ctx.fillStyle = muz; ctx.fillRect(cx - w * 0.5, cy, w, h * 0.8);
+  ctx.lineCap = 'round';
+  [-1, 1].forEach(function(dir){   // the fold running down past the mouth's corner
+    ctx.strokeStyle = 'rgba(0,0,0,.32)'; ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx + sk * 0.6 + dir * w * 0.10, cy + h * 0.31);
+    ctx.quadraticCurveTo(cx + sk * 0.6 + dir * w * 0.20, cy + h * 0.44, cx + sk * 0.6 + dir * w * 0.22, cy + h * 0.60);
+    ctx.stroke();
+  });
+  // ---- the nostrils: two narrow slits, high and close, angled in toward
+  // each other. Nothing rounded — a round nostril is a snout.
+  var nx = cx + sk * 0.6, ny = cy + h * 0.20;
   [-1, 1].forEach(function(dir){
-    ctx.fillStyle = '#0a0202';
-    ctx.beginPath(); ctx.ellipse(nx + dir * 14, ny + 4, 9, 4.5, dir * 0.5, 0, 6.2832); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(nx + dir * 6, ny - 10); ctx.quadraticCurveTo(nx + dir * 24, ny - 10, nx + dir * 26, ny + 8); ctx.stroke();
+    ctx.save();
+    ctx.translate(nx + dir * 6, ny);
+    ctx.rotate(dir * 0.26);
+    ctx.fillStyle = '#080101';
+    ctx.beginPath();
+    ctx.moveTo(0, -7);
+    ctx.quadraticCurveTo(2.2, -2, 1.4, 6);
+    ctx.quadraticCurveTo(0, 8.5, -1.4, 6);
+    ctx.quadraticCurveTo(-2.2, -2, 0, -7);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,150,110,.18)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-2.2, -4); ctx.quadraticCurveTo(-3, 1, -2, 5.5); ctx.stroke();
+    ctx.restore();
   });
   // under the chin, and the throat's light on the chin
   var ug = ctx.createLinearGradient(0, cy + h*0.55, 0, cy + h*0.84);
@@ -2202,52 +2389,64 @@ function drawHeadBody(cx, cy, w, h, sk, mouth, turn){
   ctx.restore();
   // the outline: a dark edge so the head separates from the horns and the dark
   skullPath(head); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 2; ctx.stroke();
-  // --- the mouth: lips pulled back in a snarl, a throat lit from inside,
-  //     two long canines and rows of smaller teeth above, a jagged row below
-  var mw = 78 + 10 * mouth, mh = 15 + 42 * mouth, mx = cx + sk, my = cy + h * 0.50 + mh * 0.4;
-  var mpts = mouthPoints(mx, my, mw, mh, 0);
-  // the lip, swollen and glossy, around the opening
+  // --- the mouth: the opening follows the jaw, wider than tall and lopsided.
+  // The teeth stand in gum lines that follow that curve, hanging straight down
+  // from above and straight up from below, and they silhouette black against
+  // the throat's light.
+  var mw = 66 + 8 * mouth, mh = 12 + 34 * mouth, mx = cx + sk, my = cy + h * 0.46 + mh * 0.4;
+  function gumTop(u){ return gumTopAt(my, mh, u); }
+  function gumBot(u){ return gumBotAt(my, mh, u); }
+  var mpts = snarlPoints(mx, my, mw, mh);
+  // the lip around it, swollen and wet
   ctx.save();
   skullPath(mpts);
-  ctx.lineWidth = 12; ctx.strokeStyle = 'rgb(70,10,10)'; ctx.stroke();
-  ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(200,60,50,.45)'; ctx.stroke();
+  ctx.lineWidth = 11; ctx.strokeStyle = 'rgb(62,9,9)'; ctx.stroke();
+  ctx.lineWidth = 4.5; ctx.strokeStyle = 'rgba(190,56,46,.4)'; ctx.stroke();
   ctx.restore();
+  // the throat behind everything
   ctx.save();
   skullPath(mpts);
-  ctx.fillStyle = '#120202'; ctx.fill();
+  ctx.fillStyle = '#100202'; ctx.fill();
   ctx.clip();
-  var tg = ctx.createRadialGradient(mx, my + mh * 0.5, 2, mx, my + mh * 0.1, mw * 1.05);
-  tg.addColorStop(0, 'rgba(255,200,110,.9)'); tg.addColorStop(0.3, 'rgba(230,80,20,.85)'); tg.addColorStop(0.7, 'rgba(90,14,6,.95)'); tg.addColorStop(1, 'rgba(10,2,2,1)');
+  var tg = ctx.createRadialGradient(mx, my + mh * 0.45, 2, mx, my + mh * 0.1, mw * 1.05);
+  tg.addColorStop(0, 'rgba(255,205,120,.92)'); tg.addColorStop(0.28, 'rgba(232,84,20,.88)'); tg.addColorStop(0.68, 'rgba(92,15,6,.95)'); tg.addColorStop(1, 'rgba(10,2,2,1)');
   ctx.fillStyle = tg; ctx.fillRect(mx - mw*1.2, my - mh*1.2, mw*2.4, mh*2.4);
-  // the gums along the upper lip
-  var gg = ctx.createLinearGradient(0, my - mh, 0, my - mh * 0.4);
-  gg.addColorStop(0, 'rgb(120,20,30)'); gg.addColorStop(1, 'rgba(120,20,30,0)');
-  ctx.fillStyle = gg; ctx.fillRect(mx - mw * 1.2, my - mh * 1.2, mw * 2.4, mh * 0.8);
+  var gg = ctx.createLinearGradient(0, my - mh, 0, my - mh * 0.3);
+  gg.addColorStop(0, 'rgb(104,18,26)'); gg.addColorStop(1, 'rgba(104,18,26,0)');
+  ctx.fillStyle = gg; ctx.fillRect(mx - mw * 1.2, my - mh * 1.2, mw * 2.4, mh * 0.9);
+  // ---- the teeth, inside the opening, as black silhouettes
+  // [u along the jaw, length, half-width, tilt, state] state: 0 whole, 1 broken, 2 crooked
+  // [u, length as a share of the opening's height there, half-width, tilt, state]
+  var UPPER = [[-0.70, 0.38, 0.045, 0.03, 0], [-0.50, 0.62, 0.058, 0.04, 0], [-0.30, 0.34, 0.044, 0, 2],
+               [-0.11, 0.30, 0.040, 0, 1], [0.09, 0.33, 0.042, 0, 0], [0.29, 0.36, 0.044, -0.01, 0],
+               [0.49, 0.66, 0.058, -0.04, 0], [0.70, 0.36, 0.045, -0.03, 0]];
+  var LOWER = [[-0.58, 0.30, 0.044, -0.02, 0], [-0.36, 0.48, 0.052, -0.02, 2], [-0.14, 0.26, 0.038, 0, 1],
+               [0.08, 0.28, 0.040, 0, 0], [0.30, 0.46, 0.052, 0.02, 0], [0.54, 0.28, 0.042, 0.03, 0]];
+  function silhouetteTooth(u, len, halfW, tilt, state, up){
+    var dir = up ? 1 : -1;
+    var bx = mx + u * mw * 0.93, by = up ? gumTop(u) + 1 : gumBot(u) - 1;
+    // never longer than the gap it hangs into, so the rows never meet
+    var open = Math.max(6, gumBot(u) - gumTop(u));
+    var L = len * open;
+    if (state === 1) L *= 0.5;                         // broken off short
+    var hw = halfW * mw, tipx = bx + tilt * mw * (state === 2 ? 2.4 : 1);
+    ctx.beginPath();
+    ctx.moveTo(bx - hw, by);
+    ctx.bezierCurveTo(bx - hw * 0.92, by + dir * L * 0.45, tipx - hw * 0.34, by + dir * L * 0.8, tipx, by + dir * L);
+    if (state === 1){                                   // a flat, jagged break
+      ctx.lineTo(tipx + hw * 0.5, by + dir * L * 0.88);
+      ctx.lineTo(tipx + hw * 0.2, by + dir * L * 0.97);
+    }
+    ctx.bezierCurveTo(tipx + hw * 0.4, by + dir * L * 0.76, bx + hw * 0.95, by + dir * L * 0.42, bx + hw, by);
+    ctx.closePath();
+    ctx.fillStyle = '#0a0202';
+    ctx.fill();
+    // the thinnest warm edge, so it does not read as a hole
+    ctx.strokeStyle = 'rgba(255,150,60,.35)'; ctx.lineWidth = 0.9; ctx.stroke();
+  }
+  UPPER.forEach(function(tt){ silhouetteTooth(tt[0], tt[1], tt[2], tt[3], tt[4], true); });
+  LOWER.forEach(function(tt){ silhouetteTooth(tt[0], tt[1], tt[2], tt[3], tt[4], false); });
   ctx.restore();
-  // teeth: from the upper gum line. Two canines a third of the way in on each
-  // side, the rest shorter and uneven; a jagged lower row from the bottom lip
-  var lipY = my - mh * 0.74;
-  var upper = [[-52, 12], [-40, 15], [-28, 30], [-16, 13], [-5, 11], [6, 11], [17, 13], [29, 31], [41, 15], [53, 12]];
-  upper.forEach(function(tt, i){
-    var tx = mx + tt[0] * (mw / 70), len = tt[1] * (0.7 + 0.5 * Math.min(1, mouth + 0.4)), ly = lipY + Math.abs(tt[0]) * 0.06, wd = tt[1] > 25 ? 7 : 5;
-    var fg = ctx.createLinearGradient(0, ly, 0, ly + len);
-    fg.addColorStop(0, '#e8d8c4'); fg.addColorStop(0.7, '#d2b89c'); fg.addColorStop(1, '#ffb050');
-    ctx.fillStyle = fg;
-    ctx.beginPath();
-    ctx.moveTo(tx - wd, ly); ctx.quadraticCurveTo(tx - wd * 0.6, ly + len * 0.65, tx + (i % 2 ? 1 : -1), ly + len);
-    ctx.quadraticCurveTo(tx + wd * 0.6, ly + len * 0.65, tx + wd, ly);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(60,10,10,.5)'; ctx.lineWidth = 1; ctx.stroke();
-  });
-  var lowY = my + mh * 0.70;
-  [[-44, 11], [-30, 15], [-16, 10], [-3, 9], [10, 10], [24, 15], [38, 11]].forEach(function(tt, i){
-    var tx2 = mx + tt[0] * (mw / 70), len2 = tt[1] * (0.6 + 0.6 * Math.min(1, mouth + 0.3));
-    ctx.fillStyle = '#d6bfa6';
-    ctx.beginPath();
-    ctx.moveTo(tx2 - 5, lowY); ctx.quadraticCurveTo(tx2 - 3, lowY - len2 * 0.6, tx2 + (i % 2 ? 1 : -1), lowY - len2);
-    ctx.quadraticCurveTo(tx2 + 3, lowY - len2 * 0.6, tx2 + 5, lowY);
-    ctx.closePath(); ctx.fill();
-  });
   ctx.restore();
 }
 // the head sprite: the whole head for a pose, re-rendered when the pose steps
@@ -2296,10 +2495,10 @@ function drawDevil(d){
   //     narrowed slit. Open: wide, white-hot core, a glow thrown on the brow.
   d.eyes.forEach(function(e){
     var ex = cx + e.dx * (1 - 0.28*turn) + sk*0.6, ey = cy + 4;
-    var srx = 22, sry = 12;
+    var srx = 30, sry = 17;
     // the socket: shadow under the brow shelf
     var sg = ctx.createRadialGradient(ex, ey, 2, ex, ey, srx * 1.4);
-    sg.addColorStop(0, 'rgba(0,0,0,.85)'); sg.addColorStop(0.6, 'rgba(0,0,0,.45)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+    sg.addColorStop(0, 'rgba(0,0,0,.95)'); sg.addColorStop(0.45, 'rgba(0,0,0,.8)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = sg;
     ctx.beginPath(); ctx.ellipse(ex, ey, srx * 1.4, sry * 1.6, 0, 0, 6.2832); ctx.fill();
     if (e.dead){
@@ -2311,7 +2510,7 @@ function drawDevil(d){
     }
     var wide = 1 + 0.3 * e.wide;
     var ember = e.flash > 0 ? 1 : e.ember;
-    var ry = e.open ? 8 * wide : (e.charge > 0 || e.beam > 0 ? 5 : 2.6), rx = e.open ? 12 * wide : 10;
+    var ry = e.open ? 11 * wide : (e.charge > 0 || e.beam > 0 ? 7 : 3.4), rx = e.open ? 16 * wide : 13;
     // the glow it throws, red, on the brow and cheek
     drawGlow(ex, ey, 36 + 30 * ember, [255, 40, 10], (0.35 + 0.65 * ember) * (e.open ? 1.3 : 1), 120 + 60 * ember, 80 + 40 * ember);
     // the eye: a narrowed slit, angled in toward the furrow
@@ -2341,11 +2540,11 @@ function drawDevil(d){
   });
 
   // the throat's light: the mouth-fire, the white flash before a volley
-  var mw = 78 + 10 * mouth, mh = 15 + 42 * mouth, mx = cx + sk, my = cy + h * 0.50 + mh * 0.4;
+  var mw = 66 + 8 * mouth, mh = 12 + 34 * mouth, mx = cx + sk, my = cy + h * 0.46 + mh * 0.4;
   drawGlow(mx, my, 32, [255, 138, 32], (0.3 + 0.5 * mouth) + 0.8 * glow, mw * 2.2 + 60 * glow, mh * 2.4 + 60 * glow);
   if (mouth > 0.2 || glow > 0){
     ctx.save();
-    skullPath(mouthPoints(mx, my, mw, mh, 0));
+    skullPath(snarlPoints(mx, my, mw, mh));
     ctx.clip();
     ctx.globalAlpha = 0.4 * mouth;
     ctx.drawImage(colFire.canvas, 20, 30, 50, 100, mx - mw*1.1, my - mh*1.1, mw*2.2, mh*2.2);
@@ -2575,7 +2774,9 @@ function updateArms(dt){
     var near = 1 - clamp((dist - 60) / 260, 0, 1);
     var tcurl = 0.22 + 0.5 * near + breathe, tspread = 0.35 + 0.45 * (1 - near);
     var lean = near * 16;
-    var tx = restX - side * lean, ty = restY, trot = clamp(toward, -0.75, 0.75) * 0.8, ease = 3;
+    // level: the arm reaches in horizontally and only tips a little toward
+    // the heart's height, so the palm keeps facing the centre
+    var tx = restX - side * lean, ty = restY, trot = clamp(toward, -0.5, 0.5) * 0.35, ease = 3;
     // an occasional scrape along the frame edge
     if (a.scrapeAt == null) a.scrapeAt = t + rnd(3, 7);
     if (t > a.scrapeAt){
@@ -2650,24 +2851,35 @@ function hideOver(alpha){
 // tip where it meets a long hooked talon. Lit by fire from below: a warm rim
 // on the lower edge, shadow above and between fingers.
 // Local frame: +x toward the arena; -y is up. bendSign: +1 curls toward +y.
-function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire){
+function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
   var C = COLORS.claw, Cd = 'rgb(96,9,7)', Ct = 'rgb(46,5,7)';
-  var L = [len*0.4, len*0.33, len*0.27], bend = bendSign * curl * 1.05;
+  // the bend lives mostly in the last joints: a digit reaches out nearly
+  // straight and hooks at the end rather than clenching from the root. A
+  // thumb has two segments to a finger's three, and a far heavier base.
+  var L = thumb ? [len*0.54, len*0.46] : [len*0.42, len*0.33, len*0.25];
+  var W = thumb ? [0.55, 1.5] : [0.28, 0.95, 1.5];
+  var bend = bendSign * curl * 1.05;
   var J = [{x:x0, y:y0}], ang = a1;
-  for (var i=0;i<3;i++){ ang += (i === 0 ? bend * 0.5 : bend); J.push({ x: J[i].x + Math.cos(ang) * L[i], y: J[i].y + Math.sin(ang) * L[i] }); }
+  for (var i=0;i<L.length;i++){ ang += bend * W[i]; J.push({ x: J[i].x + Math.cos(ang) * L[i], y: J[i].y + Math.sin(ang) * L[i] }); }
   var n = 22, pts = [], left = [], right = [], seed = x0 * 0.7 + y0 * 1.3;
   for (var k=0;k<=n;k++) pts.push(spline(J, k/n));
   for (k=0;k<=n;k++){
     var u = k/n, a = pts[Math.max(0, k-1)], b = pts[Math.min(n, k+1)];
     var tx = b.x - a.x, ty = b.y - a.y, tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
     // knuckles: two hard swellings, bigger when flexed; gnarl: the field roughens the outline
-    var bunch = (0.26 + 0.5 * curl) * (Math.exp(-Math.pow((u - 0.38) / 0.085, 2)) + 0.85 * Math.exp(-Math.pow((u - 0.7) / 0.08, 2)));
-    var gnarl = (FIRE.at(u * 34 + seed, seed * 3) - 0.5) * 0.22;
-    var r = lerp(r0, r1, u) * (1 + bunch + gnarl);
+    // three knuckles, swelling hard, with the flesh pinched between them
+    var bunch = thumb
+      ? (0.4 + 0.6 * curl) * (0.8 * Math.exp(-Math.pow((u - 0.12) / 0.1, 2)) + Math.exp(-Math.pow((u - 0.56) / 0.09, 2)))
+      : (0.34 + 0.62 * curl) * (Math.exp(-Math.pow((u - 0.2) / 0.085, 2))
+        + Math.exp(-Math.pow((u - 0.46) / 0.075, 2)) + 0.9 * Math.exp(-Math.pow((u - 0.72) / 0.07, 2)));
+    var pinch = thumb ? 0.13 * Math.exp(-Math.pow((u - 0.34) / 0.06, 2))
+                      : 0.16 * (Math.exp(-Math.pow((u - 0.33) / 0.05, 2)) + Math.exp(-Math.pow((u - 0.59) / 0.05, 2)));
+    var gnarl = (FIRE.at(u * 34 + seed, seed * 3) - 0.5) * 0.2;
+    var r = lerp(r0, r1, u) * (1 + bunch - pinch + gnarl);
     left.push({ x: pts[k].x + ty * r, y: pts[k].y - tx * r });
     right.push({ x: pts[k].x - ty * r, y: pts[k].y + tx * r });
   }
-  var tip = pts[n], tipAng = ang + bendSign * (0.35 + curl * 0.55), cl = len * 0.38;
+  var tip = pts[n], tipAng = ang + bendSign * (0.35 + curl * 0.55), cl = len * (thumb ? 0.28 : 0.38);
   function outline(ox, oy){
     ctx.beginPath();
     ctx.moveTo(left[0].x + ox, left[0].y + oy);
@@ -2677,9 +2889,10 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire){
   }
   // the shadow it throws upward onto whatever is behind it: fire is below
   outline(-2.5, -5); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill();
-  // the flesh, darkening toward the tip
+  // the flesh, darkening toward the tip until it is the talon's colour: the
+  // claw grows out of the finger, it is not stuck on the end
   var fg = ctx.createLinearGradient(J[0].x, J[0].y, tip.x, tip.y);
-  fg.addColorStop(0, C); fg.addColorStop(0.55, Cd); fg.addColorStop(1, Ct);
+  fg.addColorStop(0, C); fg.addColorStop(0.5, Cd); fg.addColorStop(0.82, Ct); fg.addColorStop(1, 'rgb(20,4,6)');
   outline(0, 0); ctx.fillStyle = fg; ctx.fill();
   ctx.save(); ctx.clip();
   hideOver(0.6);
@@ -2695,12 +2908,20 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire){
     kg.addColorStop(0, 'rgba(255,150,90,' + (0.1 + 0.2 * fire) + ')'); kg.addColorStop(0.5, 'rgba(0,0,0,0)'); kg.addColorStop(1, 'rgba(0,0,0,.35)');
     ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(c.x, c.y, r0 * 1.7, 0, 6.2832); ctx.fill();
   });
-  // the crease before each knuckle
-  ctx.strokeStyle = 'rgba(10,0,0,' + (0.25 + 0.3 * curl) + ')'; ctx.lineWidth = 1.5;
-  [0.3, 0.62].forEach(function(u){
+  // the creases, only where the flesh folds — across the palm side, between
+  // the knuckles, bowed toward the tip and fading out before the far edge
+  var inner = bendSign > 0 ? right : left, outer = bendSign > 0 ? left : right;
+  (thumb ? [0.34] : [0.33, 0.59]).forEach(function(u){
     var kk = Math.round(u * n), c = pts[kk], nxt = pts[Math.min(n, kk + 2)];
-    ctx.beginPath(); ctx.moveTo(left[kk].x, left[kk].y);
-    ctx.quadraticCurveTo(c.x + (nxt.x - c.x) * 1.4, c.y + (nxt.y - c.y) * 1.4, right[kk].x, right[kk].y); ctx.stroke();
+    var mid = { x: c.x + (nxt.x - c.x) * 1.5, y: c.y + (nxt.y - c.y) * 1.5 };
+    var cg2 = ctx.createLinearGradient(outer[kk].x, outer[kk].y, inner[kk].x, inner[kk].y);
+    cg2.addColorStop(0, 'rgba(10,0,0,0)'); cg2.addColorStop(0.45, 'rgba(10,0,0,' + (0.3 + 0.35 * curl) + ')');
+    cg2.addColorStop(1, 'rgba(10,0,0,' + (0.42 + 0.4 * curl) + ')');
+    ctx.strokeStyle = cg2; ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(lerp(outer[kk].x, c.x, 0.45), lerp(outer[kk].y, c.y, 0.45));
+    ctx.quadraticCurveTo(mid.x, mid.y, inner[kk].x, inner[kk].y);
+    ctx.stroke();
   });
   // the warm rim itself, a thin bright line on the lowest edge
   var low = left[n].y > right[n].y ? left : right;
@@ -2710,7 +2931,13 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire){
   // the talon: long, hooked, thick at the root and tapering to a point; black
   // and glossy, with one small highlight
   var dx = Math.cos(tipAng), dy = Math.sin(tipAng), nx = -dy, ny = dx, hook = bendSign * 0.42;
-  var tb = r1 * 1.15;
+  var tb = r1 * 1.05;
+  // start it a little way back inside the flesh and blend the root in
+  tip = { x: tip.x - dx * r1 * 0.7, y: tip.y - dy * r1 * 0.7 };
+  var rootg = ctx.createRadialGradient(tip.x, tip.y, r1 * 0.2, tip.x, tip.y, r1 * 1.9);
+  rootg.addColorStop(0, 'rgba(11,3,5,.95)'); rootg.addColorStop(1, 'rgba(11,3,5,0)');
+  ctx.fillStyle = rootg;
+  ctx.beginPath(); ctx.arc(tip.x, tip.y, r1 * 1.9, 0, 6.2832); ctx.fill();
   ctx.fillStyle = '#0b0305';
   ctx.beginPath();
   ctx.moveTo(tip.x + nx * tb, tip.y + ny * tb);
@@ -2839,54 +3066,90 @@ function drawArmBody(curl, spread, fire){
     vein(-1.2, 'rgba(255,140,120,.2)', 1.3);
   });
   ctx.restore();
-  // --- the back of the hand: a broad paddle from the wrist, the thumb's muscle
-  //     bulging on the upper edge, the finger roots along the lower edge
-  var hg = ctx.createLinearGradient(-30, -50, 40, 46);
-  hg.addColorStop(0, 'rgb(120,20,12)'); hg.addColorStop(0.45, C); hg.addColorStop(1, Cd);
+  // --- the back of the hand. His fingers close away from us, into a palm we
+  //     never see, so this surface carries what a back carries: the knuckles
+  //     the fingers root in, the tendons running out to them over the bones,
+  //     and the heavy mound of the thumb at the top by the wrist.
+  var hg = ctx.createLinearGradient(-20, -50, 30, 48);
+  hg.addColorStop(0, 'rgb(168,42,24)'); hg.addColorStop(0.35, 'rgb(150,30,18)'); hg.addColorStop(0.75, C); hg.addColorStop(1, 'rgb(96,16,10)');
   ctx.fillStyle = hg;
   ctx.beginPath();
-  ctx.moveTo(-40, -wr);
-  ctx.bezierCurveTo(-14, -60, 22, -64, 44, -44);                // the thumb's mound on top
-  ctx.bezierCurveTo(66, -26, 70, 10, 60, 32);
-  ctx.bezierCurveTo(48, 50, 4, 54, -40, wr + 4);                // the lower edge the fingers hang from
-  ctx.bezierCurveTo(-22, wr - 10, -22, -wr + 8, -40, -wr);
+  ctx.moveTo(-40, -wr + 2);
+  ctx.bezierCurveTo(-26, -44, -6, -52, 12, -46);                // the thumb's mound, top and back
+  ctx.bezierCurveTo(32, -40, 44, -26, 48, -10);                 // over to the first knuckle
+  ctx.bezierCurveTo(52, 10, 46, 32, 34, 44);                    // the knuckle line, the fingers' edge
+  ctx.bezierCurveTo(16, 54, -14, 52, -40, wr + 2);
+  ctx.bezierCurveTo(-24, wr - 10, -24, -wr + 8, -40, -wr + 2);
   ctx.closePath(); ctx.fill();
   ctx.save(); ctx.clip();
-  hideOver(0.6);
-  // tendons fanning from the wrist to each finger root, raised; veins between them
+  hideOver(0.55);
+  // the bones of the hand: tendons standing out from the wrist to each knuckle
+  var kn = [[42, -8], [45, 8], [42, 24], [34, 37]];
   for (var i=0;i<4;i++){
-    var rx = 8 + i * 14, ry = 30, ext = 1 - curl;
-    ctx.strokeStyle = 'rgba(0,0,0,' + (0.22 + 0.2 * ext) + ')'; ctx.lineWidth = 3.4;
-    ctx.beginPath(); ctx.moveTo(-30, -6 + i * 4); ctx.quadraticCurveTo(-4 + i * 4, 6 + i * 4, rx, ry); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,150,130,' + (0.16 + 0.2 * ext) + ')'; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.moveTo(-30, -8 + i * 4); ctx.quadraticCurveTo(-4 + i * 4, 4 + i * 4, rx, ry - 2); ctx.stroke();
+    var ext = 1 - curl;
+    ctx.strokeStyle = 'rgba(0,0,0,' + (0.2 + 0.16 * ext) + ')'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(-26, -10 + i * 7); ctx.bezierCurveTo(0, -6 + i * 9, 18, kn[i][1] - 8, kn[i][0] - 4, kn[i][1] - 1); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,150,120,' + (0.1 + 0.14 * ext) + ')'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-26, -12 + i * 7); ctx.bezierCurveTo(0, -8 + i * 9, 18, kn[i][1] - 10, kn[i][0] - 4, kn[i][1] - 3); ctx.stroke();
   }
-  // the knuckle ridge where the fingers root: four swellings along the lower edge
-  for (i=0;i<4;i++){
-    var kx = 6 + i * 14, ky = 30 - (i === 0 || i === 3 ? 3 : 0);
-    var kg = ctx.createRadialGradient(kx, ky - 3, 1, kx, ky, 11);
-    kg.addColorStop(0, 'rgba(255,120,90,' + (0.12 + 0.18 * curl) + ')'); kg.addColorStop(0.55, 'rgba(0,0,0,0)'); kg.addColorStop(1, 'rgba(0,0,0,.4)');
-    ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(kx, ky, 11, 0, 6.2832); ctx.fill();
-  }
-  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 2.4;
-  ctx.beginPath(); ctx.moveTo(-34, -28); ctx.quadraticCurveTo(0, -36, 30, -22); ctx.quadraticCurveTo(44, -14, 40, 2); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,150,130,.2)'; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.moveTo(-34, -30); ctx.quadraticCurveTo(0, -38, 30, -24); ctx.stroke();
-  // the light from below along the lower edge, shadow along the top
-  var pg = ctx.createLinearGradient(0, -64, 0, 56);
-  pg.addColorStop(0, 'rgba(0,0,0,.38)'); pg.addColorStop(0.5, 'rgba(0,0,0,0)'); pg.addColorStop(1, 'rgba(255,130,50,' + (0.14 + 0.3 * fire) + ')');
+  // the knuckles themselves, swelling as the hand closes
+  kn.forEach(function(k){
+    var kg = ctx.createRadialGradient(k[0] - 3, k[1] - 4, 1, k[0], k[1], 12);
+    kg.addColorStop(0, 'rgba(255,150,110,' + (0.18 + 0.22 * curl) + ')');
+    kg.addColorStop(0.55, 'rgba(0,0,0,0)'); kg.addColorStop(1, 'rgba(0,0,0,' + (0.3 + 0.2 * curl) + ')');
+    ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(k[0], k[1], 12, 0, 6.2832); ctx.fill();
+  });
+  // the thumb's mound, a mass of muscle at the top by the wrist
+  var tm = ctx.createRadialGradient(-6, -32, 2, -6, -30, 26);
+  tm.addColorStop(0, 'rgba(255,140,100,.22)'); tm.addColorStop(0.6, 'rgba(255,120,80,.05)'); tm.addColorStop(1, 'rgba(0,0,0,.35)');
+  ctx.fillStyle = tm; ctx.beginPath(); ctx.arc(-6, -30, 26, 0, 6.2832); ctx.fill();
+  // a vein wandering over the bones, and the hollow between them
+  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-34, -6); ctx.bezierCurveTo(-12, 0, 6, -10, 24, -2); ctx.bezierCurveTo(34, 2, 38, 10, 40, 18); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,150,120,.16)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(-34, -9); ctx.bezierCurveTo(-12, -3, 6, -13, 24, -5); ctx.stroke();
+  // fire from below: warm along the lower edge, the top in shadow
+  var pg = ctx.createLinearGradient(0, -60, 0, 52);
+  pg.addColorStop(0, 'rgba(0,0,0,.3)'); pg.addColorStop(0.5, 'rgba(0,0,0,0)'); pg.addColorStop(1, 'rgba(255,130,50,' + (0.16 + 0.3 * fire) + ')');
   ctx.fillStyle = pg; ctx.fillRect(-60, -80, 160, 160);
   ctx.restore();
-  // --- the four fingers, hanging from the lower edge, rear to front so the
-  //     nearest overlaps; they fan by `spread` and curl toward the heart by `curl`
-  var roots = [[6, 36, 0.34], [20, 40, 0.16], [34, 40, -0.02], [48, 34, -0.18]];
-  var lens = [64, 76, 74, 62];
-  for (i=0;i<4;i++){
-    var rt = roots[i];
-    drawFinger(rt[0], rt[1], Math.PI/2 + rt[2] * (0.5 + spread), lens[i], curl, 9.5 - Math.abs(i - 1.5) * 0.6, 5.4, -1, fire);
-  }
-  // --- the thumb: from the upper edge, curling over the top toward the heart
-  drawFinger(14, -40, -Math.PI/2 + 0.6 - 0.3 * spread, 68, curl * 0.9 + 0.14, 11.5, 6.4, 1, fire);
+  // --- the four fingers: they leave the hand's leading edge pointing into
+  //     the arena (local +x is toward the heart), stacked down the lower half,
+  //     and curl downward and inward so the talons hook back toward it. The
+  //     rearmost is drawn first so the nearest overlaps it.
+  // [root x, root y, fan angle, length, base radius, how far back it sits]
+  // He is on the far side facing us, so his palm is turned this way and the
+  // fingers close UP into it, against the thumb coming down from above. They
+  // splay like a bird's foot and only hook at the tip; a full curl would fold
+  // them into a fist and they would braid together.
+  // Each finger leaves the hand aimed down and inward, past where the heart
+  // is, and the curl carries it back UP — so the talon ends hooked upward and
+  // inward, closing on the heart from below. Aimed level, the same curl would
+  // just roll the tips backwards over the hand.
+  var fingers = [
+    [34, 37, 0.86, 54, 7.4, 0.55],     // the outermost, rooted furthest back
+    [42, 24, 0.70, 68, 8.2, 0.25],
+    [45,  8, 0.56, 78, 8.8, 0.0],      // the longest, nearest the thumb
+    [42, -8, 0.40, 66, 8.2, 0.3]
+  ];
+  var grip = 0.24 + 0.34 * curl;                                // never a fist
+  fingers.forEach(function(f){
+    ctx.save();
+    if (f[5] > 0) ctx.globalAlpha = 1 - 0.18 * f[5];            // set back in the shade
+    drawFinger(f[0], f[1], f[2] * (0.7 + 0.5 * spread), f[3], grip, f[4], 5.2, -1, fire);
+    if (f[5] > 0){                                              // and a little darker still
+      ctx.globalAlpha = 0.26 * f[5];
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.ellipse(f[0] + f[3] * 0.45, f[1] + f[3] * 0.18, f[3] * 0.6, f[3] * 0.5, 0, 0, 6.2832); ctx.fill();
+    }
+    ctx.restore();
+  });
+  // --- the thumb. It is not a fifth finger: it leaves the mound at the top
+  //     BY THE WRIST, well behind the knuckles, swings up and forward away
+  //     from the hand, then folds down over it so its talon comes to meet the
+  //     fingers rising from below. Two segments, a base half again as thick as
+  //     a finger's, and barely two-thirds the length.
+  drawFinger(-8, -34, -0.16 + 0.22 * spread, 52, 0.42 + 0.34 * curl, 15, 9, 1, fire, true);
   ctx.restore();
 }
 var armsLayer = makeLayer(), devilLayer = makeLayer();
