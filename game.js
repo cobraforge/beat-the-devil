@@ -16,7 +16,7 @@ var wrap = document.getElementById('wrap');
 var monitor = document.getElementById('monitor');
 var scale = 1;
 // bezel extents in logical px at --s = 1 (must match style.css #monitor padding)
-var BEZEL_X = 32 * 2, BEZEL_Y = 30 + 76;
+var BEZEL_X = 38 * 2, BEZEL_Y = 36 + 78;
 
 var isTouch = (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ||
               ('ontouchstart' in window);
@@ -2851,14 +2851,16 @@ function hideOver(alpha){
 // tip where it meets a long hooked talon. Lit by fire from below: a warm rim
 // on the lower edge, shadow above and between fingers.
 // Local frame: +x toward the arena; -y is up. bendSign: +1 curls toward +y.
-function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire){
+function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
   var C = COLORS.claw, Cd = 'rgb(96,9,7)', Ct = 'rgb(46,5,7)';
-  // the bend lives mostly in the last two joints: the finger reaches out
-  // nearly straight and hooks at the end, rather than clenching from the root
-  var L = [len*0.42, len*0.33, len*0.25], bend = bendSign * curl * 1.05;
-  var W = [0.28, 0.95, 1.5];
+  // the bend lives mostly in the last joints: a digit reaches out nearly
+  // straight and hooks at the end rather than clenching from the root. A
+  // thumb has two segments to a finger's three, and a far heavier base.
+  var L = thumb ? [len*0.54, len*0.46] : [len*0.42, len*0.33, len*0.25];
+  var W = thumb ? [0.55, 1.5] : [0.28, 0.95, 1.5];
+  var bend = bendSign * curl * 1.05;
   var J = [{x:x0, y:y0}], ang = a1;
-  for (var i=0;i<3;i++){ ang += bend * W[i]; J.push({ x: J[i].x + Math.cos(ang) * L[i], y: J[i].y + Math.sin(ang) * L[i] }); }
+  for (var i=0;i<L.length;i++){ ang += bend * W[i]; J.push({ x: J[i].x + Math.cos(ang) * L[i], y: J[i].y + Math.sin(ang) * L[i] }); }
   var n = 22, pts = [], left = [], right = [], seed = x0 * 0.7 + y0 * 1.3;
   for (var k=0;k<=n;k++) pts.push(spline(J, k/n));
   for (k=0;k<=n;k++){
@@ -2866,15 +2868,18 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire){
     var tx = b.x - a.x, ty = b.y - a.y, tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
     // knuckles: two hard swellings, bigger when flexed; gnarl: the field roughens the outline
     // three knuckles, swelling hard, with the flesh pinched between them
-    var bunch = (0.34 + 0.62 * curl) * (Math.exp(-Math.pow((u - 0.2) / 0.085, 2))
-              + Math.exp(-Math.pow((u - 0.46) / 0.075, 2)) + 0.9 * Math.exp(-Math.pow((u - 0.72) / 0.07, 2)));
-    var pinch = 0.16 * (Math.exp(-Math.pow((u - 0.33) / 0.05, 2)) + Math.exp(-Math.pow((u - 0.59) / 0.05, 2)));
+    var bunch = thumb
+      ? (0.4 + 0.6 * curl) * (0.8 * Math.exp(-Math.pow((u - 0.12) / 0.1, 2)) + Math.exp(-Math.pow((u - 0.56) / 0.09, 2)))
+      : (0.34 + 0.62 * curl) * (Math.exp(-Math.pow((u - 0.2) / 0.085, 2))
+        + Math.exp(-Math.pow((u - 0.46) / 0.075, 2)) + 0.9 * Math.exp(-Math.pow((u - 0.72) / 0.07, 2)));
+    var pinch = thumb ? 0.13 * Math.exp(-Math.pow((u - 0.34) / 0.06, 2))
+                      : 0.16 * (Math.exp(-Math.pow((u - 0.33) / 0.05, 2)) + Math.exp(-Math.pow((u - 0.59) / 0.05, 2)));
     var gnarl = (FIRE.at(u * 34 + seed, seed * 3) - 0.5) * 0.2;
     var r = lerp(r0, r1, u) * (1 + bunch - pinch + gnarl);
     left.push({ x: pts[k].x + ty * r, y: pts[k].y - tx * r });
     right.push({ x: pts[k].x - ty * r, y: pts[k].y + tx * r });
   }
-  var tip = pts[n], tipAng = ang + bendSign * (0.35 + curl * 0.55), cl = len * 0.38;
+  var tip = pts[n], tipAng = ang + bendSign * (0.35 + curl * 0.55), cl = len * (thumb ? 0.28 : 0.38);
   function outline(ox, oy){
     ctx.beginPath();
     ctx.moveTo(left[0].x + ox, left[0].y + oy);
@@ -2906,7 +2911,7 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire){
   // the creases, only where the flesh folds — across the palm side, between
   // the knuckles, bowed toward the tip and fading out before the far edge
   var inner = bendSign > 0 ? right : left, outer = bendSign > 0 ? left : right;
-  [0.33, 0.59].forEach(function(u){
+  (thumb ? [0.34] : [0.33, 0.59]).forEach(function(u){
     var kk = Math.round(u * n), c = pts[kk], nxt = pts[Math.min(n, kk + 2)];
     var mid = { x: c.x + (nxt.x - c.x) * 1.5, y: c.y + (nxt.y - c.y) * 1.5 };
     var cg2 = ctx.createLinearGradient(outer[kk].x, outer[kk].y, inner[kk].x, inner[kk].y);
@@ -3061,47 +3066,51 @@ function drawArmBody(curl, spread, fire){
     vein(-1.2, 'rgba(255,140,120,.2)', 1.3);
   });
   ctx.restore();
-  // --- the palm, turned toward the heart: a broad pad narrowing to the wrist,
-  //     the thumb's mount swelling off the upper edge. Because this is the
-  //     inner surface, there are no knuckles here — those show on the fingers
-  //     themselves — only the mounts at their roots, the heel, and the creases.
-  var hg = ctx.createLinearGradient(-20, -46, 30, 50);
-  hg.addColorStop(0, 'rgb(96,16,10)'); hg.addColorStop(0.4, Cd); hg.addColorStop(0.75, C); hg.addColorStop(1, 'rgb(150,34,20)');
+  // --- the back of the hand. His fingers close away from us, into a palm we
+  //     never see, so this surface carries what a back carries: the knuckles
+  //     the fingers root in, the tendons running out to them over the bones,
+  //     and the heavy mound of the thumb at the top by the wrist.
+  var hg = ctx.createLinearGradient(-20, -50, 30, 48);
+  hg.addColorStop(0, 'rgb(168,42,24)'); hg.addColorStop(0.35, 'rgb(150,30,18)'); hg.addColorStop(0.75, C); hg.addColorStop(1, 'rgb(96,16,10)');
   ctx.fillStyle = hg;
   ctx.beginPath();
   ctx.moveTo(-40, -wr + 2);
-  ctx.bezierCurveTo(-18, -46, 6, -50, 24, -38);                 // the thumb's mount, on top
-  ctx.bezierCurveTo(40, -24, 46, -12, 46, -2);                  // out to the root of the first finger
-  ctx.bezierCurveTo(50, 12, 46, 32, 36, 44);                    // the edge the fingers leave from
-  ctx.bezierCurveTo(18, 54, -14, 54, -40, wr + 2);
+  ctx.bezierCurveTo(-26, -44, -6, -52, 12, -46);                // the thumb's mound, top and back
+  ctx.bezierCurveTo(32, -40, 44, -26, 48, -10);                 // over to the first knuckle
+  ctx.bezierCurveTo(52, 10, 46, 32, 34, 44);                    // the knuckle line, the fingers' edge
+  ctx.bezierCurveTo(16, 54, -14, 52, -40, wr + 2);
   ctx.bezierCurveTo(-24, wr - 10, -24, -wr + 8, -40, -wr + 2);
   ctx.closePath(); ctx.fill();
   ctx.save(); ctx.clip();
   hideOver(0.55);
-  // the hollow of the palm: darker in the middle, the mounts around it lit
-  var hollow = ctx.createRadialGradient(6, -4, 2, 6, -4, 46);
-  hollow.addColorStop(0, 'rgba(0,0,0,.5)'); hollow.addColorStop(0.7, 'rgba(0,0,0,.12)'); hollow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = hollow; ctx.fillRect(-60, -60, 130, 120);
-  // the mount at the base of each finger, and the thumb's, and the heel
-  [[34, 0, 13], [36, 16, 13], [33, 32, 12], [26, 44, 10], [-2, -28, 18], [-26, 18, 16]].forEach(function(m){
-    var mg = ctx.createRadialGradient(m[0], m[1] + m[2] * 0.3, 1, m[0], m[1], m[2]);
-    mg.addColorStop(0, 'rgba(255,140,100,' + (0.2 + 0.14 * fire) + ')'); mg.addColorStop(0.6, 'rgba(255,120,80,.05)'); mg.addColorStop(1, 'rgba(0,0,0,.3)');
-    ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(m[0], m[1], m[2], 0, 6.2832); ctx.fill();
+  // the bones of the hand: tendons standing out from the wrist to each knuckle
+  var kn = [[42, -8], [45, 8], [42, 24], [34, 37]];
+  for (var i=0;i<4;i++){
+    var ext = 1 - curl;
+    ctx.strokeStyle = 'rgba(0,0,0,' + (0.2 + 0.16 * ext) + ')'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(-26, -10 + i * 7); ctx.bezierCurveTo(0, -6 + i * 9, 18, kn[i][1] - 8, kn[i][0] - 4, kn[i][1] - 1); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,150,120,' + (0.1 + 0.14 * ext) + ')'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-26, -12 + i * 7); ctx.bezierCurveTo(0, -8 + i * 9, 18, kn[i][1] - 10, kn[i][0] - 4, kn[i][1] - 3); ctx.stroke();
+  }
+  // the knuckles themselves, swelling as the hand closes
+  kn.forEach(function(k){
+    var kg = ctx.createRadialGradient(k[0] - 3, k[1] - 4, 1, k[0], k[1], 12);
+    kg.addColorStop(0, 'rgba(255,150,110,' + (0.18 + 0.22 * curl) + ')');
+    kg.addColorStop(0.55, 'rgba(0,0,0,0)'); kg.addColorStop(1, 'rgba(0,0,0,' + (0.3 + 0.2 * curl) + ')');
+    ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(k[0], k[1], 12, 0, 6.2832); ctx.fill();
   });
-  // the two creases that fold when the hand closes, deepening with the curl
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(0,0,0,' + (0.3 + 0.35 * curl) + ')'; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.moveTo(38, -16); ctx.quadraticCurveTo(6, -6, -18, -6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(30, 34); ctx.quadraticCurveTo(0, 22, -22, 6); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,150,120,' + (0.12 + 0.12 * curl) + ')'; ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.moveTo(38, -19); ctx.quadraticCurveTo(6, -9, -18, -9); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(30, 31); ctx.quadraticCurveTo(0, 19, -22, 3); ctx.stroke();
-  // the wrist's cords, running in under the heel
-  ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 3;
-  [-10, 0, 10].forEach(function(o){ ctx.beginPath(); ctx.moveTo(-52, o - 4); ctx.quadraticCurveTo(-30, o, -14, o + 6); ctx.stroke(); });
-  // fire from below: warm along the lower edge, shadow along the top
+  // the thumb's mound, a mass of muscle at the top by the wrist
+  var tm = ctx.createRadialGradient(-6, -32, 2, -6, -30, 26);
+  tm.addColorStop(0, 'rgba(255,140,100,.22)'); tm.addColorStop(0.6, 'rgba(255,120,80,.05)'); tm.addColorStop(1, 'rgba(0,0,0,.35)');
+  ctx.fillStyle = tm; ctx.beginPath(); ctx.arc(-6, -30, 26, 0, 6.2832); ctx.fill();
+  // a vein wandering over the bones, and the hollow between them
+  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-34, -6); ctx.bezierCurveTo(-12, 0, 6, -10, 24, -2); ctx.bezierCurveTo(34, 2, 38, 10, 40, 18); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,150,120,.16)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(-34, -9); ctx.bezierCurveTo(-12, -3, 6, -13, 24, -5); ctx.stroke();
+  // fire from below: warm along the lower edge, the top in shadow
   var pg = ctx.createLinearGradient(0, -60, 0, 52);
-  pg.addColorStop(0, 'rgba(255,140,60,' + (0.1 + 0.16 * fire) + ')'); pg.addColorStop(0.45, 'rgba(0,0,0,0)'); pg.addColorStop(1, 'rgba(0,0,0,.4)');
+  pg.addColorStop(0, 'rgba(0,0,0,.3)'); pg.addColorStop(0.5, 'rgba(0,0,0,0)'); pg.addColorStop(1, 'rgba(255,130,50,' + (0.16 + 0.3 * fire) + ')');
   ctx.fillStyle = pg; ctx.fillRect(-60, -80, 160, 160);
   ctx.restore();
   // --- the four fingers: they leave the hand's leading edge pointing into
@@ -3118,9 +3127,9 @@ function drawArmBody(curl, spread, fire){
   // inward, closing on the heart from below. Aimed level, the same curl would
   // just roll the tips backwards over the hand.
   var fingers = [
-    [30, 34, 0.86, 54, 7.4, 0.55],     // the outermost, rooted furthest back
-    [40, 22, 0.70, 68, 8.2, 0.25],
-    [46,  8, 0.56, 78, 8.8, 0.0],      // the longest, nearest the thumb
+    [34, 37, 0.86, 54, 7.4, 0.55],     // the outermost, rooted furthest back
+    [42, 24, 0.70, 68, 8.2, 0.25],
+    [45,  8, 0.56, 78, 8.8, 0.0],      // the longest, nearest the thumb
     [42, -8, 0.40, 66, 8.2, 0.3]
   ];
   var grip = 0.24 + 0.34 * curl;                                // never a fist
@@ -3135,10 +3144,12 @@ function drawArmBody(curl, spread, fire){
     }
     ctx.restore();
   });
-  // --- the thumb: short, thick and opposed. It comes off the mount on the
-  //     upper edge and closes DOWN onto the fingers coming up: the two meet,
-  //     which is what makes it a grip rather than a paw.
-  drawFinger(18, -36, 0.16 + 0.16 * spread, 48, 0.3 + 0.4 * curl, 11.5, 6.6, 1, fire);
+  // --- the thumb. It is not a fifth finger: it leaves the mound at the top
+  //     BY THE WRIST, well behind the knuckles, swings up and forward away
+  //     from the hand, then folds down over it so its talon comes to meet the
+  //     fingers rising from below. Two segments, a base half again as thick as
+  //     a finger's, and barely two-thirds the length.
+  drawFinger(-8, -34, -0.16 + 0.22 * spread, 52, 0.42 + 0.34 * curl, 15, 9, 1, fire, true);
   ctx.restore();
 }
 var armsLayer = makeLayer(), devilLayer = makeLayer();

@@ -14,11 +14,14 @@
   --title:#ff5a1f;       /* red-orange display type */
   /* the cabinet: cream upper shell, dark brown lower panel, as on the
      early-80s composite monitors this is modelled on */
-  --plastic:#d9d2bd;
-  --plastic-lit:#eee8d6;
-  --plastic-dark:#a79f8a;
-  --panel:#4a413a;
-  --panel-lit:#6b6055;
+  /* the cabinet: a cool grey case, a charcoal face around the tube, and a
+     grey control strip under it */
+  --plastic:#b6b2aa;
+  --plastic-lit:#cdc9c1;
+  --plastic-dark:#8e8a83;
+  --panel:#b0aca4;
+  --panel-lit:#c6c2ba;
+  --face:#2f2e2c;
   --s:1;
 }
 *,*::before,*::after{box-sizing:inherit}
@@ -43,11 +46,11 @@ body{
    whole thing with the picture. */
 #monitor{
   position:relative;
-  padding:calc(30px * var(--s)) calc(32px * var(--s)) calc(76px * var(--s));
+  padding:calc(36px * var(--s)) calc(38px * var(--s)) calc(78px * var(--s));
   border-radius:calc(10px * var(--s)) calc(10px * var(--s)) calc(7px * var(--s)) calc(7px * var(--s));
   background:
-    linear-gradient(100deg, rgba(0,0,0,.10) 0%, rgba(255,255,255,.10) 22%, rgba(255,255,255,0) 55%, rgba(0,0,0,.16) 100%),
-    linear-gradient(180deg, var(--plastic-lit) 0%, var(--plastic) 26%, #c6bfa9 72%, #b0a893 100%);
+    linear-gradient(100deg, rgba(0,0,0,.12) 0%, rgba(255,255,255,.12) 20%, rgba(255,255,255,0) 52%, rgba(0,0,0,.18) 100%),
+    linear-gradient(180deg, var(--plastic-lit) 0%, var(--plastic) 22%, #aeaaa2 70%, #9b978f 100%);
   box-shadow:
     inset 0 calc(2px * var(--s)) 0 rgba(255,255,255,.6),
     inset calc(2px * var(--s)) 0 0 rgba(255,255,255,.25),
@@ -58,21 +61,23 @@ body{
 /* the tube's surround: the plastic turns in and darkens toward the glass */
 #monitor::before{
   content:"";position:absolute;pointer-events:none;
-  inset:calc(14px * var(--s)) calc(16px * var(--s)) calc(60px * var(--s));
+  inset:calc(9px * var(--s)) calc(10px * var(--s)) calc(56px * var(--s));
   border-radius:calc(12px * var(--s));
-  background:linear-gradient(180deg, #2a2621, #171412 45%, #221f1a);
+  background:linear-gradient(180deg, #3a3937 0%, var(--face) 18%, #262523 70%, #353432 100%);
   box-shadow:
-    inset 0 calc(3px * var(--s)) calc(7px * var(--s)) rgba(0,0,0,.8),
-    0 calc(1px * var(--s)) 0 rgba(255,255,255,.35);
+    inset 0 calc(2px * var(--s)) calc(5px * var(--s)) rgba(0,0,0,.6),
+    inset 0 calc(-2px * var(--s)) calc(4px * var(--s)) rgba(0,0,0,.5),
+    0 calc(1px * var(--s)) 0 rgba(255,255,255,.4);
 }
 /* vents pressed into the top of the shell */
 #vents{
   position:absolute;pointer-events:none;
-  top:calc(5px * var(--s));left:calc(34px * var(--s));right:calc(34px * var(--s));
-  height:calc(5px * var(--s));
-  background:repeating-linear-gradient(90deg,
-    rgba(0,0,0,.20) 0 calc(3px * var(--s)), rgba(0,0,0,0) calc(3px * var(--s)) calc(9px * var(--s)));
+  top:calc(6px * var(--s));right:calc(8px * var(--s));
+  width:calc(18px * var(--s));height:calc(18px * var(--s));
+  background:repeating-linear-gradient(180deg,
+    #3b3a38 0 calc(2px * var(--s)), rgba(0,0,0,0) calc(2px * var(--s)) calc(4px * var(--s)));
   border-radius:calc(2px * var(--s));
+  box-shadow:inset 0 0 0 calc(1px * var(--s)) rgba(0,0,0,.35);
 }
 /* the lower panel: a darker inset face carrying the controls */
 #panel{
@@ -80,26 +85,26 @@ body{
   left:calc(14px * var(--s));right:calc(14px * var(--s));
   bottom:calc(10px * var(--s));height:calc(40px * var(--s));
   display:flex;align-items:center;
-  border-radius:calc(5px * var(--s));
-  background:linear-gradient(180deg, var(--panel-lit), var(--panel) 40%, #372f2a);
+  border-radius:calc(3px * var(--s));
+  background:linear-gradient(180deg, var(--panel-lit), var(--panel) 45%, #a29e96);
   box-shadow:
-    inset 0 calc(1px * var(--s)) 0 rgba(255,255,255,.18),
-    inset 0 calc(-2px * var(--s)) calc(4px * var(--s)) rgba(0,0,0,.5),
-    0 calc(1px * var(--s)) 0 rgba(255,255,255,.4);
+    inset 0 calc(1px * var(--s)) 0 rgba(255,255,255,.5),
+    inset 0 calc(-1px * var(--s)) calc(3px * var(--s)) rgba(0,0,0,.28),
+    0 calc(1px * var(--s)) 0 rgba(255,255,255,.35);
 }
 /* the maker's plate: a mark, a wordmark and the striped block the period's
    home-computer badges all carried */
 #badge{
   position:absolute;left:calc(12px * var(--s));top:50%;transform:translateY(-50%);
   display:flex;align-items:center;gap:calc(5px * var(--s));
-  padding:calc(3px * var(--s)) calc(6px * var(--s));
+  padding:calc(2px * var(--s)) calc(5px * var(--s));
   border-radius:calc(2px * var(--s));
-  background:linear-gradient(180deg, #3b332d, #262019);
-  box-shadow:inset 0 calc(1px * var(--s)) 0 rgba(255,255,255,.12), 0 calc(1px * var(--s)) calc(2px * var(--s)) rgba(0,0,0,.5);
+  background:linear-gradient(180deg, #2a2927, #1c1b1a);
+  box-shadow:inset 0 calc(1px * var(--s)) 0 rgba(255,255,255,.1), 0 calc(1px * var(--s)) 0 rgba(255,255,255,.35);
 }
-#badge .mark{ /* a heart, struck through: this game's own mark */
+#badge .mark{ /* a heart: this game's own mark */
   width:calc(9px * var(--s));height:calc(9px * var(--s));
-  background:#d8d0bb;
+  background:#d7d3cb;
   -webkit-mask:radial-gradient(circle at 30% 34%, #000 46%, transparent 47%) no-repeat, radial-gradient(circle at 70% 34%, #000 46%, transparent 47%) no-repeat, linear-gradient(#000,#000) no-repeat;
   -webkit-mask-size:60% 60%, 60% 60%, 100% 60%;
   -webkit-mask-position:0 0, 100% 0, 0 55%;
@@ -110,7 +115,7 @@ body{
 }
 #badge .word{
   font-size:calc(5.5px * var(--s));letter-spacing:calc(1.5px * var(--s));
-  color:#d8d0bb;text-shadow:0 calc(1px * var(--s)) 0 rgba(0,0,0,.7);
+  color:#d7d3cb;text-shadow:0 calc(1px * var(--s)) 0 rgba(0,0,0,.7);
 }
 #badge .stripes{
   width:calc(26px * var(--s));height:calc(9px * var(--s));
@@ -121,21 +126,20 @@ body{
 }
 /* the control door, slightly proud of the panel, with the knobs behind it */
 #door{
-  position:absolute;right:calc(44px * var(--s));top:calc(6px * var(--s));
-  height:calc(28px * var(--s));width:calc(112px * var(--s));
+  position:absolute;right:calc(52px * var(--s));top:calc(10px * var(--s));
+  height:calc(20px * var(--s));width:calc(96px * var(--s));
   display:flex;align-items:center;justify-content:space-around;
-  padding:0 calc(8px * var(--s));
-  border-radius:calc(3px * var(--s));
-  background:linear-gradient(180deg, #5c5249, #433a34 55%, #332c27);
+  padding:0 calc(7px * var(--s));
+  border-radius:calc(2px * var(--s));
+  background:linear-gradient(180deg, #2a2927, #1b1a19 60%, #232221);
   box-shadow:
-    inset 0 calc(1px * var(--s)) 0 rgba(255,255,255,.14),
-    inset 0 calc(-1px * var(--s)) calc(3px * var(--s)) rgba(0,0,0,.6),
-    0 calc(1px * var(--s)) calc(2px * var(--s)) rgba(0,0,0,.45);
+    inset 0 calc(1px * var(--s)) calc(2px * var(--s)) rgba(0,0,0,.7),
+    0 calc(1px * var(--s)) 0 rgba(255,255,255,.4);
 }
 .knob{
-  width:calc(13px * var(--s));height:calc(13px * var(--s));border-radius:50%;
+  width:calc(11px * var(--s));height:calc(11px * var(--s));border-radius:50%;
   background:
-    linear-gradient(145deg, #8b8177 0%, #6a6058 45%, #4a423c 100%);
+    linear-gradient(145deg, #9c9890 0%, #6e6a63 45%, #45423d 100%);
   box-shadow:
     inset 0 calc(1px * var(--s)) 0 rgba(255,255,255,.35),
     inset 0 calc(-1px * var(--s)) 0 rgba(0,0,0,.5),
@@ -153,9 +157,9 @@ body{
 .knob:nth-child(4)::after{transform:translateX(-50%) rotate(-12deg)}
 /* the power lamp in its bezel, at the panel's right end */
 #power{
-  position:absolute;right:calc(14px * var(--s));top:50%;transform:translateY(-50%);
-  width:calc(13px * var(--s));height:calc(13px * var(--s));border-radius:50%;
-  background:linear-gradient(180deg, #2b2621, #15120f);
+  position:absolute;right:calc(16px * var(--s));top:50%;transform:translateY(-50%);
+  width:calc(11px * var(--s));height:calc(11px * var(--s));border-radius:50%;
+  background:linear-gradient(180deg, #2b2927, #141312);
   box-shadow:inset 0 calc(1px * var(--s)) calc(2px * var(--s)) rgba(0,0,0,.8), 0 calc(1px * var(--s)) 0 rgba(255,255,255,.28);
   display:flex;align-items:center;justify-content:center;
 }
