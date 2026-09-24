@@ -297,7 +297,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 18;
+  window.BTD_VERSION = 19;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 

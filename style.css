@@ -198,10 +198,12 @@ body.touch #mute{right:auto;left:calc(6px * var(--s))}
 #stage::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
   background:
-    /* the long diagonal sheen off a curved tube */
-    linear-gradient(118deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.055) 42%, rgba(255,255,255,.02) 48%, rgba(255,255,255,0) 58%),
-    radial-gradient(55% 34% at 20% 10%, rgba(255,255,255,.12), rgba(255,255,255,0) 70%),
-    radial-gradient(120% 80% at 50% 50%, rgba(255,255,255,0) 68%, rgba(150,190,180,.07) 100%);
+    /* A reflection in the top corner, where a tube's curve actually catches the
+       room, and a faint tint at the edges. No long diagonal band: a static
+       streak across the middle lines up with whatever is bright below it, and
+       a rising flame turns it into a shaft of light that is not there. */
+    radial-gradient(48% 30% at 18% 8%, rgba(255,255,255,.13), rgba(255,255,255,0) 72%),
+    radial-gradient(120% 80% at 50% 50%, rgba(255,255,255,0) 70%, rgba(150,190,180,.06) 100%);
 }
 
 /* ---- overlay screens ---- */
