@@ -3912,18 +3912,19 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire){
     kg.addColorStop(0, 'rgba(255,150,90,' + (0.1 + 0.2 * fire) + ')'); kg.addColorStop(0.5, 'rgba(0,0,0,0)'); kg.addColorStop(1, 'rgba(0,0,0,.35)');
     ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(c.x, c.y, r0 * 1.7, 0, 6.2832); ctx.fill();
   });
-  // the creases, only where the flesh folds — across the underside between
-  // the knuckles, bowed toward the tip, fading out before the upper edge
+  // the creases, only where the flesh folds — across the palm side, between
+  // the knuckles, bowed toward the tip and fading out before the far edge
+  var inner = bendSign > 0 ? right : left, outer = bendSign > 0 ? left : right;
   [0.33, 0.59].forEach(function(u){
     var kk = Math.round(u * n), c = pts[kk], nxt = pts[Math.min(n, kk + 2)];
     var mid = { x: c.x + (nxt.x - c.x) * 1.5, y: c.y + (nxt.y - c.y) * 1.5 };
-    var cg2 = ctx.createLinearGradient(left[kk].x, left[kk].y, right[kk].x, right[kk].y);
+    var cg2 = ctx.createLinearGradient(outer[kk].x, outer[kk].y, inner[kk].x, inner[kk].y);
     cg2.addColorStop(0, 'rgba(10,0,0,0)'); cg2.addColorStop(0.45, 'rgba(10,0,0,' + (0.3 + 0.35 * curl) + ')');
     cg2.addColorStop(1, 'rgba(10,0,0,' + (0.42 + 0.4 * curl) + ')');
     ctx.strokeStyle = cg2; ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.moveTo(lerp(left[kk].x, c.x, 0.45), lerp(left[kk].y, c.y, 0.45));
-    ctx.quadraticCurveTo(mid.x, mid.y, right[kk].x, right[kk].y);
+    ctx.moveTo(lerp(outer[kk].x, c.x, 0.45), lerp(outer[kk].y, c.y, 0.45));
+    ctx.quadraticCurveTo(mid.x, mid.y, inner[kk].x, inner[kk].y);
     ctx.stroke();
   });
   // the warm rim itself, a thin bright line on the lowest edge
@@ -4087,11 +4088,11 @@ function drawArmBody(curl, spread, fire){
   ctx.save(); ctx.clip();
   hideOver(0.55);
   // the hollow of the palm: darker in the middle, the mounts around it lit
-  var hollow = ctx.createRadialGradient(6, 2, 2, 6, 2, 46);
+  var hollow = ctx.createRadialGradient(6, -4, 2, 6, -4, 46);
   hollow.addColorStop(0, 'rgba(0,0,0,.5)'); hollow.addColorStop(0.7, 'rgba(0,0,0,.12)'); hollow.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = hollow; ctx.fillRect(-60, -60, 130, 120);
   // the mount at the base of each finger, and the thumb's, and the heel
-  [[34, -6, 13], [36, 10, 13], [33, 26, 12], [26, 38, 10], [-2, -30, 18], [-26, 22, 16]].forEach(function(m){
+  [[34, 0, 13], [36, 16, 13], [33, 32, 12], [26, 44, 10], [-2, -28, 18], [-26, 18, 16]].forEach(function(m){
     var mg = ctx.createRadialGradient(m[0], m[1] + m[2] * 0.3, 1, m[0], m[1], m[2]);
     mg.addColorStop(0, 'rgba(255,140,100,' + (0.2 + 0.14 * fire) + ')'); mg.addColorStop(0.6, 'rgba(255,120,80,.05)'); mg.addColorStop(1, 'rgba(0,0,0,.3)');
     ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(m[0], m[1], m[2], 0, 6.2832); ctx.fill();
@@ -4109,7 +4110,7 @@ function drawArmBody(curl, spread, fire){
   [-10, 0, 10].forEach(function(o){ ctx.beginPath(); ctx.moveTo(-52, o - 4); ctx.quadraticCurveTo(-30, o, -14, o + 6); ctx.stroke(); });
   // fire from below: warm along the lower edge, shadow along the top
   var pg = ctx.createLinearGradient(0, -60, 0, 52);
-  pg.addColorStop(0, 'rgba(0,0,0,.42)'); pg.addColorStop(0.5, 'rgba(0,0,0,0)'); pg.addColorStop(1, 'rgba(255,130,50,' + (0.16 + 0.3 * fire) + ')');
+  pg.addColorStop(0, 'rgba(255,140,60,' + (0.1 + 0.16 * fire) + ')'); pg.addColorStop(0.45, 'rgba(0,0,0,0)'); pg.addColorStop(1, 'rgba(0,0,0,.4)');
   ctx.fillStyle = pg; ctx.fillRect(-60, -80, 160, 160);
   ctx.restore();
   // --- the four fingers: they leave the hand's leading edge pointing into
@@ -4117,30 +4118,36 @@ function drawArmBody(curl, spread, fire){
   //     and curl downward and inward so the talons hook back toward it. The
   //     rearmost is drawn first so the nearest overlaps it.
   // [root x, root y, fan angle, length, base radius, how far back it sits]
-  // They splay like a bird's foot: the top one reaches slightly up, the
-  // bottom one down, and each only hooks at the tip. A full curl here would
-  // fold them into a fist and they would braid together.
+  // He is on the far side facing us, so his palm is turned this way and the
+  // fingers close UP into it, against the thumb coming down from above. They
+  // splay like a bird's foot and only hook at the tip; a full curl would fold
+  // them into a fist and they would braid together.
+  // Each finger leaves the hand aimed down and inward, past where the heart
+  // is, and the curl carries it back UP — so the talon ends hooked upward and
+  // inward, closing on the heart from below. Aimed level, the same curl would
+  // just roll the tips backwards over the hand.
   var fingers = [
-    [28, 44, 0.62, 52, 7.4, 0.55],     // the outermost, rooted furthest back
-    [39, 25, 0.28, 66, 8.2, 0.25],
-    [45,  4, -0.08, 78, 8.8, 0.0],     // the longest, nearest the thumb
-    [40, -17, -0.44, 66, 8.2, 0.3]
+    [30, 34, 0.86, 54, 7.4, 0.55],     // the outermost, rooted furthest back
+    [40, 22, 0.70, 68, 8.2, 0.25],
+    [46,  8, 0.56, 78, 8.8, 0.0],      // the longest, nearest the thumb
+    [42, -8, 0.40, 66, 8.2, 0.3]
   ];
-  var grip = 0.3 + 0.45 * curl;                                 // never a fist
+  var grip = 0.24 + 0.34 * curl;                                // never a fist
   fingers.forEach(function(f){
     ctx.save();
     if (f[5] > 0) ctx.globalAlpha = 1 - 0.18 * f[5];            // set back in the shade
-    drawFinger(f[0], f[1], f[2] * (0.7 + 0.5 * spread), f[3], grip, f[4], 5.2, 1, fire);
+    drawFinger(f[0], f[1], f[2] * (0.7 + 0.5 * spread), f[3], grip, f[4], 5.2, -1, fire);
     if (f[5] > 0){                                              // and a little darker still
       ctx.globalAlpha = 0.26 * f[5];
       ctx.fillStyle = '#000';
-      ctx.beginPath(); ctx.ellipse(f[0] + f[3] * 0.4, f[1] + f[3] * 0.25, f[3] * 0.6, f[3] * 0.45, 0, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(f[0] + f[3] * 0.45, f[1] + f[3] * 0.18, f[3] * 0.6, f[3] * 0.5, 0, 0, 6.2832); ctx.fill();
     }
     ctx.restore();
   });
-  // --- the thumb: short, thick and opposed, coming off the mount on the upper
-  //     edge and closing down across the fingers rather than running beside them
-  drawFinger(14, -32, 0.5 + 0.18 * spread, 44, 0.35 + 0.4 * curl, 11.5, 6.6, 1, fire);
+  // --- the thumb: short, thick and opposed. It comes off the mount on the
+  //     upper edge and closes DOWN onto the fingers coming up: the two meet,
+  //     which is what makes it a grip rather than a paw.
+  drawFinger(18, -36, 0.16 + 0.16 * spread, 48, 0.3 + 0.4 * curl, 11.5, 6.6, 1, fire);
   ctx.restore();
 }
 var armsLayer = makeLayer(), devilLayer = makeLayer();
