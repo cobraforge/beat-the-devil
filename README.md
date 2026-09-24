@@ -216,6 +216,11 @@ object), `BTD_STEP(dt)` (advance one frame by hand) and `BTD_VERSION`. Set
 `window.BTD_HEART_SCALE = 5` to magnify the heart for a look at its damage.
 Handy for jumping to the fight: `BTD_G.surv = 41.9`.
 
+The scripts and the stylesheet are loaded with a `?v=` query. A browser will
+keep serving the cached copy while that number is unchanged, so an edit can
+look like it did nothing — bump `?v=` in `index.html` (and `BTD_VERSION` in
+`game.js`, which is what the page reports) when a change refuses to appear.
+
 With `#debug` a frame-time overlay sits in the bottom-left (the backtick key
 toggles it without reloading): fps with the window's low, rolling average,
 p95 and max rAF interval, time in update+draw, device pixel ratio, particle
