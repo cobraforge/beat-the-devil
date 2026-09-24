@@ -297,7 +297,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 19;
+  window.BTD_VERSION = 20;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -1803,7 +1803,8 @@ function flameColumn(x, h, w, seed, flare){
   if (Q.smoke) smokePlume(x, top, w, seed, t);
   floorSpill(x, w, h);
   var glowK = 0.8 + 0.5 * fl;
-  drawGlow(x, LH - h * 0.42, 40, [255, 96, 20], glowK, w * 2.8 + 30, h + 90);
+  drawGlow(x, LH - h * 0.10, 40, [255, 110, 30], glowK, w * 4.4 + 40, h * 0.62 + 60);   // the pool at its foot
+  drawGlow(x, LH - h * 0.52, 40, [255, 84, 16], glowK * 0.5, w * 2.4, h * 0.7);         // and the body's haze
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -1872,8 +1873,13 @@ function flameColumn(x, h, w, seed, flare){
   if (fl){
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = 'rgba(255,230,170,' + (0.35 * fl) + ')';
-    ctx.beginPath(); ctx.ellipse(x, LH - h * 0.3, w * 1.1, h * 0.55, 0, 0, 6.2832); ctx.fill();
+    var er = w * 1.5 + h * 0.28, ey2 = LH - h * 0.2;
+    var eg = ctx.createRadialGradient(x, ey2, 2, x, ey2, er);
+    eg.addColorStop(0, 'rgba(255,238,195,' + (0.42 * fl) + ')');
+    eg.addColorStop(0.35, 'rgba(255,170,70,' + (0.2 * fl) + ')');
+    eg.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = eg;
+    ctx.fillRect(x - er, ey2 - er, er * 2, er * 2);
     ctx.restore();
   }
   // sparks torn off the tips
