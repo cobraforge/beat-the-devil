@@ -1312,7 +1312,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 21;
+  window.BTD_VERSION = 26;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -3902,7 +3902,9 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
     left.push({ x: pts[k].x + ty * r, y: pts[k].y - tx * r });
     right.push({ x: pts[k].x - ty * r, y: pts[k].y + tx * r });
   }
-  var tip = pts[n], tipAng = ang + bendSign * (0.35 + curl * 0.55), cl = len * (thumb ? 0.28 : 0.38);
+  var hook = thumb ? (0.14 + 0.16 * curl) : (0.2 + 0.24 * curl);
+  var tipAng = ang + bendSign * hook, cl = len * (thumb ? 0.28 : 0.38);
+  var tip = pts[n];
   function outline(ox, oy){
     ctx.beginPath();
     ctx.moveTo(left[0].x + ox, left[0].y + oy);
@@ -3953,7 +3955,7 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
   ctx.restore();
   // the talon: long, hooked, thick at the root and tapering to a point; black
   // and glossy, with one small highlight
-  var dx = Math.cos(tipAng), dy = Math.sin(tipAng), nx = -dy, ny = dx, hook = bendSign * 0.42;
+  var dx = Math.cos(tipAng), dy = Math.sin(tipAng), nx = -dy, ny = dx, curve = bendSign * 0.42;
   var tb = r1 * 1.05;
   // start it a little way back inside the flesh and blend the root in
   tip = { x: tip.x - dx * r1 * 0.7, y: tip.y - dy * r1 * 0.7 };
@@ -3965,7 +3967,7 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
   ctx.beginPath();
   ctx.moveTo(tip.x + nx * tb, tip.y + ny * tb);
   ctx.quadraticCurveTo(tip.x + dx * cl * 0.5 + nx * tb * 0.9, tip.y + dy * cl * 0.5 + ny * tb * 0.9,
-                       tip.x + dx * cl + nx * hook * cl, tip.y + dy * cl + ny * hook * cl);
+                       tip.x + dx * cl + nx * curve * cl, tip.y + dy * cl + ny * curve * cl);
   ctx.quadraticCurveTo(tip.x + dx * cl * 0.55 - nx * tb * 0.1, tip.y + dy * cl * 0.55 - ny * tb * 0.1,
                        tip.x - nx * tb, tip.y - ny * tb);
   ctx.closePath(); ctx.fill();
@@ -3973,10 +3975,25 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
   ctx.strokeStyle = 'rgba(255,190,170,.45)'; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(tip.x + nx * tb * 0.55, tip.y + ny * tb * 0.55);
-  ctx.quadraticCurveTo(tip.x + dx * cl * 0.45 + nx * tb * 0.55, tip.y + dy * cl * 0.45 + ny * tb * 0.55, tip.x + dx * cl * 0.8 + nx * hook * cl * 0.75, tip.y + dy * cl * 0.8 + ny * hook * cl * 0.75);
+  ctx.quadraticCurveTo(tip.x + dx * cl * 0.45 + nx * tb * 0.55, tip.y + dy * cl * 0.45 + ny * tb * 0.55, tip.x + dx * cl * 0.8 + nx * curve * cl * 0.75, tip.y + dy * cl * 0.8 + ny * curve * cl * 0.75);
   ctx.stroke();
   ctx.fillStyle = 'rgba(255,230,220,.7)';
   ctx.beginPath(); ctx.ellipse(tip.x + dx * cl * 0.18 + nx * tb * 0.35, tip.y + dy * cl * 0.18 + ny * tb * 0.35, 1.6, 0.9, tipAng, 0, 6.2832); ctx.fill();
+  // BTD_SPINE: debug. The digit's skeleton and where its claw actually points.
+  if (window.BTD_SPINE){
+    (window.__DIG = window.__DIG || []).push({ thumb: !!thumb, rootX: Math.round(J[0].x), rootY: Math.round(J[0].y), tipX: Math.round(tip.x), tipY: Math.round(tip.y), aimDeg: Math.round(tipAng * 180 / Math.PI) });
+    ctx.save();
+    ctx.strokeStyle = thumb ? '#00ffe0' : '#7fd0ff'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(J[0].x, J[0].y);
+    for (var q=1;q<J.length;q++) ctx.lineTo(J[q].x, J[q].y);
+    ctx.stroke();
+    ctx.fillStyle = thumb ? '#00ffe0' : '#7fd0ff';
+    ctx.beginPath(); ctx.arc(J[0].x, J[0].y, 2.6, 0, 6.2832); ctx.fill();          // the root
+    ctx.strokeStyle = '#ffee00'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tip.x, tip.y); ctx.lineTo(tip.x + dx * 26, tip.y + dy * 26); ctx.stroke();   // where the claw points
+    ctx.beginPath(); ctx.arc(tip.x + dx * 26, tip.y + dy * 26, 2.2, 0, 6.2832); ctx.fill();
+    ctx.restore();
+  }
   return J;
 }
 // His right hand enters from the screen's left, his left from the right: he
@@ -4150,9 +4167,9 @@ function drawArmBody(reach, curl, spread, fire){
     ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(k[0], k[1], 12, 0, 6.2832); ctx.fill();
   });
   // the thumb's mound, a mass of muscle at the top by the wrist
-  var tm = ctx.createRadialGradient(X(-6), -32, 2, X(-6), -30, 26);
+  var tm = ctx.createRadialGradient(X(10), -30, 2, X(10), -28, 26);
   tm.addColorStop(0, 'rgba(255,140,100,.22)'); tm.addColorStop(0.6, 'rgba(255,120,80,.05)'); tm.addColorStop(1, 'rgba(0,0,0,.35)');
-  ctx.fillStyle = tm; ctx.beginPath(); ctx.arc(X(-6), -30, 26, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = tm; ctx.beginPath(); ctx.arc(X(10), -28, 26, 0, 6.2832); ctx.fill();
   // a vein wandering over the bones, and the hollow between them
   ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(X(-34), -6); ctx.bezierCurveTo(X(-12), 0, X(6), -10, X(24), -2); ctx.bezierCurveTo(X(34), 2, X(38), 10, X(40), 18); ctx.stroke();
@@ -4182,8 +4199,8 @@ function drawArmBody(reach, curl, spread, fire){
     [45,  8, 0.56, 78, 8.8, 0.0],      // the longest, nearest the thumb
     [42, -8, 0.40, 66, 8.2, 0.3]
   ];
-  var grip = 0.24 + 0.34 * curl;                                // never a fist
-  fingers.forEach(function(f){
+  var grip = 0.2 + 0.28 * curl;                                 // never a fist, never past the vertical
+  if (!window.BTD_THUMB_ONLY) fingers.forEach(function(f){
     ctx.save();
     if (f[5] > 0) ctx.globalAlpha = 1 - 0.18 * f[5];            // set back in the shade
     drawFinger(X(f[0]), f[1], A(f[2] * (0.7 + 0.5 * spread)), f[3], grip, f[4], 5.2, B(-1), fire);
@@ -4199,7 +4216,12 @@ function drawArmBody(reach, curl, spread, fire){
   //     from the hand, then folds down over it so its talon comes to meet the
   //     fingers rising from below. Two segments, a base half again as thick as
   //     a finger's, and barely two-thirds the length.
-  drawFinger(X(-8), -34, A(-0.16 + 0.22 * spread), 52, 0.42 + 0.34 * curl, 15, 9, B(1), fire, true);
+  // It has to close on something. Rooted back by the wrist its tip finished
+  // 80 px behind the fingertips, hooking down into nothing — which is what
+  // makes a thumb look bent the wrong way. It sits forward on the top edge
+  // now, over the knuckles, so its claw comes down onto the fingers rising to
+  // meet it and the two make a ring.
+  drawFinger(X(22), -32, A(0.2 + 0.12 * spread), 58, 0.2 + 0.2 * curl, 15, 9, B(1), fire, true);
   ctx.restore();
 }
 var armsLayer = makeLayer(), devilLayer = makeLayer();
