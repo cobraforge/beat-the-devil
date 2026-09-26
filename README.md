@@ -1,7 +1,7 @@
 # Beat the Devil
 
-Single-screen canvas arcade game in violet and fire. A cyan glass
-heart dodges pitchforks and hellfire on a violet night, then takes on the Devil
+Single-screen canvas arcade game in the bowels of hell. A cyan glass
+heart dodges pitchforks and hellfire in a cavern of magma and rock, then takes on the Devil
 himself, whose clawed red arms frame the arena. You have five bolts for the
 whole run, and two of them are for his eyes.
 
@@ -39,7 +39,7 @@ whole run, and two of them are for his eyes.
   the arena.
 - **The fire itself.** Column edges are three octaves of curl noise scrolling
   up at different rates; embers shed from the tops and drift on the same
-  turbulence; thin smoke darkens the violet above each column; heat shimmer
+  turbulence; thin smoke darkens the rock above each column; heat shimmer
   displaces whatever is seen through or just above a flame; and fire light
   spills onto the floor, the heart and his arms, brightest on the side facing
   it.
@@ -157,23 +157,46 @@ whole run, and two of them are for his eyes.
     as it moves. It leaves a permanent charred patch at the impact point. A
     burn while a fork is embedded burns the fork away early.
 
+## The pit
+
+The arena is the bowels of hell, drawn by `drawPit()` in `game.js`: a cavern
+of dark rock (a noise-field strata texture) under a roof of stalactites,
+jagged walls lit at their inner edge, crags standing black against the glow,
+a crust of floor over magma, and fissures of magma through the lower wall,
+the walls and the crust. The rock is rendered once into a layer and the
+fissures into another, drawn in light each frame at a brightness that pulses
+with the heartbeat and runs hotter as the survive phase wears on; a few fires
+flicker far off behind the crags. It stays dark through the middle, where the
+play is, because every hazard is fire too. The palette is in `style.css`:
+`--void`, `--midnight` (the heat haze), `--rock`, `--magma`, and `--grace`
+for the light at the end.
+
+## The win
+
+When the second eye goes he burns, cracks and sinks; his hands make one last
+grab and close on the heart; with him gone they burn to ash and crumble; the
+roof splits and a shaft of light comes down; in it the heart heals and rises
+out of the pit. The timeline is `FREE` in `game.js`, the light is
+`drawHeaven()`, and the panel then sits low, under it.
+
 ## On a phone
 
-- **Touch controls.** A joystick in the bottom-left corner for the left thumb
-  and the fire button in the bottom-right for the right, mirrored and always
-  visible during play. The joystick is a fixed circle 112 css px across with
-  four chevrons and a knob that follows the thumb, stops at the rim and
-  springs home when let go; the rim lights toward the push. It is analog from
-  its centre: a 12 % dead zone, then linear to the keys' full speed at the
-  rim. The fire button (at least 72 css px across) fires on press, not
-  release, and shows the bolts left. Pointers are tracked by id: the stick
-  thumb never fires, the fire thumb never steers, both work at once, and a
-  touch anywhere else does nothing. The stick adds to the key vector, so the
-  embed and burn penalties apply to touch exactly as to keys. The title card
-  names both controls on touch devices. A mouse still drags and clicks.
+- **Touch controls.** A joystick for the left thumb and the fire button for
+  the right, the same size (76 css px across), always visible during play,
+  and **off the picture**: the layout reserves a band under the picture (or
+  either side of it, held sideways) and shrinks the picture to leave it, so
+  no thumb ever covers the arena. The joystick is a fixed circle with four
+  chevrons and a knob that follows the thumb, stops at the rim and springs
+  home; the rim lights toward the push. It is analog from its centre: a 12 %
+  dead zone, then linear to the keys' full speed at the rim. The fire button
+  fires on press and shows the bolts left. Pointers are tracked by id: the
+  stick thumb never fires, the fire thumb never steers, both work at once, and
+  a touch anywhere else does nothing. The stick adds to the key vector, so
+  the embed and burn penalties apply to touch exactly as to keys. They are
+  drawn on their own layer, `#ctl`, a strip around the two controls redrawn
+  only when it changes. A mouse still drags and clicks on the picture.
 - **Layout.** On screens under 600 px the bezel goes and the glass takes the
-  whole width; on touch the sound button moves to the top centre, out of the
-  thumbs' corners.
+  whole width; on touch the sound button sits at the top centre.
 - **Performance.** Touch devices cap the device pixel ratio at 1.5. Three
   quality tiers (`QUALITY` in `game.js`: full, medium, low) trade heat
   shimmer, smoke, glow sprites, particle share, flame edge detail, fire
@@ -219,8 +242,9 @@ Open `http://localhost:8080/#debug` and the console gets `BTD_G` (the state
 object), `BTD_STEP(dt)` (advance one frame by hand) and `BTD_VERSION`. Set
 `window.BTD_FREEZE = true` to hold the state without the pause overlay, and
 `window.BTD_HEART_SCALE = 5` to magnify the heart for a look at its damage.
-Handy for jumping to the fight: `BTD_G.surv = 41.9`. `BTD_STICK` is the
-joystick (centre, radius, knob and the analog vector, in logical px), and
+Handy for jumping to the fight: `BTD_G.surv = 41.9`. `BTD_STICK` and
+`BTD_FIREBTN` are the touch controls (centre, radius, knob and the analog
+vector, in css px), and
 `BTD_AUDIO.choirLevel(v)` sets the choir's level live for balancing it.
 
 The scripts and the stylesheet are loaded with a `?v=` query. A browser will
@@ -265,6 +289,13 @@ and the fight from 49 to 19; on the GPU path the game never leaves the top
 tier.
 
 ## Sound
+
+The win has its own music and sounds: his death cry (three sawtooth voices a
+fifth and an octave apart falling through a closing formant, into the long
+reverb), the crumble of his hands to ash, and the roof splitting open (a
+bright crack and a ringing that hangs in the air). As the light comes down the
+`win` track starts: the choir open and full in D major — the pit's D minor
+turned — I, IV, vi, V, over high bells, carrying on under the panel.
 
 The eerie part of the score is two layers over the chiptune:
 
@@ -329,7 +360,7 @@ There is no kick: the heartbeat is the kick, and the tempo is the heart rate.
 Each track has `bars` and optional `drone` (MIDI note), `bed` (low rumble),
 `breath` (the breathing layer plus the whisper layer), `choir` (one
 four-voice chord per bar, via `chords([...])`, with `choirOpen` for the *ah*
-vowel) and `box` (a music-box pattern). A sanity check at load throws if a
+vowel, `choirLevel` for its level) and `box` (a music-box pattern). A sanity check at load throws if a
 pattern's length doesn't match `bars * 16` or a choir isn't one four-note
 chord per bar.
 

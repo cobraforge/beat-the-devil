@@ -128,6 +128,10 @@ var sfx = {
   erupt:  function(x){ explosion(x, 0.8); },
   impact: function(x, wall){ forkImpact(x, wall); },
   laughter: function(){ return laughter(); },
+  deathCry: function(){ deathCry(); },
+  collapse: function(){ explosion(210, 1.5); noise({dur:1.8, vol:0.4, freq:180, slide:50, attack:0.05}); },
+  crumble: function(){ crumble(); },
+  heavenCrack: function(){ heavenCrack(); },
   breathWarn: function(){ tone({freq:48, slide:110, dur:1.0, vol:0.35, type:'sawtooth', filter:300, attack:0.3}); },
   breath: function(){ noise({dur:0.9, vol:0.45, freq:2200, slide:300, attack:0.03}); },
   jet: function(){ noise({dur:0.85, vol:0.36, type:'bandpass', freq:1400, q:0.8, slide:500, attack:0.02}); tone({freq:160, slide:70, dur:0.5, vol:0.2, type:'sawtooth', filter:400}); },
@@ -299,20 +303,23 @@ var TRACKS = {
       '. . . . F4 . . . . . . . Eb4 . . .'
     ])
   },
-  // Victory: bright loop in D.
+  // Victory: the light. The pit's D minor turns to D major: the choir open
+  // and full over high bells, I - IV - vi - V and round. It starts as the
+  // light comes down and carries on under the panel.
   win: {
-    bars: 2, leadDur: 1.8,
+    bars: 4, bassDur: 7, choirOpen: true, choirLevel: 0.55,
+    choir: chords(['D3 A3 D4 F#4', 'D3 G3 B3 D4', 'F#3 B3 D4 F#4', 'E3 A3 C#4 E4']),
     bass: parse([
-      'D2 . . . D2 . . . G2 . . . A2 . . .',
-      'D2 . . . D2 . . . Bb2 . . . A2 . . .'
+      'D2 . . . . . . . . . . . . . . .',
+      'G2 . . . . . . . . . . . . . . .',
+      'B1 . . . . . . . . . . . . . . .',
+      'A1 . . . . . . . . . . . . . . .'
     ]),
-    lead: parse([
-      'D5 . F#5 . A5 . D6 . B4 . D5 . G5 . A5 .',
-      'D5 . F#5 . A5 . D6 . Bb4 . D5 . F5 . A5 .'
-    ]),
-    hat: parse([
-      'o . x . o . x . o . x . o . x .',
-      'o . x . o . x . o . x . o . x .'
+    bell: parse([
+      'A5 . . . D6 . . . F#6 . . . A6 . . .',
+      'G6 . . . . . . . F#6 . . . D6 . . .',
+      'F#6 . . . B5 . . . D6 . . . F#6 . . .',
+      'E6 . . . . . . . C#6 . . . A5 . . .'
     ])
   }
 };
@@ -490,12 +497,13 @@ function startBreath(){
 // measured: 0.25 puts it at ~0.056 rms on the music bus, under the heart's
 // ~0.085, so it is a bed and never the lead
 var CHOIR = 0.25, choirV = null;
-function startChoir(chord, open){
+function startChoir(chord, open, level){
   sends();
+  level = level || CHOIR;
   var a = actx, now = a.currentTime;
   var g = a.createGain();
   g.gain.setValueAtTime(0.0001, now);
-  g.gain.linearRampToValueAtTime(CHOIR, now + 4);
+  g.gain.linearRampToValueAtTime(level, now + 4);
   var mouth = a.createGain(); mouth.gain.value = 1;
   // [centre, Q, level, drift]: 'oo' by default, 'ah' when open
   var F = open ? [[700, 6, 1, 110], [1150, 8, 0.55, 160], [2650, 11, 0.2, 0]]
@@ -529,7 +537,7 @@ function startChoir(chord, open){
   var dw = a.createGain(); dw.gain.value = 0.25; g.connect(dw); dw.connect(delaySend);
   vowel.start();
   layer(oscs.concat([vowel, vibs[0].o, vibs[1].o]), g);
-  choirV = { oscs: oscs, g: g };
+  choirV = { oscs: oscs, g: g, level: level };
 }
 function choirTo(chord, t){
   if (!choirV) return;
@@ -537,8 +545,8 @@ function choirTo(chord, t){
     for (var j=0;j<2;j++){ var o = choirV.oscs[i * 2 + j]; if (o) o.frequency.setTargetAtTime(midi(n), t, 0.22); }
   });
   var g = choirV.g.gain;
-  g.setTargetAtTime(CHOIR * 1.3, t, 0.7);
-  g.setTargetAtTime(CHOIR, t + 1.8, 1.4);
+  g.setTargetAtTime(choirV.level * 1.3, t, 0.7);
+  g.setTargetAtTime(choirV.level, t + 1.8, 1.4);
 }
 function stopLayers(fade){
   whisperGain = null; choirV = null;
@@ -703,6 +711,43 @@ function laughter(){
   if (fireBus){ fireBus.gain.setTargetAtTime(0.15, t0, 0.05); fireBus.gain.setTargetAtTime(0.7, t0 + 2.0, 0.4); }
   return 2.3;
 }
+// ----- the release -----
+// his death: three voices a fifth and an octave apart falling away through a
+// closing mouth, over a torn noise, into the long reverb
+function deathCry(){
+  if (!running()) return;
+  var a = actx, t0 = a.currentTime + 0.05;
+  var out = a.createGain(); out.gain.value = 0.9; out.connect(sfxBus); out.connect(reverbGet().input);
+  [1, 1.5, 0.5].forEach(function(r, i){
+    var o = a.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(240 * r, t0); o.frequency.exponentialRampToValueAtTime(38 * r, t0 + 2.2);
+    var bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3;
+    bp.frequency.setValueAtTime(950, t0); bp.frequency.exponentialRampToValueAtTime(240, t0 + 2.2);
+    var g = a.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(i ? 0.2 : 0.4, t0 + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.3);
+    o.connect(bp); bp.connect(g); g.connect(out); o.start(t0); o.stop(t0 + 2.4);
+  });
+  noise({t: t0, dur: 2.0, vol: 0.28, type: 'bandpass', freq: 1300, slide: 200, q: 0.8, attack: 0.05, bus: out});
+}
+// the hands going to ash: grit pouring, and a soft fall
+function crumble(){
+  if (!running()) return;
+  var t0 = actx.currentTime;
+  for (var i=0;i<14;i++) noise({t: t0 + Math.random() * 0.9, dur: 0.05 + Math.random() * 0.12, vol: 0.08 + Math.random() * 0.12, type: 'highpass', freq: 1400 + Math.random() * 2600});
+  noise({t: t0, dur: 1.2, vol: 0.22, type: 'lowpass', freq: 500, slide: 90, attack: 0.1});
+  tone({freq: 90, slide: 40, t: t0 + 0.05, dur: 0.5, vol: 0.3, type: 'sine'});
+}
+// the roof splitting open: a bright crack, then a ringing that hangs in the air
+function heavenCrack(){
+  if (!running()) return;
+  var a = actx, t0 = a.currentTime;
+  var out = a.createGain(); out.gain.value = 1; out.connect(sfxBus); out.connect(reverbGet().input);
+  noise({t: t0, dur: 0.18, vol: 0.4, type: 'highpass', freq: 2200, bus: out});
+  noise({t: t0, dur: 1.6, vol: 0.12, type: 'bandpass', freq: 3000, slide: 7000, q: 1.2, attack: 0.4, bus: out});
+  [[1174.7, 0.14], [1760, 0.1], [2349.3, 0.07], [3520, 0.04]].forEach(function(p, i){
+    tone({freq: p[0], t: t0 + 0.04 + i * 0.03, dur: 3.2, vol: p[1], type: 'sine', attack: 0.02, bus: out});
+  });
+}
+
 // bus meters for the mix check: peak of each bus over the last buffer
 var meters = null;
 function meter(){
@@ -745,7 +790,7 @@ music.play = function(name, force){
   var tr = TRACKS[name]; if (!tr) return;
   seq.name = name; seq.track = tr; seq.step = 0;
   if (tr.drone) startDrone(tr.drone);
-  if (tr.choir) startChoir(tr.choir[0], tr.choirOpen);
+  if (tr.choir) startChoir(tr.choir[0], tr.choirOpen, tr.choirLevel);
   if (tr.bed) startBed();
   if (tr.breath) startBreath();
 };
@@ -789,7 +834,7 @@ window.BTD_AUDIO = {
   fire: { update: fireUpdate },
   meter: meter,
   // debug: set the choir's level live, for balancing it against the heart
-  choirLevel: function(v){ if (v != null){ CHOIR = v; if (choirV) choirV.g.gain.setTargetAtTime(v, actx.currentTime, 0.05); } return CHOIR; },
+  choirLevel: function(v){ if (v != null){ CHOIR = v; if (choirV){ choirV.level = v; choirV.g.gain.setTargetAtTime(v, actx.currentTime, 0.05); } } return CHOIR; },
   setMuted: function(m){ muted = !!m; if (master) master.gain.value = muted ? 0 : MASTER_GAIN; },
   // the beat heard from inside a closed fist
   muffle: function(on){

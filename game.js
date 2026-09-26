@@ -23,12 +23,29 @@ var isTouch = (window.matchMedia && window.matchMedia('(pointer:coarse)').matche
 
 // on a small screen the bezel goes and the glass takes the whole screen
 var bare = false;
+// On touch the two controls get ground of their own: a band under the
+// picture, or a band either side of it on a phone held sideways, whichever
+// costs the picture less. The picture shrinks to leave it, so no thumb ever
+// sits over the arena. CTL_R is both controls' radius in css px.
+var CTL_R = 38, CTL_BAND = CTL_R * 2 + 28, ctlMode = '';
 function resize(){
   bare = Math.min(window.innerWidth, window.innerHeight) < 600;
   document.body.classList.toggle('bare', bare);
   var pad = bare ? 0 : 12, bx = bare ? 0 : BEZEL_X, by = bare ? 0 : BEZEL_Y;
+  wrap.style.padding = '';
   var aw = wrap.clientWidth - pad, ah = wrap.clientHeight - pad;
   scale = Math.min(aw / (LW + bx), ah / (LH + by));
+  ctlMode = '';
+  if (isTouch){
+    var sBand = Math.min(aw / (LW + bx), (ah - CTL_BAND) / (LH + by));
+    var sSide = Math.min((aw - 2 * CTL_BAND) / (LW + bx), ah / (LH + by));
+    ctlMode = sBand >= sSide ? 'band' : 'sides';
+    scale = Math.max(sBand, sSide);
+    // the picture centres in what is left over
+    var edge = (CTL_BAND + pad / 2) + 'px';
+    if (ctlMode === 'band') wrap.style.paddingBottom = edge;
+    else { wrap.style.paddingLeft = edge; wrap.style.paddingRight = edge; }
+  }
   var w = Math.max(160, Math.floor(LW * scale));
   var h = Math.max(240, Math.floor(LH * scale));
   // fewer device pixels on touch screens: every raster cost scales with them
@@ -41,8 +58,8 @@ function resize(){
   stage.style.width = w + 'px';
   stage.style.height = h + 'px';
   monitor.style.setProperty('--s', (w / LW).toFixed(3));
-  layoutFireBtn();
   ctx.setTransform(cvs.width / LW, 0, 0, cvs.height / LH, 0, 0);
+  layoutControls();
 }
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', function(){ setTimeout(resize, 120); });
@@ -95,7 +112,10 @@ var COLORS = {
   ember:    cssColor('--ember', '#ff2a00'),
   sulfur:   cssColor('--sulfur', '#ffc321'),
   ash:      cssColor('--ash', '#c79a8f'),
-  title:    cssColor('--title', '#ff5a1f')
+  title:    cssColor('--title', '#ff5a1f'),
+  rock:     cssColor('--rock', '#1c0705'),
+  magma:    cssColor('--magma', '#ff5a0e'),
+  grace:    cssColor('--grace', '#fff0cc')
 };
 var RGB = {}; Object.keys(COLORS).forEach(function(k){ RGB[k] = hexRgb(COLORS[k]); });
 function col(name, a){ var c = RGB[name]; return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
@@ -275,6 +295,8 @@ function reset(){
   G.titleHearts = [];
   for (var th=0; th<14; th++) G.titleHearts.push({ x: rnd(20, LW-20), y: rnd(0, LH), v: rnd(18, 42), s: rnd(5, 11), p: rnd(0, 6.28) });
   G.taken = null;                          // the losing sequence
+  G.freed = null;                          // the winning one: his last grasp, and the release
+  G.heaven = null;                         // the light that comes down for it
   G.heartSilent = false;                   // after he takes it, the beat is never heard again
   G.paused = false;
   G.ending = null;
@@ -297,49 +319,68 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 27;
+  window.BTD_VERSION = 31;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
 // ---------- input ----------
 var keys = {};
 var fireQueued = false;
-// On touch there are two controls and nothing else: the joystick bottom left
-// for the left thumb, the fire button bottom right for the right. Pointers
-// are tracked by id from the moment they land. One that lands on the button
-// fires on press and never steers; one that lands on the stick steers and
-// never fires; a touch anywhere else does nothing. A mouse keeps drag-to-move
-// and click-to-fire.
+// On touch there are two controls and nothing else: the joystick for the left
+// thumb, the fire button for the right, the same size, off the picture on
+// their own ground (see resize) and drawn on their own layer, #ctl, in css
+// px. Pointers are tracked by id from the moment they land. One that lands on
+// the button fires on press and never steers; one that lands on the stick
+// steers and never fires; a touch anywhere else does nothing. A mouse keeps
+// drag-to-move and click-to-fire.
 var pointers = {}, movePtr = null, drag = null;
 var downT = 0, moved = 0;                         // mouse only: a click fires
-// the fire button: bottom right, in thumb reach, at least 72 css px across
-var fireBtn = { x: 0, y: 0, r: 40, press: 0 };
-// the joystick: bottom left, mirroring the button, always drawn. Analog and
+var ctl = document.getElementById('ctl'), cctx = ctl.getContext('2d');
+// the fire button, and the joystick mirroring it. The stick is analog and
 // measured from its fixed centre: a 12 % dead zone, then linear to full
 // speed at the rim, which is exactly the keys' speed.
-var stick = { x: 0, y: 0, R: 60, id: null, kx: 0, ky: 0, jx: 0, jy: 0 };
-function layoutFireBtn(){
-  if (!fireBtn || !stick) return;                 // resize() runs once before this block
-  var s = Math.max(0.2, scale);
-  fireBtn.r = clamp(38 / s, 30, 64);
-  fireBtn.x = LW - 10 - fireBtn.r; fireBtn.y = LH - 10 - fireBtn.r;
-  stick.R = clamp(56 / s, 44, 86);                // 112 css px across
-  stick.x = 10 + stick.R; stick.y = LH - 10 - stick.R;
-  if (stick.id == null){ stick.kx = stick.x; stick.ky = stick.y; }
+var fireBtn = { x: 0, y: 0, r: CTL_R, press: 0 };
+var stick = { x: 0, y: 0, R: CTL_R, id: null, kx: 0, ky: 0, jx: 0, jy: 0 };
+// The layer is only a strip around the two controls, not the whole screen,
+// and it is redrawn only when something on it changes: a full-screen layer
+// redrawn every frame cost ~5 ms a frame on a throttled phone.
+var ctlLayer = { x: 0, y: 0, W: 0, H: 0, dpr: 1, key: '' };
+function layoutControls(){
+  if (!isTouch || !stick) return;                 // resize() runs once before this block
+  var W = window.innerWidth, wr = wrap.getBoundingClientRect();
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var r = CTL_R, lx, rx, cy;
+  if (ctlMode === 'band'){
+    // the foot of the band, where thumbs rest, a little in from the edges
+    cy = wr.bottom - 14 - r;
+    lx = wr.left + Math.max(14 + r, wr.width * 0.17); rx = wr.right - Math.max(14 + r, wr.width * 0.17);
+  } else {
+    // sideways: the middle of each side band, low, where the thumbs fall
+    var side = Math.min(CTL_BAND, (wr.width - parseFloat(stage.style.width)) / 2);
+    cy = wr.top + wr.height * 0.7;
+    lx = wr.left + Math.min(side / 2 + 20, 110); rx = wr.right - Math.min(side / 2 + 20, 110);
+  }
+  stick.x = lx; stick.y = cy; fireBtn.x = rx; fireBtn.y = cy;
+  if (stick.id == null){ stick.kx = lx; stick.ky = cy; }
+  var pad = r + 16;                                // the rim, the press flash and the lit arc
+  ctlLayer.x = 0; ctlLayer.y = Math.floor(cy - pad); ctlLayer.W = W; ctlLayer.H = Math.ceil(pad * 2); ctlLayer.dpr = dpr; ctlLayer.key = '';
+  ctl.width = Math.floor(W * dpr); ctl.height = Math.floor(ctlLayer.H * dpr);
+  ctl.style.width = W + 'px'; ctl.style.height = ctlLayer.H + 'px';
+  ctl.style.left = '0px'; ctl.style.top = ctlLayer.y + 'px';
 }
-layoutFireBtn();
-function onFireBtn(x, y){ return isTouch && Math.hypot(x - fireBtn.x, y - fireBtn.y) <= fireBtn.r * 1.15; }
-// generous: a thumb that lands a little off the ring still takes the stick
-function onStick(x, y){ return isTouch && Math.hypot(x - stick.x, y - stick.y) <= stick.R * 1.5; }
-function stickTo(x, y){
-  var dx = x - stick.x, dy = y - stick.y, d = Math.hypot(dx, dy), R = stick.R;
+function onFireBtn(q){ return isTouch && Math.hypot(q.x - fireBtn.x, q.y - fireBtn.y) <= fireBtn.r * 1.35; }
+// generous: a thumb that lands a good way off the ring still takes the stick
+function onStick(q){ return isTouch && Math.hypot(q.x - stick.x, q.y - stick.y) <= stick.R * 2; }
+function stickTo(q){
+  var dx = q.x - stick.x, dy = q.y - stick.y, d = Math.hypot(dx, dy), R = stick.R;
   var c = d > R ? R / d : 1;                      // the knob stops at the rim
   stick.kx = stick.x + dx * c; stick.ky = stick.y + dy * c;
   var m = Math.min(1, d / R), k = m < 0.12 ? 0 : (m - 0.12) / 0.88;
   stick.jx = d > 0 ? dx / d * k : 0; stick.jy = d > 0 ? dy / d * k : 0;
 }
 function stickRelease(){ stick.id = null; stick.jx = stick.jy = 0; }
-if (/debug/.test(location.hash)) window.BTD_STICK = stick;   // the joystick, in logical px
+if (/debug/.test(location.hash)){ window.BTD_STICK = stick; window.BTD_FIREBTN = fireBtn; }   // the controls, in css px
+resize();
 
 window.addEventListener('keydown', function(e){
   var k = e.key, space = k === ' ' || e.code === 'Space';
@@ -373,27 +414,30 @@ function toLogical(e){
   var r = canvasRect();
   return { x: (e.clientX - r.left) / r.width * LW, y: (e.clientY - r.top) / r.height * LH };
 }
-stage.addEventListener('pointerdown', function(e){
+// On the window rather than the stage: on touch the controls live outside the
+// picture. A mouse still has to press on the picture itself.
+window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  try { stage.setPointerCapture(e.pointerId); } catch(err){}   // synthetic pointers have no capture
-  var p = toLogical(e);
+  var onPicture = stage.contains(e.target);
+  if (!isTouch && !onPicture) return;
+  var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
   if (G.mode !== 'play'){ tryStart(); return; }
   if (G.paused){ togglePause(); return; }
-  if (onFireBtn(p.x, p.y)){
+  if (onFireBtn(q)){
     pointers[e.pointerId] = { kind: 'fire' };
     fireBtn.press = 1; fireQueued = true;          // on press, not release
     return;
   }
-  if (onStick(p.x, p.y)){
+  if (onStick(q)){
     if (stick.id != null) return;                  // one thumb on it at a time
     stick.id = e.pointerId;
     pointers[e.pointerId] = { kind: 'stick' };
-    stickTo(p.x, p.y);
+    stickTo(q);
     G.idleT = 0;
     return;
   }
   // a finger anywhere else does nothing; only a mouse drags
-  if (e.pointerType !== 'mouse' || movePtr != null) return;
+  if (e.pointerType !== 'mouse' || movePtr != null || !onPicture) return;
   movePtr = e.pointerId;
   pointers[e.pointerId] = { kind: 'move', x: p.x, y: p.y };
   // the heart rides above the finger: whatever offset it lands with eases
@@ -402,10 +446,10 @@ stage.addEventListener('pointerdown', function(e){
   downT = performance.now(); moved = 0;
   G.idleT = 0;
 });
-stage.addEventListener('pointermove', function(e){
+window.addEventListener('pointermove', function(e){
   var pt = pointers[e.pointerId];
   if (!pt) return;
-  if (pt.kind === 'stick'){ var q = toLogical(e); stickTo(q.x, q.y); return; }
+  if (pt.kind === 'stick'){ stickTo({ x: e.clientX, y: e.clientY }); return; }
   if (pt.kind !== 'move') return;
   var p = toLogical(e);
   moved += Math.abs(p.x - pt.x) + Math.abs(p.y - pt.y);
@@ -420,8 +464,8 @@ function endPointer(e){
   if (!isTouch && G.mode === 'play' && !G.paused && moved < 10 && performance.now() - downT < 300) fireQueued = true;
   movePtr = null; drag = null;
 }
-stage.addEventListener('pointerup', endPointer);
-stage.addEventListener('pointercancel', endPointer);
+window.addEventListener('pointerup', endPointer);
+window.addEventListener('pointercancel', endPointer);
 
 var muteBtn = document.getElementById('mute');
 function toggleMute(){
@@ -508,6 +552,7 @@ function updateHeart(dt){
     if (G.penalty && G.penalty.kind === 'burn') target += 55;            // panicked
     if (G.penalty && G.penalty.kind === 'fork') target *= 0.72;          // labored
     if (G.ending && G.ending.kind === 'dead') target = 0;
+    if (G.freed && G.freed.released){ target = 60; h.arr = 0; }      // free, and calm
   } else if (G.mode === 'over') target = 46;
   else if (G.mode === 'won') target = 84;
   else target = 68;
@@ -525,7 +570,7 @@ function updateHeart(dt){
   if (h.since >= h.next){
     h.since = 0; h.dubDone = false;
     var big = h.big; h.big = false;
-    var dmg = (G.mode === 'play' || G.mode === 'ending') ? 3 - G.lives : 0;
+    var dmg = (G.mode === 'play' || G.mode === 'ending') && !(G.freed && G.freed.heal > 0.3) ? 3 - G.lives : 0;
     var pen = G.penalty ? G.penalty.kind : '';
     h.lubScale = big ? 1.32 : (pen === 'burn' ? 1.06 : (pen === 'fork' ? 1.24 : (dmg >= 2 ? 1.2 : 1.14)));
     h.pulse = pen === 'burn' ? 0.7 : 1;                                   // fast and shallow
@@ -770,15 +815,7 @@ function loseHeart(){
   d.eyes.forEach(function(e){ e.open = false; e.wide = 0; });
   G.taken = { t: 0, bpm: G.heart.bpm, hand: { x: G.player.x, y: G.player.y, close: 0 }, point: 0, grabbed: false, stopped: false };
   if (G.arms){ G.arms.l.mode = 'reach'; G.arms.r.mode = 'reach'; G.arms.reach = 0; }
-  // everything on screen burns out
-  G.forks.forEach(function(f){ burst(f.x, f.y, '#ff6a1f', 3, 90); });
-  G.forks.length = 0;
-  G.flames.forEach(function(fl){
-    if (fl.type === 'walker'){ fl.state = 'die'; fl.t = 0; }
-    else if (fl.type === 'ember'){ fl.state = 'bloom'; fl.t = fl.fuse + 0.5; }
-    else if (fl.type === 'jet'){ if (fl.len > 0){ fl.state = 'retract'; fl.t = 0; } else { fl.state = 'retract'; fl.t = 1; } }
-    else fl.t = fl.warn + fl.burn;
-  });
+  burnOutHazards();
   music.stop(1.2);
   music.whisper(0);
 }
@@ -828,27 +865,130 @@ function heartGaveOut(){
   G.shake = 1.4;
   music.stop();
 }
+// everything on screen burns out
+function burnOutHazards(){
+  G.forks.forEach(function(f){ burst(f.x, f.y, '#ff6a1f', 3, 90); });
+  G.forks.length = 0;
+  G.bolts.length = 0;
+  G.flames.forEach(function(fl){
+    if (fl.type === 'walker'){ fl.state = 'die'; fl.t = 0; }
+    else if (fl.type === 'ember'){ fl.state = 'bloom'; fl.t = fl.fuse + 0.5; }
+    else if (fl.type === 'jet'){ if (fl.len > 0){ fl.state = 'retract'; fl.t = 0; } else { fl.state = 'retract'; fl.t = 1; } }
+    else fl.t = fl.warn + fl.burn;
+  });
+}
+// ---------- the release ----------
+// He dies, burning and sinking into the pit. With the last of him his hands
+// lunge in and close around the heart — a final grasp — and with him gone
+// they burn to ash and crumble, and let it go. The roof of the pit splits and
+// a light comes down on it; in the light the heart heals, its scars fading,
+// its beat slowing to calm, and it rises up the light and out. Only then the
+// panel. In seconds from the killing bolt:
+var FREE = { reach: [0.2, 1.0], close: [1.0, 1.4], dead: 2.4, char: [2.5, 3.7], crumble: 3.7,
+             crack: 3.9, beam: [4.1, 4.8], heal: [4.8, 6.4], rise: [6.2, 8.4], end: 8.8 };
 function devilDies(){
   var d = G.devil;
   d.dying = true; d.dieT = 0;
-  beginEnding('devil', 2.8);
+  beginEnding('devil', FREE.end);
   G.white = 1; G.shake = 1.6;
   music.stop();
   sfx.kill();
   sfx.roar();
+  sfx.deathCry();
+  burnOutHazards();
+  G.freed = { hand: { x: G.player.x, y: G.player.y, close: 0 }, grabbed: false, char: 0, released: false, heal: 0 };
+  if (G.arms){ G.arms.l.mode = 'reach'; G.arms.r.mode = 'reach'; G.arms.reach = 0; }
+}
+function updateFreed(dt){
+  var t = G.ending.t, d = G.devil, F = G.freed, p = G.player, A = G.arms;
+  // he burns, cracks, sinks
+  if (!d.dead){
+    d.dieT = t;
+    G.shake = Math.max(G.shake, 0.6 * (1 - t / FREE.dead));
+    if (Math.random() < 0.35)
+      burst(d.x + rnd(-110,110), d.y + rnd(-70,100), Math.random()<0.5 ? COLORS.ember : COLORS.sulfur, 2, 220, 60);
+    if (Math.random() < 0.6)
+      addPart({ x: d.x + rnd(-90, 90), y: d.y + rnd(-40, 100), vx: rnd(-20, 20), vy: rnd(-90, -40), life: rnd(0.6, 1.3), t: 0,
+                c: Math.random() < 0.5 ? '#ffb060' : '#ff7a10', r: rnd(1, 2.4), g: -30, turb: 40 });
+    if (t >= FREE.dead){
+      d.dead = true; G.white = 1; G.shake = 1.4;
+      burst(d.x, d.y + 30, '#5b534e', 26, 260, 220);         // ash
+      burst(d.x, d.y, COLORS.ember, 18, 380, 60);
+      sfx.collapse();
+    }
+  }
+  // the last grasp, and the hands burning to ash
+  if (A){
+    A.reach = smooth((t - FREE.reach[0]) / (FREE.reach[1] - FREE.reach[0]));
+    F.hand.x = p.x; F.hand.y = p.y;
+    F.hand.close = smooth((t - FREE.close[0]) / (FREE.close[1] - FREE.close[0]));
+    if (t > FREE.reach[0] && !F.lunged){ F.lunged = true; sfx.grab(); }
+    if (!F.grabbed && F.hand.close >= 1){ F.grabbed = true; AUDIO.muffle(true); }
+    F.char = smooth((t - FREE.char[0]) / (FREE.char[1] - FREE.char[0]));
+    A.l.char = A.r.char = F.char;
+    if (F.char > 0 && Math.random() < 0.7 * F.char){
+      var a = Math.random() < 0.5 ? A.l : A.r;
+      addPart({ x: a.hx + rnd(-60, 60), y: a.hy + rnd(-40, 40), vx: rnd(-10, 10), vy: rnd(-40, -10), life: rnd(0.5, 1), t: 0,
+                c: Math.random() < 0.5 ? '#ff9a40' : '#5b534e', r: rnd(0.8, 2), g: 30, turb: 20 });
+    }
+    if (t >= FREE.crumble) crumbleArms();
+  } else if (t >= FREE.crumble && !F.released){ F.released = true; AUDIO.muffle(false); }
+  // the roof splits, and the light comes down
+  if (t >= FREE.crack && !G.heaven){
+    G.heaven = { x: clamp(p.x, 50, LW - 50), t: 0, crack: 0, beam: 0, wash: 0 };
+    G.shake = Math.max(G.shake, 0.7);
+    burst(G.heaven.x, 6, '#6a5048', 12, 120, 420);            // the roof coming down in pieces
+    sfx.heavenCrack();
+  }
+  if (G.heaven){
+    var H = G.heaven;
+    H.t += dt;
+    H.crack = smooth(H.t / 0.5);
+    H.beam = smooth((t - FREE.beam[0]) / (FREE.beam[1] - FREE.beam[0]));
+    H.wash = H.beam;
+    if (H.beam > 0 && !H.sung){ H.sung = true; music.play('win'); }
+  }
+  // in the light it heals, then rises up it and out
+  F.heal = smooth((t - FREE.heal[0]) / (FREE.heal[1] - FREE.heal[0]));
+  if (F.released && G.heaven) p.x = lerp(p.x, G.heaven.x, Math.min(1, dt * 1.6));
+  var rk = (t - FREE.rise[0]) / (FREE.rise[1] - FREE.rise[0]);
+  if (rk > 0){
+    if (F.riseY == null) F.riseY = p.y;
+    p.y = lerp(F.riseY, -70, Math.pow(Math.min(1, rk), 1.8));
+  }
+}
+// the hands go to ash and fall apart, and the heart is loose
+function crumbleArms(){
+  var A = G.arms, F = G.freed;
+  ['l', 'r'].forEach(function(key){
+    var a = A[key], rr = a.reach > 0 ? a.rot : -a.rot, c = Math.cos(rr), s = Math.sin(rr);
+    for (var i = 0; i < 48; i++){
+      var lb = rnd(-460, 110), ly = rnd(-1, 1) * (lb < -40 ? 40 + (-lb - 40) * 0.12 : 46), lx = a.reach * lb;
+      var r = Math.random();
+      addPart({ x: a.hx + lx * c - ly * s, y: a.hy + lx * s + ly * c, vx: rnd(-30, 30), vy: rnd(-50, 10), life: rnd(0.9, 2.1), t: 0,
+                c: r < 0.4 ? '#5b534e' : (r < 0.8 ? '#2e2927' : '#ff8a30'), r: rnd(1.2, 3.4), g: rnd(80, 190), turb: 24 });
+    }
+  });
+  G.arms = null; F.released = true; F.grabbed = false;
+  G.inferno = false;
+  G.white = Math.max(G.white, 0.35);
+  AUDIO.muffle(false);
+  sfx.crumble();
+}
+// motes drifting up the light
+function heavenMotes(dt){
+  var H = G.heaven;
+  if (H.beam < 0.2 || Math.random() > dt * 36 * H.beam) return;
+  var yy = rnd(10, FLOOR - 10), w = lerp(10 + 40 * H.crack, 70, yy / LH);
+  addPart({ x: H.x + rnd(-w, w), y: yy, vx: rnd(-5, 5), vy: rnd(-26, -8), life: rnd(1.4, 3), t: 0,
+            c: Math.random() < 0.5 ? col('grace', 1) : col('sulfur', 0.9), r: rnd(0.7, 1.7), g: -3, turb: 10 });
 }
 function updateEnding(dt){
   var E = G.ending, d = G.devil;
   E.t += dt;
   if (E.kind === 'taken'){ updateTaken(dt); return; }
   if (d && !d.dying){ d.sway += dt; d.x = LW/2 + Math.sin(d.sway * 0.55) * d.swayAmp; }
-  if (E.kind === 'devil'){
-    d.dieT = E.t;
-    G.shake = Math.max(G.shake, 0.5);
-    if (Math.random() < 0.35)
-      burst(d.x + rnd(-110,110), d.y + rnd(-70,100), Math.random()<0.5 ? COLORS.ember : COLORS.sulfur, 2, 220, 60);
-    if (E.t > E.dur - 0.3 && !d.dead){ d.dead = true; G.white = 1; burst(d.x, d.y, COLORS.bone, 30, 420, 0); }
-  }
+  if (E.kind === 'devil') updateFreed(dt);
   if (E.t >= E.dur){
     G.ending = null;
     if (E.kind === 'devil') victory();
@@ -874,9 +1014,9 @@ function victory(){
   var spare = G.ammo;
   G.score = Math.floor(G.score + 10000 + G.lives * 2500 + spare * 1500);
   if (G.score > hi){ hi = G.score; saveHi(); }
-  document.getElementById('win-why').textContent = spare
+  document.getElementById('win-why').innerHTML = 'Your soul is free.<br>' + (spare
     ? ('Two eyes. ' + spare + ' bolt' + (spare > 1 ? 's' : '') + ' to spare.')
-    : 'Two eyes. Not a bolt to spare.';
+    : 'Two eyes. Not a bolt to spare.');
   document.getElementById('win-score').textContent = 'Score ' + G.score;
   document.getElementById('win-hi').textContent = 'Best ' + hi;
   scrWin.hidden = false;
@@ -912,6 +1052,7 @@ function update(dt){
     if (em.y < -6){ em.y = LH + 6; em.x = rnd(0, LW); }
   }
   stepParticles(dt);
+  if (G.heaven) heavenMotes(dt);
   stepTexts(dt);
   for (var lf=G.loose.length-1; lf>=0; lf--){
     var L = G.loose[lf]; L.t += dt; L.x += L.vx * dt; L.y += L.vy * dt; L.vy += 520 * dt; L.rot += L.spin * dt;
@@ -1611,7 +1752,8 @@ function drawPlayer(){
   var p = G.player, h = G.heart, t = G.t;
   if (G.mode === 'play' && G.invuln > 0 && Math.floor(G.t * 14) % 2 === 0 && !(G.penalty && G.penalty.kind !== 'hit')) return;
   var held = G.taken && G.taken.grabbed && G.mode === 'ending';
-  var y = p.y + G.recoil * 3, s = 11 * (window.BTD_HEART_SCALE || 1) * (held ? 1.8 : 1);   // BTD_HEART_SCALE: debug magnifier
+  var heal = G.freed && G.mode === 'ending' ? G.freed.heal : 0;       // in the light: healing, brightening
+  var y = p.y + G.recoil * 3, s = 11 * (window.BTD_HEART_SCALE || 1) * (held ? 1.8 : 1) * (1 + 0.3 * heal);   // BTD_HEART_SCALE: debug magnifier
   var lit = fireBelow(p), fire = fireLight(p.x, p.y);
   var pen = G.penalty, burn = pen && pen.kind === 'burn' ? pen : null;
   // It is a muscle, not a gem. Each beat: a slow fill, a hard squeeze on the
@@ -1650,10 +1792,11 @@ function drawPlayer(){
     ctx.beginPath(); ctx.ellipse(p.x + dx, y + dy, rr, rr * 0.86, 0, 0, 6.2832); ctx.stroke();
     ctx.restore();
   }
+  if (heal > 0) drawGlow(p.x + dx, y + dy, 48, RGB.grace, 0.9 * heal, 150 * (0.5 + 0.5 * heal), 150 * (0.5 + 0.5 * heal));
   drawGem(p.x + dx, y + dy, s, {
-    pulse: h.pulse, lit: lit, dmg: 3 - G.lives, light: h.light * (G.taken && G.taken.glow != null ? G.taken.glow : 1), fire: fire, scars: G.scars,
-    burnK: burn ? Math.max(0, 1 - pen.t / 0.6) : 0,
-    sx: sx, sy: sy, rot: rot, veins: true, leak: G.lives <= 1 || (pen && pen.kind === 'fork'),
+    pulse: h.pulse, lit: lit, dmg: 3 - G.lives, light: lerp(h.light * (G.taken && G.taken.glow != null ? G.taken.glow : 1), 1.3, heal), fire: fire, scars: G.scars,
+    burnK: burn ? Math.max(0, 1 - pen.t / 0.6) : 0, heal: heal,
+    sx: sx, sy: sy, rot: rot, veins: true, leak: heal < 0.3 && (G.lives <= 1 || (pen && pen.kind === 'fork')),
     breath: 0.82 + 0.18 * Math.sin(t * 1.1 + 0.7),                  // its own slower cycle
     veinWave: h.since / 0.45
   });
@@ -1730,7 +1873,7 @@ function drawFork(f){
     var locked = f.state === 'lock';
     var flick = locked && Math.floor(f.t * 30) % 2 === 0;
     ctx.globalAlpha = locked ? (flick ? 0.95 : 0.6) : 0.18 + 0.12 * (f.t / f.aimT);
-    ctx.strokeStyle = locked ? COLORS.sulfur : COLORS.ember;
+    ctx.strokeStyle = locked ? COLORS.sulfur : COLORS.bone;      // pale: red dashes vanish on the pit's rock
     ctx.lineWidth = locked ? 1.5 : 1;
     if (!locked) ctx.setLineDash([3, 9]);
     ctx.beginPath(); ctx.moveTo(f.ox, f.oy); ctx.lineTo(f.tx, f.ty); ctx.stroke();
@@ -1771,7 +1914,7 @@ function floorSpill(x, w, h){
   ctx.beginPath(); ctx.ellipse(x, FLOOR, r, r * 0.22, 0, 0, 6.2832); ctx.fill();
   ctx.restore();
 }
-// thin smoke above the tip, darkening the violet behind it
+// thin smoke above the tip, darkening the rock behind it
 function smokePlume(x, top, w, seed, t){
   ctx.save();
   for (var i=0;i<8;i++){
@@ -2085,7 +2228,7 @@ function drawJet(j){
     else { ex = j.tx; ey = j.ty; }
     var flick = locked && Math.floor(j.t * 30) % 2 === 0;
     ctx.globalAlpha = locked ? (flick ? 0.95 : 0.6) : 0.18 + 0.14 * charge;
-    ctx.strokeStyle = locked ? COLORS.sulfur : '#ff6a10';
+    ctx.strokeStyle = locked ? COLORS.sulfur : COLORS.bone;
     ctx.lineWidth = locked ? 1.5 : 1;
     if (!locked) ctx.setLineDash([3, 9]);
     ctx.beginPath(); ctx.moveTo(j.ox, j.oy); ctx.lineTo(ex, ey); ctx.stroke();
@@ -2522,8 +2665,8 @@ function drawDevil(d){
   var p = G.player;
   var turn = d.turn || 0;
   var cx = d.x + turn * 30, cy = d.y - d.kick * 26, w = d.w * (1 - 0.28 * turn), h = d.h;
-  var dieK = d.dying ? clamp(d.dieT / 2.5, 0, 1) : 0;
-  if (d.dying){ cx += rnd(-1,1) * 6 * dieK; cy += rnd(-1,1) * 4 * dieK; }
+  var dieK = d.dying ? clamp(d.dieT / FREE.dead, 0, 1) : 0;
+  if (d.dying){ cx += rnd(-1,1) * 6 * dieK; cy += rnd(-1,1) * 4 * dieK + dieK * dieK * 70; }   // shaking, and sinking into the pit
   var sk = clamp((p.x - cx) / LW, -1, 1) * 26 + turn * 40;      // watching you
   var mouth = d.mouth || 0, glow = d.mouthGlow || 0;
   ctx.save();
@@ -2614,10 +2757,9 @@ function drawDevil(d){
     }
   }
 
-  // cracks as he dies
+  // cracks as he dies: the fire inside him showing through
   if (dieK > 0.15){
-    ctx.strokeStyle = 'rgba(255,255,255,' + Math.min(1, dieK * 1.4) + ')';
-    ctx.lineWidth = 2;
+    var ca = Math.min(1, dieK * 1.4);
     ctx.beginPath();
     var seeds = [[-40,-60,-90,60],[30,-70,80,70],[0,-20,-30,110],[-70,0,60,10]];
     seeds.forEach(function(s, si){
@@ -2628,7 +2770,8 @@ function drawDevil(d){
         ctx.lineTo(cx + s[0] + (s[2]-s[0])*kk + Math.sin(si * 7 + k * 13) * 14, cy + s[1] + (s[3]-s[1])*kk);
       }
     });
-    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,80,10,' + (0.6 * ca) + ')'; ctx.lineWidth = 7; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,236,170,' + ca + ')'; ctx.lineWidth = 2.2; ctx.stroke();
   }
   ctx.restore();
 
@@ -2678,8 +2821,11 @@ function drawDevil(d){
 function drawGem(x, y, s, o){
   o = o || {};
   var dmg = o.dmg || 0, light = o.light == null ? 1 : o.light, pulse = o.pulse || 0, scars = o.scars || [];
+  var heal = o.heal || 0;
+  if (heal > 0.5) dmg = 0;                                              // healed: the colour comes back
   var H = RGB.heart, grey = [143, 160, 176], k = dmg >= 2 ? 0.6 : (dmg === 1 ? 0.2 : 0);
   var core = [lerp(H[0], grey[0], k), lerp(H[1], grey[1], k), lerp(H[2], grey[2], k)];
+  if (heal){ var gr = RGB.grace; core = [lerp(core[0], gr[0], 0.55 * heal), lerp(core[1], gr[1], 0.55 * heal), lerp(core[2], gr[2], 0.55 * heal)]; }
   if (o.burnK){ core = [lerp(core[0], 255, o.burnK), lerp(core[1], 150, o.burnK), lerp(core[2], 40, o.burnK)]; }
   var gutter = dmg >= 2 ? 0.35 + 0.65 * FIRE.at(G.t * 95, 17) : 1;
   var breath = o.breath == null ? 1 : o.breath;                        // the slower cycle
@@ -2747,7 +2893,8 @@ function drawGem(x, y, s, o){
   ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,.45)';
   ctx.beginPath(); ctx.ellipse(-s*0.45, -s*0.5, s*0.22, s*0.12, -0.6, 0, 6.2832); ctx.fill();
-  // the scars
+  // the scars, fading out in the light
+  ctx.globalAlpha *= 1 - heal;
   scars.forEach(function(sc){
     if (sc.kind === 'stain'){
       // dried blood around the wound: dark red, soft-edged, restrained
@@ -2809,7 +2956,7 @@ function makeArms(){
   };
 }
 function updateArms(dt){
-  var A = G.arms, p = G.player, T = G.taken;
+  var A = G.arms, p = G.player, T = G.taken || G.freed;
   A.present = Math.min(1, A.present + dt / 1.4);
   ['l', 'r'].forEach(function(key){
     var a = A[key], side = a.side, t = G.t;
@@ -3047,18 +3194,19 @@ function armSprite(a){
   // a slam crosses several steps and re-renders as it goes
   var qc = Q.hide ? 0.06 : 0.1, curl = Math.round(a.curl / qc) * qc, spread = Math.round((a.spread == null ? 0.6 : a.spread) / 0.1) * 0.1;
   var fire = window.BTD_LIGHT ? 1 : Math.round(clamp(fireLight(a.hx, a.hy).k * 1.4, 0, 1) * 4) / 4;
-  var stale = c.S !== S || c.curl !== curl || c.spread !== spread || c.fire !== fire || c.hide !== Q.hide || c.reach !== reach;
+  var ch = Math.round((a.char || 0) * 8) / 8;
+  var stale = c.S !== S || c.curl !== curl || c.spread !== spread || c.fire !== fire || c.hide !== Q.hide || c.reach !== reach || c.char !== ch;
   // at most one arm re-renders per frame
   if (stale && c.S !== 0 && armRenderedAt === PERF.total) return c.canvas;
   if (stale){
     armRenderedAt = PERF.total;
     if (c.S !== S){ c.canvas.width = Math.ceil(ARM_W * S); c.canvas.height = Math.ceil(ARM_H * S); c.S = S; }
-    c.curl = curl; c.spread = spread; c.fire = fire; c.hide = Q.hide; c.reach = reach;
+    c.curl = curl; c.spread = spread; c.fire = fire; c.hide = Q.hide; c.reach = reach; c.char = ch;
     var cx = c.canvas.getContext('2d');
     cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, c.canvas.width, c.canvas.height);
     cx.setTransform(S, 0, 0, S, -armX0(reach) * S, -ARM_Y0 * S);
     var saved = ctx; ctx = cx;
-    drawArmBody(reach, curl, spread, fire);
+    drawArmBody(reach, curl, spread, fire, ch);
     ctx = saved;
   }
   return c.canvas;
@@ -3074,8 +3222,9 @@ function drawArm(a){
   ctx.rotate(a.reach > 0 ? a.rot : -a.rot);
   ctx.drawImage(sp, armX0(a.reach), ARM_Y0, ARM_W, ARM_H);
   // the held heart underlights the fingers
-  if (G.taken && G.taken.grabbed && G.mode === 'ending'){
-    var hl = G.heart.light * (G.taken.glow == null ? 1 : G.taken.glow);
+  var TT = G.mode === 'ending' ? (G.taken || G.freed) : null;
+  if (TT && TT.grabbed){
+    var hl = G.heart.light * (TT.glow == null ? 1 : TT.glow);
     if (hl > 0.02){
       var wx = G.player.x - a.hx, wy = G.player.y - a.hy;
       var rr = a.reach > 0 ? -a.rot : a.rot;
@@ -3116,7 +3265,7 @@ function drawArm(a){
 // turns a curl direction into the one that closes this hand. Shading that
 // depends on the world — the fire below, the heart's light at the centre —
 // is written in world terms and is NOT flipped with the geometry.
-function drawArmBody(reach, curl, spread, fire){
+function drawArmBody(reach, curl, spread, fire, char){
   function X(v){ return reach * v; }
   function A(a){ return reach > 0 ? a : Math.PI - a; }
   function B(sgn){ return reach > 0 ? sgn : -sgn; }
@@ -3250,11 +3399,26 @@ function drawArmBody(reach, curl, spread, fire){
   // now, over the knuckles, so its claw comes down onto the fingers rising to
   // meet it and the two make a ring.
   drawFinger(X(22), -32, A(0.2 + 0.12 * spread), 58, 0.2 + 0.2 * curl, 15, 9, B(1), fire, true);
+  // with him gone they burn to ash: the hide greys over, and the last of the
+  // fire in them shows through the cracks before it goes out
+  if (char > 0){
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = 'rgba(46,40,37,' + (0.9 * char) + ')';
+    ctx.fillRect(-620, -220, 1240, 440);
+    var R = seeded(reach > 0 ? 71 : 97), glow = char * (1 - 0.6 * char);
+    for (var ci = 0; ci < 16; ci++){
+      var x0 = X(-430 + R() * 540), y0 = -60 + R() * 120, len = 26 + R() * 50, ang = R() * 6.2832;
+      var qx = x0 + Math.cos(ang) * len * 0.5 + (R() - 0.5) * 22, qy = y0 + Math.sin(ang) * len * 0.5 + (R() - 0.5) * 22;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(qx, qy, x0 + Math.cos(ang) * len, y0 + Math.sin(ang) * len);
+      ctx.strokeStyle = 'rgba(255,110,30,' + (0.7 * glow) + ')'; ctx.lineWidth = 3.2; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,225,160,' + (0.9 * glow) + ')'; ctx.lineWidth = 1.1; ctx.stroke();
+    }
+  }
   ctx.restore();
 }
 var armsLayer = makeLayer(), devilLayer = makeLayer();
 function drawArms(front){
-  var A = G.arms, T = G.taken && G.mode === 'ending' ? G.taken : null;
+  var A = G.arms, T = G.mode === 'ending' ? (G.taken || G.freed) : null;
   if (A.present <= 0) return;
   var busy = A.l.mode !== 'idle' || A.r.mode !== 'idle' || T;
   if (Q.armsEvery > 1 && !busy){
@@ -3394,9 +3558,25 @@ function drawHUD(){
   var label = G.phase === 'survive' ? 'S' : (G.devil && !G.devil.dying && (G.devil.state === 'open' || G.devil.state === 'attack') ? (open ? 'O' : 'C') : '-');
   var key = [Math.floor(G.score), hi, G.ammo, G.phase, Math.round(clamp(G.surv / G.SURV, 0, 1) * 200), alive, label].join('|');
   hudLayer.draw(key, drawHUDStatic);
-  if (isTouch){ drawStick(); drawFireBtn(); }
+
   // lives, beating too
   for (var i=0;i<G.lives;i++) drawGem(18 + i*20, 44, 6.5 * (1 + (G.heart.scale - 1) * 0.6), { alpha: 0.9, pulse: G.heart.pulse * 0.5 });
+}
+// The touch controls, on their own layer in css px: cleared and drawn only
+// while there is a game to play.
+function drawControls(){
+  var live = G.mode === 'play' && !G.paused && !skip('ctl');
+  var key = live ? [Math.round(stick.kx), Math.round(stick.ky), stick.id != null ? 1 : 0, Math.round(stick.jx * 20), Math.round(stick.jy * 20),
+                    Math.round(fireBtn.press * 24), G.ammo].join('|') : '';
+  if (key === ctlLayer.key) return;               // nothing on it has changed
+  ctlLayer.key = key;
+  var c = cctx;
+  c.setTransform(ctlLayer.dpr, 0, 0, ctlLayer.dpr, -ctlLayer.x * ctlLayer.dpr, -ctlLayer.y * ctlLayer.dpr);
+  c.clearRect(ctlLayer.x, ctlLayer.y, ctlLayer.W, ctlLayer.H);
+  if (!live) return;
+  var saved = ctx; ctx = c;                       // the shapes below draw on ctx
+  drawStick(); drawFireBtn();
+  ctx = saved;
 }
 // The joystick: the same dark glass and cyan rim as the fire button, with four
 // chevrons so it reads as a stick at a glance. Held, the rim brightens and
@@ -3452,7 +3632,7 @@ function drawFireBtn(){
   if (k > 0){ ctx.strokeStyle = col('heart', 0.5 * k); ctx.lineWidth = 6 * k; ctx.beginPath(); ctx.arc(b.x, b.y, r + 4 + 6 * k, 0, 6.2832); ctx.stroke(); }
   // a bolt, and the count beside it
   ctx.fillStyle = G.ammo > 0 ? '#eefaff' : 'rgba(253,248,240,.3)';
-  boltShape(b.x - r * 0.32, b.y + r * 0.02, r / 26);
+  boltShape(b.x - r * 0.32, b.y + r * 0.02, r / 24);
   ctx.fill();
   ctx.font = Math.round(r * 0.55) + "px 'Press Start 2P', monospace";
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -3557,6 +3737,185 @@ function drawLightning(){
   ctx.restore();
 }
 
+// ---------- the light ----------
+// the shaft of light, rendered once: a trapezoid widening downward, white at
+// its core and gold at its soft edges, brightest under the roof, fading out
+// at its foot
+var beamCanvas = null;
+function beamSprite(){
+  if (beamCanvas) return beamCanvas;
+  var W = 128, Hs = 256, c = document.createElement('canvas'); c.width = W; c.height = Hs;
+  var cx = c.getContext('2d'), img = cx.createImageData(W, Hs), d = img.data, gr = RGB.grace, i = 0;
+  for (var y = 0; y < Hs; y++){
+    var v = y / (Hs - 1), hw = W * lerp(0.2, 0.5, v), inten = (1 - 0.5 * v) * (v > 0.82 ? (1 - v) / 0.18 : 1);
+    for (var x = 0; x < W; x++){
+      var e = Math.abs(x + 0.5 - W / 2) / hw, a = e < 1 ? Math.pow(1 - e * e, 1.6) : 0;
+      d[i]   = 255;
+      d[i+1] = lerp(gr[1] - 50, gr[1] + 4, a);      // gold at the edges, near white in the core
+      d[i+2] = lerp(gr[2] - 114, gr[2] + 6, a);
+      d[i+3] = 180 * a * inten;
+      i += 4;
+    }
+  }
+  cx.putImageData(img, 0, 0);
+  return beamCanvas = c;
+}
+// The roof of the pit splits over the heart and a shaft of light comes down:
+// nested shafts layered for a soft edge, brightest at the roof, rays drifting
+// across it, a pool where it meets the floor, and the pit darkening around it.
+function drawHeaven(){
+  var H = G.heaven, p = G.player, x = H.x, t = G.t, i;
+  ctx.save();
+  if (H.wash > 0){ ctx.fillStyle = 'rgba(3,1,0,' + (0.4 * H.wash) + ')'; ctx.fillRect(-20, -20, LW + 40, LH + 40); }
+  ctx.globalCompositeOperation = 'lighter';
+  // the crack in the roof
+  var cw = 8 + 52 * H.crack;
+  drawGlow(x, 2, 60, RGB.grace, 0.9 * H.crack, cw * 3 + 50, 90);
+  ctx.fillStyle = col('grace', 0.95 * H.crack);
+  ctx.beginPath(); ctx.moveTo(x - cw, -2);
+  for (i = 0; i <= 8; i++) ctx.lineTo(x - cw + 2 * cw * i / 8, (i % 2 ? 5 : 11) * H.crack * (1 - Math.abs(i - 4) / 6));
+  ctx.lineTo(x + cw, -2); ctx.closePath(); ctx.fill();
+  if (H.beam > 0){
+    // the shaft: one soft sprite stretched to reach, so its leading edge is soft as it comes down
+    var bot = lerp(40, LH + 30, H.beam), bw = 96;
+    ctx.globalAlpha = 0.95;
+    ctx.drawImage(beamSprite(), x - bw, 0, bw * 2, bot);
+    ctx.globalAlpha = 1;
+    for (i = 0; i < 4; i++){                   // rays drifting across it
+      var off = Math.sin(t * 0.6 + i * 1.9) * 26, rw = 3 + 3 * FIRE.at(i * 40, t * 8);
+      ctx.fillStyle = col('grace', (0.05 + 0.06 * FIRE.at(i * 70 + 5, t * 12)) * H.beam);
+      ctx.beginPath(); ctx.moveTo(x + off * 0.3 - rw * 0.4, 0); ctx.lineTo(x + off * 0.3 + rw * 0.4, 0); ctx.lineTo(x + off + rw, bot); ctx.lineTo(x + off - rw, bot); ctx.closePath(); ctx.fill();
+    }
+    if (H.beam > 0.9){                         // where it lands
+      var pg = ctx.createRadialGradient(x, FLOOR, 2, x, FLOOR, 110);
+      pg.addColorStop(0, col('grace', 0.4 * (H.beam - 0.9) * 10)); pg.addColorStop(1, col('grace', 0));
+      ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(x, FLOOR, 110, 26, 0, 0, 6.2832); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// ---------- the pit ----------
+// The arena is the bowels of hell: a cavern of dark rock under a roof of
+// stalactites, crags standing black against the glow, a crust of floor over
+// magma, and veins of fire through the rock that pulse with the heartbeat.
+// The rock is rendered once into a layer and the veins into another; only
+// their brightness and the far fires move. It stays DARK where the play is:
+// every hazard is fire too, and it has to be the brightest thing on screen.
+var pitLayer = makeLayer(), veinLayer = makeLayer(), pitRock = null;
+// a repeatable sequence, so it is the same cavern every time it is drawn
+function seeded(seed){
+  var s = seed >>> 0 || 1;
+  return function(){ s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 100000) / 100000; };
+}
+// strata and mottling from the noise field; integer scales so the tile is seamless
+function pitRockPattern(){
+  if (pitRock) return pitRock;
+  var N = 128, c = document.createElement('canvas'); c.width = c.height = N;
+  var cx = c.getContext('2d'), img = cx.createImageData(N, N), d = img.data, i = 0;
+  for (var y=0;y<N;y++) for (var x=0;x<N;x++){
+    var v = FIRE.at(x, y * 2) * 0.5 + FIRE.at(x * 2 + 40, y * 2 + 90) * 0.32 + FIRE.at(x * 4 + 7, y * 4 + 3) * 0.18;
+    if (v < 0.5){ d[i] = 3; d[i+1] = 0; d[i+2] = 0; d[i+3] = Math.min(200, (0.5 - v) * 520); }
+    else if (v > 0.7){ d[i] = 92; d[i+1] = 26; d[i+2] = 12; d[i+3] = Math.min(90, (v - 0.7) * 380); }
+    i += 4;
+  }
+  cx.putImageData(img, 0, 0);
+  return pitRock = ctx.createPattern(c, 'repeat');
+}
+function renderPit(){
+  var R = seeded(666), i;
+  // the far wall: black under the roof, a dull red toward the floor the magma lights
+  var g = ctx.createLinearGradient(0, 0, 0, LH);
+  g.addColorStop(0, 'rgb(5,1,1)'); g.addColorStop(0.45, 'rgb(12,3,2)'); g.addColorStop(0.8, 'rgb(28,6,3)'); g.addColorStop(1, 'rgb(54,11,4)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, LW, LH);
+  ctx.fillStyle = pitRockPattern(); ctx.fillRect(0, 0, LW, LH);
+  // crags in the middle distance, rising from the floor, black against the glow
+  for (i = 0; i < 6; i++){
+    var x = 20 + i * 76 + (R() - 0.5) * 40, h = 50 + R() * (i === 0 || i === 5 ? 170 : 90), w = 22 + h * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(x - w, FLOOR + 2);
+    ctx.quadraticCurveTo(x - w * 0.8, FLOOR - h * 0.5, x - w * 0.18, FLOOR - h);
+    ctx.quadraticCurveTo(x + w * 0.1, FLOOR - h * 1.05, x + w * 0.3, FLOOR - h * 0.86);
+    ctx.quadraticCurveTo(x + w * 0.8, FLOOR - h * 0.4, x + w, FLOOR + 2);
+    ctx.closePath();
+    var cg = ctx.createLinearGradient(0, FLOOR - h, 0, FLOOR);
+    cg.addColorStop(0, 'rgba(7,2,1,.9)'); cg.addColorStop(1, 'rgba(16,4,2,.96)');
+    ctx.fillStyle = cg; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,90,20,.14)'; ctx.lineWidth = 1.4; ctx.stroke();   // their edges catch the magma
+  }
+  // the side walls, jagged, their inner edge lit more the nearer the floor
+  [-1, 1].forEach(function(side){
+    var x0 = side < 0 ? -2 : LW + 2, pts = [];
+    for (var y = -10; y <= LH + 12; y += 18) pts.push([x0 - side * (6 + 16 * FIRE.at(y * 0.3 + (side > 0 ? 400 : 0), 30) + (y > LH * 0.75 ? 8 : 0)), y]);
+    ctx.beginPath(); ctx.moveTo(x0, -10);
+    pts.forEach(function(q){ ctx.lineTo(q[0], q[1]); });
+    ctx.lineTo(x0, LH + 12); ctx.closePath();
+    ctx.fillStyle = 'rgb(6,1,1)'; ctx.fill();
+    var eg = ctx.createLinearGradient(0, 0, 0, LH);
+    eg.addColorStop(0, 'rgba(255,80,20,0)'); eg.addColorStop(0.6, 'rgba(255,80,20,.1)'); eg.addColorStop(1, 'rgba(255,110,30,.35)');
+    ctx.strokeStyle = eg; ctx.lineWidth = 1.5;
+    ctx.beginPath(); pts.forEach(function(q, k){ if (k) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.stroke();
+  });
+  // the roof: stalactites
+  for (i = 0; i < 18; i++){
+    var sx = R() * LW, sl = 8 + R() * 40, sw = 4 + R() * 10;
+    ctx.beginPath();
+    ctx.moveTo(sx - sw, -2);
+    ctx.quadraticCurveTo(sx - sw * 0.35, sl * 0.6, sx + (R() - 0.5) * 5, sl);
+    ctx.quadraticCurveTo(sx + sw * 0.35, sl * 0.6, sx + sw, -2);
+    ctx.closePath();
+    ctx.fillStyle = 'rgb(3,1,1)'; ctx.fill();
+  }
+  // the floor: a crust of dark rock over the magma
+  var fg = ctx.createLinearGradient(0, FLOOR, 0, LH);
+  fg.addColorStop(0, 'rgb(30,7,3)'); fg.addColorStop(1, 'rgb(9,2,1)');
+  ctx.fillStyle = fg; ctx.fillRect(0, FLOOR, LW, LH - FLOOR);
+}
+// the veins: cracks of magma through the lower wall, the walls and the crust.
+// Drawn in light only; the frame decides how bright they are.
+function renderVeins(){
+  var R = seeded(1313), i;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // a fissure: jagged (rock splits, it does not flow), hot at the core and
+  // tapering, with a wide dim glow around it
+  function vein(x, y, ang, len, w, depth){
+    var pts = [[x, y]], a = ang, n = 6;
+    for (var k = 0; k < n; k++){ a += (R() - 0.5) * 1.1; x += Math.cos(a) * len / n; y += Math.sin(a) * len / n; pts.push([x, y]); }
+    [[7, 'rgba(255,50,8,.08)'], [3.2, 'rgba(255,90,16,.26)'], [1.5, 'rgba(255,150,50,.7)'], [0.7, 'rgba(255,230,170,.95)']].forEach(function(s){
+      for (var q = 0; q < n; q++){                  // each segment thinner than the last
+        ctx.strokeStyle = s[1]; ctx.lineWidth = s[0] * w * (1 - 0.7 * q / n);
+        ctx.beginPath(); ctx.moveTo(pts[q][0], pts[q][1]); ctx.lineTo(pts[q+1][0], pts[q+1][1]); ctx.stroke();
+      }
+    });
+    if (depth < 1 && R() < 0.6) vein(pts[2][0], pts[2][1], a + (R() < 0.5 ? 0.8 : -0.8), len * 0.45, w * 0.65, depth + 1);
+  }
+  for (i = 0; i < 6; i++) vein(R() * LW, FLOOR + 3 + R() * 3, R() < 0.5 ? 0.04 : Math.PI - 0.04, 60 + R() * 70, 1.4, 0);   // in the crust
+  for (i = 0; i < 5; i++) vein(30 + i * 85 + (R() - 0.5) * 40, FLOOR, -Math.PI / 2 + (R() - 0.5) * 1.1, 30 + R() * 70, 1.5, 0);   // up from the floor
+  for (i = 0; i < 4; i++){ var sd = i % 2 ? 1 : -1; vein(sd < 0 ? 6 : LW - 6, 380 + R() * 220, -Math.PI / 2 + sd * (0.2 + R() * 0.4), 50 + R() * 60, 1.2, 0); }   // in the side walls
+  // the seam where crust meets magma
+  var sg = ctx.createLinearGradient(0, FLOOR - 12, 0, FLOOR + 6);
+  sg.addColorStop(0, 'rgba(255,80,20,0)'); sg.addColorStop(0.7, 'rgba(255,110,30,.35)'); sg.addColorStop(1, 'rgba(255,170,80,.5)');
+  ctx.fillStyle = sg; ctx.fillRect(0, FLOOR - 12, LW, 18);
+}
+function drawPit(prog, pulse){
+  pitLayer.draw('pit', renderPit);
+  // fires burning far off behind the crags, each on its own slow flicker
+  var t = G.t;
+  [[70, 0.9], [236, 0.7], [352, 1]].forEach(function(f, i){
+    var fk = 0.55 + 0.45 * FIRE.at(t * 9 + i * 40, i * 70);
+    drawGlow(f[0], FLOOR - 36, 60, [255, 80, 16], (0.22 + 0.12 * prog) * fk * f[1], 150, 120);
+  });
+  // the veins: the rock's pulse is the heart's, and it runs hotter as the phase wears on
+  if (Q.glow){
+    var hv = G.heaven ? 1 - 0.8 * G.heaven.wash : 1;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = (0.32 + 0.4 * pulse + 0.25 * prog) * hv;
+    veinLayer.draw('veins', renderVeins);
+    ctx.restore();
+  }
+}
+
 // darkness closes in over the survive phase: radius 0.72 → 0.5
 function drawVignette(){
   if (window.BTD_LIGHT) return;
@@ -3612,12 +3971,12 @@ function draw(){
     ctx.translate(rnd(-1,1) * G.shake * 7, rnd(-1,1) * G.shake * 7);
   }
 
-  // background: the violet night drains toward black as the phase wears on
-  var V = RGB.void, M = RGB.midnight;
-  ctx.fillStyle = rgba(lerp(V[0], 2, prog), lerp(V[1], 0, prog), lerp(V[2], 8, prog), 1);
-  ctx.fillRect(-20, -20, LW+40, LH+40);
-  // violet mist above the floor line, breathing with the heart; fire warms it once he is here
-  var mist = 0.55 + 0.25 * pulse;
+  // the pit: the cavern, its veins pulsing with the heart, fires far off
+  var M = RGB.midnight;
+  if (!skip('pit')) drawPit(prog, pulse);
+  else { ctx.fillStyle = COLORS.void; ctx.fillRect(-20, -20, LW+40, LH+40); }
+  // heat haze above the magma floor, breathing with the heart; fire warms it once he is here
+  var mist = 0.4 + 0.25 * pulse;
   if (!skip('mist')){
   if (!mistStrip){
     mistStrip = document.createElement('canvas'); mistStrip.width = 4; mistStrip.height = 280;
@@ -3662,8 +4021,8 @@ function draw(){
     });
     ctx.restore();
   }
-  // the floor line
-  ctx.strokeStyle = G.inferno ? col('ember', 0.4 + 0.4 * pulse) : col('heart', 0.18 + 0.3 * pulse);
+  // the floor's molten seam
+  ctx.strokeStyle = G.inferno ? col('ember', 0.4 + 0.4 * pulse) : col('magma', 0.3 + 0.4 * pulse);
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(0, FLOOR); ctx.lineTo(LW, FLOOR);
@@ -3672,20 +4031,21 @@ function draw(){
   if (G.lightning > 0 && G.phase === 'devil' && !skip('lightning')) drawLightning();
   if (G.watch && !skip('watch')) drawWatch();
 
-  var taken = G.taken && G.mode === 'ending';
+  var taken = G.taken && G.mode === 'ending', gripped = G.freed && G.mode === 'ending';
   if (G.devil && !skip('devil')){
     // on lower tiers he is redrawn every 2nd or 3rd frame; the eyes and beams
     // are attack telegraphs, and a frame of lag is well inside their windows
     if (Q.devilEvery > 1 && !G.devil.dead) devilLayer.draw(Math.floor(PERF.total / Q.devilEvery), function(){ drawDevil(G.devil); });
     else drawDevil(G.devil);
   }
-  if (G.arms && !taken && !skip('arms')) drawArms();
+  if (G.arms && !taken && !gripped && !skip('arms')) drawArms();
   if (!skip('flames')) G.flames.forEach(drawFlame);
   G.forks.forEach(drawFork);
   G.loose.forEach(function(L){
     ctx.save(); ctx.translate(L.x, L.y); ctx.rotate(L.rot); ctx.globalAlpha = Math.max(0, 1 - L.t / 3);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#c85a24'; ctx.lineWidth = 3; forkShape(); ctx.restore();
   });
+  if (G.heaven) drawHeaven();                     // the light, behind the heart
   G.bolts.forEach(drawBolt);
 
   // particles; blood droplets are drawn as small drops, with a short tail while falling
@@ -3702,7 +4062,7 @@ function draw(){
 
   var playerVisible = G.mode === 'play' || (G.mode === 'ending' && G.ending.kind !== 'dead');
   if (taken && G.taken.grabbed){ if (G.arms) drawArms(true); drawPlayer(); }   // cupped: the heart over the fingers
-  else { if (playerVisible) drawPlayer(); if (taken && G.arms) drawArms(true); }
+  else { if (playerVisible) drawPlayer(); if ((taken || gripped) && G.arms) drawArms(true); }
   if (taken) drawPointingHand(G.taken.point);
   drawTexts();
 
@@ -3788,6 +4148,7 @@ function frame(now){
     PERF.errors++;
     console.error(err);
   }
+  if (isTouch) drawControls();
   perfPush(frameMs, performance.now() - t0);
   adapt(frameMs);
   if (perfShow) drawPerf();
