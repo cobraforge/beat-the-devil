@@ -117,6 +117,10 @@ always see which stage it is in.
 | Pitchfork | thin line tracks the heart, 0.45 s | line snaps solid, flashes, 0.22 s; target = heart position led by `vx*0.35` | fixed vector at 520 px/s; sticks in the floor 1.5 s |
 | Wall jet | vent glows, line tracks, 0.9 s | line locks and flashes, 0.22 s; target = heart position **at lock, not led** | lance 40×450 px along that vector, 0.3 s out, 0.5 s hold, retract; 15–35° above horizontal |
 
+The aim line is pale (`COLORS.bone`) and dashed; the lock line is solid
+sulfur and flashes. The aim line used to be ember red, and against the pit's
+red rock it all but vanished — the stage the player most needs to see.
+
 Once locked, nothing re-aims. Fan and bracket forks share the same stages
 (bracket pins ±64 px of where you are at throw time, so committing before the
 lock is the counter).
@@ -203,48 +207,51 @@ that fixed the look.
 
 ---
 
-## 7. Touch: a stick on the left, the button on the right
+## 7. Touch: two thumbs, off the picture
 
-**Rule.** On touch devices there are exactly two controls, mirrored in the
-playfield's bottom corners and always drawn during play:
+**Rule.** On touch devices there are exactly two controls, the same size
+(76 css px across, `CTL_R = 38`), always drawn during play, and **never over
+the arena**: they have ground of their own. `resize()` reserves a band of
+`CTL_BAND` (104 css px) under the picture, or a band either side of it on a
+phone held sideways — whichever costs the picture less — and the picture
+shrinks to leave it (on a tall phone it does not shrink at all; on a short
+one, about 2 %).
 
-- **The joystick**, bottom left: a fixed, visible circle (112 css px across,
-  `R = 56 / scale` logical) with a knob that follows the thumb and stops at
-  the rim. Analog, measured from the circle's fixed centre: a 12 % dead zone,
-  then linear to full speed at the rim — and full speed is exactly the keys'
-  265 px/s. A thumb that lands within 1.5 × R takes it. Let go and the heart
-  stops and the knob springs home.
-- **The fire button**, bottom right (≥ 72 css px, showing the bolts left). It
-  fires on press.
+- **The joystick**, left: a fixed, visible circle with a knob that follows the
+  thumb and stops at the rim. Analog, measured from the circle's fixed centre:
+  a 12 % dead zone, then linear to full speed at the rim — and full speed is
+  exactly the keys' 265 px/s. A thumb that lands within 2 × R takes it. Let go
+  and the heart stops and the knob springs home.
+- **The fire button**, right, mirroring it, showing the bolts left. It fires
+  on press; a thumb within 1.35 × r counts.
 
 Pointers are tracked by id for their whole life: one that lands on the button
 never steers, one that lands on the stick never fires, and a touch anywhere
-else does nothing at all. Both thumbs work at once — moving while firing is
-the core action. The stick's vector is added to the keys' vector, so the
-speed and every movement penalty (rule 2) are the same multipliers on touch
-as on keys, with no special case. The sound button moves to the top centre on
-touch, out of both thumbs' corners. A mouse keeps drag-to-move and
-click-to-fire.
+else — including on the picture — does nothing at all. Both thumbs work at
+once. The stick's vector is added to the keys' vector, so the speed and every
+movement penalty (rule 2) are the same multipliers on touch as on keys. The
+sound button sits at the top centre. A mouse keeps drag-to-move and
+click-to-fire, and only on the picture.
 
-**Why.** Drag-anywhere made the player chase the heart across the whole
-screen with a finger that covered it; the first fix (the heart riding 90 px
-above the finger) helped, but a drag is still a *target*, so the heart lags
-and overshoots under the thumb. A stick gives the left thumb a home it never
-has to leave, and a *visible* fixed circle tells a new player where that home
-is — an earlier floating stick that only appeared under the thumb, with a
-faint dashed outline at rest, did not read as a control. Tap-to-fire on a
-drag surface meant every hesitant touch spent a bolt, and with five bolts for
-the run (rule 1) that is a lost game, so the stick thumb can never fire and
-stray touches do nothing. Firing on press keeps the shot where the eye is.
-Tracking by id is what makes two thumbs work. Adding the stick to the key
-vector keeps rule 2 honest: an embedded heart is 65 % slow under a pushed
-stick exactly as under a held key.
+**Why.** Drag-anywhere made the player chase the heart with a finger that
+covered it. The first stick sat in the playfield's bottom-left corner, and a
+thumb there hid exactly what comes out of that corner: the wall jets fire
+diagonally from vents as low as the floor, and their aim line starts at the
+wall (rule 4). Making the stick smaller would not have helped — the thumb is
+the same size — so the controls moved off the picture entirely. A *visible*
+fixed circle tells a new player where the left thumb lives; an earlier
+floating stick that only appeared under the thumb did not read as a control.
+The stick thumb can never fire and stray touches do nothing, because with five
+bolts for the run (rule 1) a hesitant touch that fired would be a lost game.
+Adding the stick to the key vector keeps rule 2 honest.
 
-**In code.** `stick`, `onStick()`, `stickTo()`, `stickRelease()`, `fireBtn`,
-`onFireBtn()`, `layoutFireBtn()` (lays out both), the `pointerdown/move/up`
-handlers, the `mx += stick.jx` line and `mag` in `update()`; drawn by
-`drawStick()` and `drawFireBtn()` in the HUD. `body.touch #mute` in
-`style.css`.
+**In code.** `CTL_R`, `CTL_BAND`, `ctlMode` and the band in `resize()`;
+`layoutControls()`, `stick`, `fireBtn`, `onStick()`, `onFireBtn()`,
+`stickTo()`, `stickRelease()`, the window's `pointerdown/move/up` handlers,
+the `mx += stick.jx` line and `mag` in `update()`. They are drawn by
+`drawControls()` onto their own layer, `#ctl` — a strip just around the two
+controls, redrawn only when something on it changes. (A full-screen layer
+redrawn every frame cost ~5 ms a frame at 4× throttle.)
 
 ---
 
@@ -287,8 +294,23 @@ would play differently on a slow phone.
   are capped (thuds 3, fire voices 4) so the mix cannot clip.
 - **The palette lives in `style.css`.** JS reads the custom properties once
   (`COLORS`, `col()`); no hardcoded hex in draw calls.
+- **The pit stays dark where the play is.** The arena is the bowels of hell
+  (`drawPit`): black under the roof, red only toward the magma floor, crags
+  and walls near-black, veins of magma that pulse with the heart but sit low
+  and along the walls. Every hazard is fire too; if the background glowed in
+  the middle of the arena, fire would stop reading as danger.
 - **The ending is silent about the score.** No HUD once the heart is taken;
   the panel sits in the lower third, in his light.
+- **The win is a release, and it is seen whole.** When the second eye goes
+  (`FREE` in `game.js`): he burns, cracks and sinks; his hands make one last
+  grab and close on the heart — its beat muffled inside them, as in the
+  losing ending; with him gone they burn to ash and crumble, letting it go;
+  the roof splits and a shaft of light comes down; in it the heart heals
+  (scars fade, colour returns, the beat slows to a calm, regular 60) and
+  rises out of the pit. Then the panel, low, under the light: *Your soul is
+  free.* The losing ending is the same grasp that never lets go — the two
+  mirror each other, and the win has to *show* the release to mean it. Its
+  hands keep rule 6: the ash cracks are curves.
 - **No references to any source material.** The title is "Beat the Devil"
   and that is all. No author, book, series, year or "based on" — in the UI,
   the README, or code comments.
@@ -305,5 +327,6 @@ would play differently on a slow phone.
 4. Light two columns and check `flameFreeOK` still rejects a third that would
    cover more than 60 %.
 5. Screenshot the arms; if you can find a straight edge, it's wrong.
+   Step through the win (`FREE`) too: the grasp, the ash, the light.
 6. `python dev/perf.py --software --rates 4` before and after anything that
    touches drawing; the numbers in the README are the reference.

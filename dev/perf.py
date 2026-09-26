@@ -78,9 +78,8 @@ def launch(profile, software):
 
 
 def stick_home(cdp):
-    """the joystick's centre and radius in page css px (BTD_STICK is logical)"""
-    return json.loads(cdp.js("(function(){ var r = document.getElementById('c').getBoundingClientRect(), S = BTD_STICK;"
-                             " return JSON.stringify({x: r.left + S.x / 420 * r.width, y: r.top + S.y / 640 * r.height, R: S.R / 420 * r.width}); })()"))
+    """the joystick's centre and radius, in page css px (as BTD_STICK holds them)"""
+    return json.loads(cdp.js("JSON.stringify({x: BTD_STICK.x, y: BTD_STICK.y, R: BTD_STICK.R})"))
 
 
 def touch_drag(cdp, seconds, k=0.8):
