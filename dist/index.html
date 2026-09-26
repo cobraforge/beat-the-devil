@@ -205,7 +205,10 @@ body.bare #monitor{padding:0;border-radius:0;background:none;box-shadow:none}
 body.bare #monitor::before,body.bare #panel,body.bare #vents{display:none}
 body.bare #stage{border-radius:0;box-shadow:none}
 /* on touch screens the fire button owns the bottom-right corner; the mute goes bottom-left */
-body.touch #mute{right:auto;left:calc(6px * var(--s))}
+/* on touch the bottom corners belong to the thumbs: the stick and the fire
+   button. Sound goes to the top centre, between the lives and the bolts in
+   play and just under the banner on the title. */
+body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));transform:translateX(-50%)}
 /* the glass itself: a soft reflection that sells the barrel curve */
 #stage::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
@@ -317,10 +320,12 @@ body.touch #mute{right:auto;left:calc(6px * var(--s))}
 
 <script>
 // audio.js — Web Audio synthesis for Beat the Devil.
-// Sound effects and a chiptune sequencer that is slaved to the game's
-// heartbeat: the game calls music.beat() on every "lub" and the sequencer
-// schedules one beat's worth of steps from that moment. Everything is
-// generated at runtime; there are no audio assets. Exposes window.BTD_AUDIO.
+// Sound effects and a sequencer that is slaved to the game's heartbeat: the
+// game calls music.beat() on every "lub" and the sequencer schedules one
+// beat's worth of steps from that moment. Over the chiptune sits the score
+// proper — a choir that changes chord on the bar and a music box with a bent
+// tine. Everything is generated at runtime; there are no audio assets.
+// Exposes window.BTD_AUDIO.
 (function(){
 "use strict";
 
@@ -505,11 +510,23 @@ function parse(bars){
   });
 }
 
+// one chord per bar, lowest voice first; voices glide to the next chord
+function chords(list){ return list.map(function(c){ return parse([c]); }); }
+
 var TRACKS = {
   // Survive phase: sparse D Phrygian. Quiet and patient at a resting pulse,
   // driving once the heart races.
   survive: {
     bars: 4, bed: true, breath: true,
+    // Dm, Gm over D, F minor (the tritone's chord), Eb: each voice moves a
+    // step or two, so the glide between them is a slow smear, not a jump
+    choir: chords(['D3 A3 D4 F4', 'D3 G3 Bb3 D4', 'F3 Ab3 C4 F4', 'Eb3 G3 Bb3 D4']),
+    box: parse([
+      '. . . . A5 . . . . . . . D6 . . .',
+      '. . . . Bb5 . . . . . . . . . A5 .',
+      '. . . . Ab5 . . . . . . . G5 . . .',
+      '. . . . . . . . . . . . . . . .'
+    ]),
     bass: parse([
       'D2 . . . D2 . . . D2 . . . F2 . Eb2 .',
       'D2 . . . D2 . . . D2 . . . Bb2 . A2 .',
@@ -538,6 +555,9 @@ var TRACKS = {
   // Devil fight: tritones, a sawtooth drone and the rumble underneath.
   devil: {
     bars: 4, bed: true, breath: true, drone: 38, leadType: 'sawtooth', leadDur: 3.2,
+    // the tritone chord, a minor ninth, the tritone again, and a diminished
+    // seventh that leans back onto D
+    choir: chords(['D3 Ab3 D4 F4', 'D3 F3 A3 Eb4', 'D3 Ab3 D4 F4', 'C#3 G3 Bb3 E4']), choirOpen: true,
     arp: parse([
       'D4 A4 D5 A4 F4 A4 D5 A4 D4 A4 D5 A4 Ab4 A4 D5 A4',
       'D4 A4 D5 A4 F4 A4 D5 A4 Eb4 Ab4 C5 Ab4 D4 A4 D5 A4',
@@ -569,19 +589,28 @@ var TRACKS = {
       'x . o . x . o . x . o . x o x o'
     ])
   },
-  // Title: drone and sparse bells.
+  // Title: drone, the choir, a lullaby on the music box and a bell tolling
+  // under it. D minor with its raised seventh, so the last bar leans home.
   title: {
     bars: 4, drone: 38,
+    choir: chords(['D3 A3 D4 F4', 'D3 Bb3 D4 F4', 'D3 G3 Bb3 Eb4', 'C#3 E3 A3 E4']),
+    box: parse([
+      'A5 . . . D6 . . . E6 . F6 . . . . .',
+      'F6 . . . E6 . . . D6 . . . . . . .',
+      'G5 . . . Bb5 . . . D6 . . . Eb6 . . .',
+      'C#6 . . . E6 . . . A5 . . . . . . .'
+    ]),
     bell: parse([
-      'D5 . . . . . . . . . . . . . . .',
-      '. . . . . . . . Ab4 . . . . . . .',
-      'F4 . . . . . . . . . . . . . . .',
-      '. . . . . . . . Eb4 . . . D4 . . .'
+      'D4 . . . . . . . . . . . . . . .',
+      '. . . . . . . . . . . . . . . .',
+      'Eb4 . . . . . . . . . . . . . . .',
+      'A3 . . . . . . . . . . . . . . .'
     ])
   },
   // Game over: a slow dirge.
   dirge: {
     bars: 2, drone: 26, bassDur: 7,
+    choir: chords(['D3 F3 A3 D4', 'Eb3 G3 Bb3 D4']),
     bass: parse([
       'D2 . . . . . . . Ab2 . . . . . . .',
       'F2 . . . . . . . Eb2 . . . . . . .'
@@ -611,9 +640,11 @@ var TRACKS = {
 // sanity: every pattern must span bars*16 steps
 Object.keys(TRACKS).forEach(function(k){
   var tr = TRACKS[k], len = tr.bars * 16;
-  ['bass','lead','bell','snare','hat'].forEach(function(p){
+  ['bass','lead','bell','box','snare','hat','arp'].forEach(function(p){
     if (tr[p] && tr[p].length !== len) throw new Error('track ' + k + '.' + p + ' has ' + tr[p].length + ' steps, expected ' + len);
   });
+  if (tr.choir && (tr.choir.length !== tr.bars || tr.choir.some(function(c){ return c.length !== 4; })))
+    throw new Error('track ' + k + '.choir needs one four-voice chord per bar');
 });
 
 // ----- instruments -----
@@ -681,6 +712,22 @@ function bell(t, n){
   tone({freq:f0*5.4,   t:t, dur:0.4, vol:0.02, type:'sine', attack:0.002, bus:musicBus});
   tone({freq:f0,       t:t, dur:1.6, vol:0.06, type:'sine', attack:0.006, bus:plateSend});
   tone({freq:f0,       t:t, dur:1.2, vol:0.05, type:'sine', attack:0.006, bus:delaySend});
+}
+// A music box with one bent tine. A pure tone with a quick inharmonic tick
+// (the comb's tooth), its pitch sagging a hair as the note rings like a
+// spring running down, and every F a quarter-tone flat: close to right, and
+// never quite. It lives up at A5..F6, where a phone speaker is at its best.
+var BENT = 5, BENT_CENTS = -26;
+function box(t, n){
+  sends();
+  t += drift();
+  var cents = (n % 12 === BENT ? BENT_CENTS : 0) + (Math.random() - 0.5) * 6;
+  var f0 = midi(n) * Math.pow(2, cents / 1200), v = 0.075 * hum();
+  tone({freq:f0,        slide:f0 * 0.993, t:t, dur:2.6, vol:v,        type:'sine', attack:0.003, bus:musicBus});
+  tone({freq:f0 * 2,    t:t, dur:0.8,  vol:v * 0.22, type:'sine', attack:0.002, bus:musicBus});
+  tone({freq:f0 * 4.2,  t:t, dur:0.12, vol:v * 0.2,  type:'sine', attack:0.001, bus:musicBus});
+  tone({freq:f0,        slide:f0 * 0.993, t:t, dur:2.2, vol:v * 0.9, type:'sine', attack:0.003, bus:plateSend});
+  tone({freq:f0,        t:t, dur:1.4,  vol:v * 0.6, type:'triangle', attack:0.003, bus:delaySend});
 }
 function snare(t, v){
   sends();
@@ -755,8 +802,67 @@ function startBreath(){
   layer([ws, wl], w);
   whisperGain = w;
 }
+// The choir: four voices of two detuned saws each, a slightly different
+// vibrato on alternate voices, all through one mouth — three formant filters
+// that drift between 'oo' and 'ah' over about fifteen seconds. On each new
+// bar every voice glides to its note in the next chord and the whole thing
+// swells a little and settles. It sits between 200 Hz and 3 kHz on purpose:
+// the drone and the rumble live below that, where a phone plays nothing.
+// measured: 0.25 puts it at ~0.056 rms on the music bus, under the heart's
+// ~0.085, so it is a bed and never the lead
+var CHOIR = 0.25, choirV = null;
+function startChoir(chord, open){
+  sends();
+  var a = actx, now = a.currentTime;
+  var g = a.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(CHOIR, now + 4);
+  var mouth = a.createGain(); mouth.gain.value = 1;
+  // [centre, Q, level, drift]: 'oo' by default, 'ah' when open
+  var F = open ? [[700, 6, 1, 110], [1150, 8, 0.55, 160], [2650, 11, 0.2, 0]]
+               : [[440, 6, 1, 150], [900, 8, 0.5, 200], [2600, 11, 0.16, 0]];
+  var vowel = a.createOscillator(); vowel.type = 'sine'; vowel.frequency.value = 0.065;
+  F.forEach(function(f){
+    var bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f[0]; bp.Q.value = f[1];
+    var fg = a.createGain(); fg.gain.value = f[2];
+    mouth.connect(bp); bp.connect(fg); fg.connect(g);
+    if (f[3]){ var dg = a.createGain(); dg.gain.value = f[3]; vowel.connect(dg); dg.connect(bp.frequency); }
+  });
+  // a little of the chest, unshaped, so it is not all nasal
+  var chest = a.createBiquadFilter(); chest.type = 'lowpass'; chest.frequency.value = 520;
+  var cg = a.createGain(); cg.gain.value = 0.16; mouth.connect(chest); chest.connect(cg); cg.connect(g);
+  var vibs = [4.7, 5.3].map(function(hz){
+    var l = a.createOscillator(); l.frequency.value = hz;
+    var lg = a.createGain(); lg.gain.value = 11; l.connect(lg); l.start();
+    return { o: l, g: lg };
+  });
+  var oscs = [];
+  chord.forEach(function(n, i){
+    [-7, 7].forEach(function(dt){
+      var o = a.createOscillator(); o.type = 'sawtooth';
+      o.frequency.value = midi(n); o.detune.value = dt + (Math.random() - 0.5) * 5;
+      vibs[i % 2].g.connect(o.detune);
+      o.connect(mouth); o.start(); oscs.push(o);
+    });
+  });
+  g.connect(musicBus);
+  var wet = a.createGain(); wet.gain.value = 0.8; g.connect(wet); wet.connect(plateSend);
+  var dw = a.createGain(); dw.gain.value = 0.25; g.connect(dw); dw.connect(delaySend);
+  vowel.start();
+  layer(oscs.concat([vowel, vibs[0].o, vibs[1].o]), g);
+  choirV = { oscs: oscs, g: g };
+}
+function choirTo(chord, t){
+  if (!choirV) return;
+  chord.forEach(function(n, i){
+    for (var j=0;j<2;j++){ var o = choirV.oscs[i * 2 + j]; if (o) o.frequency.setTargetAtTime(midi(n), t, 0.22); }
+  });
+  var g = choirV.g.gain;
+  g.setTargetAtTime(CHOIR * 1.3, t, 0.7);
+  g.setTargetAtTime(CHOIR, t + 1.8, 1.4);
+}
 function stopLayers(fade){
-  whisperGain = null;
+  whisperGain = null; choirV = null;
   if (!layers.length) return;
   var a = actx, now = a.currentTime, old = layers; layers = [];
   fade = fade == null ? 0.8 : fade;
@@ -948,6 +1054,8 @@ function scheduleStep(tr, step, t, spb){
   if (tr.bass  && (n = tr.bass[step]))  bass(t, n, spb * (tr.bassDur || 1.6));
   if (tr.lead  && (n = tr.lead[step]))  lead(t, n, spb * (tr.leadDur || 1.6), tr.leadType);
   if (tr.bell  && (n = tr.bell[step]))  bell(t, n);
+  if (tr.box   && (n = tr.box[step]))   box(t, n);
+  if (tr.choir && step % 16 === 0)      choirTo(tr.choir[step / 16], t);
   if (tr.snare && (n = tr.snare[step])) snare(t, n);
   if (tr.hat   && (n = tr.hat[step]))   hat(t, n);
 }
@@ -958,6 +1066,7 @@ music.play = function(name, force){
   var tr = TRACKS[name]; if (!tr) return;
   seq.name = name; seq.track = tr; seq.step = 0;
   if (tr.drone) startDrone(tr.drone);
+  if (tr.choir) startChoir(tr.choir[0], tr.choirOpen);
   if (tr.bed) startBed();
   if (tr.breath) startBreath();
 };
@@ -1000,6 +1109,8 @@ window.BTD_AUDIO = {
   unlock: ctx,
   fire: { update: fireUpdate },
   meter: meter,
+  // debug: set the choir's level live, for balancing it against the heart
+  choirLevel: function(v){ if (v != null){ CHOIR = v; if (choirV) choirV.g.gain.setTargetAtTime(v, actx.currentTime, 0.05); } return CHOIR; },
   setMuted: function(m){ muted = !!m; if (master) master.gain.value = muted ? 0 : MASTER_GAIN; },
   // the beat heard from inside a closed fist
   muffle: function(on){
@@ -1065,7 +1176,7 @@ resize();
 
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
 document.getElementById('tip').innerHTML = STORY + (isTouch
-  ? 'Drag anywhere to move<br>The round button fires'
+  ? 'Left thumb on the circle to move<br>Right thumb on the button to fire'
   : 'Arrows / WASD to move<br>Space to fire<br>P pause &middot; M mute');
 if (isTouch){
   document.body.classList.add('touch');
@@ -1312,28 +1423,49 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 26;
+  window.BTD_VERSION = 27;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
 // ---------- input ----------
 var keys = {};
 var fireQueued = false;
-// Pointers are tracked by id from the moment they land. One that lands on the
-// fire button is a 'fire' pointer for its whole life and never moves the
-// heart; the first to land anywhere else is the 'move' pointer and never
-// fires. Fingers that arrive while the move pointer is held do nothing.
+// On touch there are two controls and nothing else: the joystick bottom left
+// for the left thumb, the fire button bottom right for the right. Pointers
+// are tracked by id from the moment they land. One that lands on the button
+// fires on press and never steers; one that lands on the stick steers and
+// never fires; a touch anywhere else does nothing. A mouse keeps drag-to-move
+// and click-to-fire.
 var pointers = {}, movePtr = null, drag = null;
-var downT = 0, moved = 0;                         // mouse only: a tap fires
+var downT = 0, moved = 0;                         // mouse only: a click fires
 // the fire button: bottom right, in thumb reach, at least 72 css px across
 var fireBtn = { x: 0, y: 0, r: 40, press: 0 };
+// the joystick: bottom left, mirroring the button, always drawn. Analog and
+// measured from its fixed centre: a 12 % dead zone, then linear to full
+// speed at the rim, which is exactly the keys' speed.
+var stick = { x: 0, y: 0, R: 60, id: null, kx: 0, ky: 0, jx: 0, jy: 0 };
 function layoutFireBtn(){
-  if (!fireBtn) return;                           // resize() runs once before this block
-  fireBtn.r = clamp(38 / Math.max(0.2, scale), 30, 64);
+  if (!fireBtn || !stick) return;                 // resize() runs once before this block
+  var s = Math.max(0.2, scale);
+  fireBtn.r = clamp(38 / s, 30, 64);
   fireBtn.x = LW - 10 - fireBtn.r; fireBtn.y = LH - 10 - fireBtn.r;
+  stick.R = clamp(56 / s, 44, 86);                // 112 css px across
+  stick.x = 10 + stick.R; stick.y = LH - 10 - stick.R;
+  if (stick.id == null){ stick.kx = stick.x; stick.ky = stick.y; }
 }
 layoutFireBtn();
 function onFireBtn(x, y){ return isTouch && Math.hypot(x - fireBtn.x, y - fireBtn.y) <= fireBtn.r * 1.15; }
+// generous: a thumb that lands a little off the ring still takes the stick
+function onStick(x, y){ return isTouch && Math.hypot(x - stick.x, y - stick.y) <= stick.R * 1.5; }
+function stickTo(x, y){
+  var dx = x - stick.x, dy = y - stick.y, d = Math.hypot(dx, dy), R = stick.R;
+  var c = d > R ? R / d : 1;                      // the knob stops at the rim
+  stick.kx = stick.x + dx * c; stick.ky = stick.y + dy * c;
+  var m = Math.min(1, d / R), k = m < 0.12 ? 0 : (m - 0.12) / 0.88;
+  stick.jx = d > 0 ? dx / d * k : 0; stick.jy = d > 0 ? dy / d * k : 0;
+}
+function stickRelease(){ stick.id = null; stick.jx = stick.jy = 0; }
+if (/debug/.test(location.hash)) window.BTD_STICK = stick;   // the joystick, in logical px
 
 window.addEventListener('keydown', function(e){
   var k = e.key, space = k === ' ' || e.code === 'Space';
@@ -1353,7 +1485,7 @@ window.addEventListener('keydown', function(e){
   }
 });
 window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
-window.addEventListener('blur', function(){ keys = {}; pointers = {}; movePtr = null; drag = null; });
+window.addEventListener('blur', function(){ keys = {}; pointers = {}; movePtr = null; drag = null; stickRelease(); });
 document.addEventListener('visibilitychange', function(){
   if (document.hidden && G.mode === 'play' && !G.paused && !window.BTD_FREEZE) togglePause();
 });
@@ -1378,7 +1510,16 @@ stage.addEventListener('pointerdown', function(e){
     fireBtn.press = 1; fireQueued = true;          // on press, not release
     return;
   }
-  if (movePtr != null) return;
+  if (onStick(p.x, p.y)){
+    if (stick.id != null) return;                  // one thumb on it at a time
+    stick.id = e.pointerId;
+    pointers[e.pointerId] = { kind: 'stick' };
+    stickTo(p.x, p.y);
+    G.idleT = 0;
+    return;
+  }
+  // a finger anywhere else does nothing; only a mouse drags
+  if (e.pointerType !== 'mouse' || movePtr != null) return;
   movePtr = e.pointerId;
   pointers[e.pointerId] = { kind: 'move', x: p.x, y: p.y };
   // the heart rides above the finger: whatever offset it lands with eases
@@ -1389,7 +1530,9 @@ stage.addEventListener('pointerdown', function(e){
 });
 stage.addEventListener('pointermove', function(e){
   var pt = pointers[e.pointerId];
-  if (!pt || pt.kind !== 'move') return;
+  if (!pt) return;
+  if (pt.kind === 'stick'){ var q = toLogical(e); stickTo(q.x, q.y); return; }
+  if (pt.kind !== 'move') return;
   var p = toLogical(e);
   moved += Math.abs(p.x - pt.x) + Math.abs(p.y - pt.y);
   pt.x = p.x; pt.y = p.y;
@@ -1397,6 +1540,7 @@ stage.addEventListener('pointermove', function(e){
 function endPointer(e){
   var pt = pointers[e.pointerId];
   delete pointers[e.pointerId];
+  if (pt && pt.kind === 'stick'){ stickRelease(); return; }
   if (!pt || pt.kind !== 'move') return;
   // a mouse tap (no button on screen) fires; a finger never does
   if (!isTouch && G.mode === 'play' && !G.paused && moved < 10 && performance.now() - downT < 300) fireQueued = true;
@@ -1876,6 +2020,10 @@ function update(dt){
   G.lightning = decay(G.lightning, 2.0, dt);
   G.recoil = decay(G.recoil, 8, dt);
   fireBtn.press = decay(fireBtn.press, 5, dt);
+  if (stick.id == null){                          // let go, the knob springs home
+    var sk = Math.min(1, dt * 14);
+    stick.kx = lerp(stick.kx, stick.x, sk); stick.ky = lerp(stick.ky, stick.y, sk);
+  }
   if (G.herald > 0) G.herald -= dt;
   if (G.hold > 0) G.hold -= dt;
   if (G.devil) G.devil.kick = decay(G.devil.kick, 3, dt);
@@ -1930,6 +2078,9 @@ function update(dt){
   if (keys['arrowright']|| keys['d']) mx += 1;
   if (keys['arrowup']   || keys['w']) my -= 1;
   if (keys['arrowdown'] || keys['s']) my += 1;
+  // the joystick adds its analog vector to the keys'. Nothing else about touch
+  // is special: the speed and every penalty are the same multipliers.
+  mx += stick.jx; my += stick.jy;
   var dragging = false;
   if (drag && movePtr != null && pointers[movePtr]){
     // the target: the finger plus an offset that eases to sit above it
@@ -1941,6 +2092,9 @@ function update(dt){
     if (dd > 0.5){ mx = ddx / dd; my = ddy / dd; dragging = true; }
     if (dragging && dd < sp * dt) sp = dd / dt;   // no overshoot
   }
+  // how hard: keys, a drag and a stick at the rim are all 1; a stick pushed
+  // halfway is half. Taken before the burn's jitter, which only bends the way.
+  var mag = Math.min(1, Math.hypot(mx, my));
   if (pen === 'burn' && (mx || my)){ mx += rnd(-0.45, 0.45); my += rnd(-0.45, 0.45); }
   // knocked: the fork's momentum carries the heart, and the hand on the controls
   // is weaker for it (down to 40 %), never gone
@@ -1957,11 +2111,11 @@ function update(dt){
     if (vk === 0 || (!sh.vx && !sh.vy)) G.shove = null;
   }
   if (mx || my){
-    var m = Math.hypot(mx,my) || 1;
+    var m = (Math.hypot(mx,my) || 1) / mag;
     p.x += mx/m * sp * dt * (1 - 0.6 * shoveK);
     p.y += my/m * sp * dt * (1 - 0.6 * shoveK);
     G.idleT = 0;
-  } else if (movePtr == null){
+  } else if (movePtr == null && stick.id == null){
     G.idleT += dt;
     if (G.idleT > 3 && !G.heart.flutterDue){ G.heart.flutterDue = true; G.idleT = -2; }   // it flutters, then waits again
   }
@@ -4366,9 +4520,51 @@ function drawHUD(){
   var label = G.phase === 'survive' ? 'S' : (G.devil && !G.devil.dying && (G.devil.state === 'open' || G.devil.state === 'attack') ? (open ? 'O' : 'C') : '-');
   var key = [Math.floor(G.score), hi, G.ammo, G.phase, Math.round(clamp(G.surv / G.SURV, 0, 1) * 200), alive, label].join('|');
   hudLayer.draw(key, drawHUDStatic);
-  if (isTouch) drawFireBtn();
+  if (isTouch){ drawStick(); drawFireBtn(); }
   // lives, beating too
   for (var i=0;i<G.lives;i++) drawGem(18 + i*20, 44, 6.5 * (1 + (G.heart.scale - 1) * 0.6), { alpha: 0.9, pulse: G.heart.pulse * 0.5 });
+}
+// The joystick: the same dark glass and cyan rim as the fire button, with four
+// chevrons so it reads as a stick at a glance. Held, the rim brightens and
+// lights toward the push; the knob follows the thumb and springs home.
+function drawStick(){
+  var s = stick, R = s.R, held = s.id != null, kr = R * 0.44;
+  var push = Math.hypot(s.jx, s.jy);
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = 'rgba(10,6,32,' + (held ? 0.64 : 0.52) + ')';
+  ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, 6.2832); ctx.fill();
+  ctx.lineWidth = held ? 3 : 2;
+  ctx.strokeStyle = col('heart', held ? 0.95 : 0.72);
+  ctx.stroke();
+  // the dead zone, faintly
+  ctx.lineWidth = 1; ctx.strokeStyle = col('heart', 0.18);
+  ctx.beginPath(); ctx.arc(s.x, s.y, R * 0.56, 0, 6.2832); ctx.stroke();
+  // four chevrons just inside the rim
+  ctx.fillStyle = col('heart', held ? 0.3 : 0.5);
+  for (var i=0;i<4;i++){
+    var a = i * Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a), c = R * 0.8, w = R * 0.1;
+    ctx.beginPath();
+    ctx.moveTo(s.x + ca * (c + w), s.y + sa * (c + w));
+    ctx.lineTo(s.x + ca * (c - w * 0.6) - sa * w * 1.1, s.y + sa * (c - w * 0.6) + ca * w * 1.1);
+    ctx.lineTo(s.x + ca * (c - w * 0.6) + sa * w * 1.1, s.y + sa * (c - w * 0.6) - ca * w * 1.1);
+    ctx.closePath(); ctx.fill();
+  }
+  // the rim lights where the thumb is pushing, brighter the harder
+  if (held && push > 0){
+    var pa = Math.atan2(s.jy, s.jx);
+    ctx.strokeStyle = col('heart', 0.35 + 0.6 * push); ctx.lineWidth = 3 + 4 * push;
+    ctx.beginPath(); ctx.arc(s.x, s.y, R + 1, pa - 0.55, pa + 0.55); ctx.stroke();
+  }
+  // the knob
+  var kg = ctx.createRadialGradient(s.kx - kr * 0.3, s.ky - kr * 0.35, 1, s.kx, s.ky, kr);
+  kg.addColorStop(0, held ? '#ffffff' : col('heart', 0.95));
+  kg.addColorStop(0.55, col('heart', held ? 0.9 : 0.6));
+  kg.addColorStop(1, col('heart', held ? 0.5 : 0.28));
+  ctx.fillStyle = kg;
+  ctx.beginPath(); ctx.arc(s.kx, s.ky, kr, 0, 6.2832); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = col('heart', 0.85); ctx.stroke();
+  ctx.restore();
 }
 function drawFireBtn(){
   var b = fireBtn, r = b.r, k = b.press;

@@ -193,7 +193,10 @@ body.bare #monitor{padding:0;border-radius:0;background:none;box-shadow:none}
 body.bare #monitor::before,body.bare #panel,body.bare #vents{display:none}
 body.bare #stage{border-radius:0;box-shadow:none}
 /* on touch screens the fire button owns the bottom-right corner; the mute goes bottom-left */
-body.touch #mute{right:auto;left:calc(6px * var(--s))}
+/* on touch the bottom corners belong to the thumbs: the stick and the fire
+   button. Sound goes to the top centre, between the lives and the bolts in
+   play and just under the banner on the title. */
+body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));transform:translateX(-50%)}
 /* the glass itself: a soft reflection that sells the barrel curve */
 #stage::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:4;

@@ -1,8 +1,10 @@
 // audio.js — Web Audio synthesis for Beat the Devil.
-// Sound effects and a chiptune sequencer that is slaved to the game's
-// heartbeat: the game calls music.beat() on every "lub" and the sequencer
-// schedules one beat's worth of steps from that moment. Everything is
-// generated at runtime; there are no audio assets. Exposes window.BTD_AUDIO.
+// Sound effects and a sequencer that is slaved to the game's heartbeat: the
+// game calls music.beat() on every "lub" and the sequencer schedules one
+// beat's worth of steps from that moment. Over the chiptune sits the score
+// proper — a choir that changes chord on the bar and a music box with a bent
+// tine. Everything is generated at runtime; there are no audio assets.
+// Exposes window.BTD_AUDIO.
 (function(){
 "use strict";
 
@@ -187,11 +189,23 @@ function parse(bars){
   });
 }
 
+// one chord per bar, lowest voice first; voices glide to the next chord
+function chords(list){ return list.map(function(c){ return parse([c]); }); }
+
 var TRACKS = {
   // Survive phase: sparse D Phrygian. Quiet and patient at a resting pulse,
   // driving once the heart races.
   survive: {
     bars: 4, bed: true, breath: true,
+    // Dm, Gm over D, F minor (the tritone's chord), Eb: each voice moves a
+    // step or two, so the glide between them is a slow smear, not a jump
+    choir: chords(['D3 A3 D4 F4', 'D3 G3 Bb3 D4', 'F3 Ab3 C4 F4', 'Eb3 G3 Bb3 D4']),
+    box: parse([
+      '. . . . A5 . . . . . . . D6 . . .',
+      '. . . . Bb5 . . . . . . . . . A5 .',
+      '. . . . Ab5 . . . . . . . G5 . . .',
+      '. . . . . . . . . . . . . . . .'
+    ]),
     bass: parse([
       'D2 . . . D2 . . . D2 . . . F2 . Eb2 .',
       'D2 . . . D2 . . . D2 . . . Bb2 . A2 .',
@@ -220,6 +234,9 @@ var TRACKS = {
   // Devil fight: tritones, a sawtooth drone and the rumble underneath.
   devil: {
     bars: 4, bed: true, breath: true, drone: 38, leadType: 'sawtooth', leadDur: 3.2,
+    // the tritone chord, a minor ninth, the tritone again, and a diminished
+    // seventh that leans back onto D
+    choir: chords(['D3 Ab3 D4 F4', 'D3 F3 A3 Eb4', 'D3 Ab3 D4 F4', 'C#3 G3 Bb3 E4']), choirOpen: true,
     arp: parse([
       'D4 A4 D5 A4 F4 A4 D5 A4 D4 A4 D5 A4 Ab4 A4 D5 A4',
       'D4 A4 D5 A4 F4 A4 D5 A4 Eb4 Ab4 C5 Ab4 D4 A4 D5 A4',
@@ -251,19 +268,28 @@ var TRACKS = {
       'x . o . x . o . x . o . x o x o'
     ])
   },
-  // Title: drone and sparse bells.
+  // Title: drone, the choir, a lullaby on the music box and a bell tolling
+  // under it. D minor with its raised seventh, so the last bar leans home.
   title: {
     bars: 4, drone: 38,
+    choir: chords(['D3 A3 D4 F4', 'D3 Bb3 D4 F4', 'D3 G3 Bb3 Eb4', 'C#3 E3 A3 E4']),
+    box: parse([
+      'A5 . . . D6 . . . E6 . F6 . . . . .',
+      'F6 . . . E6 . . . D6 . . . . . . .',
+      'G5 . . . Bb5 . . . D6 . . . Eb6 . . .',
+      'C#6 . . . E6 . . . A5 . . . . . . .'
+    ]),
     bell: parse([
-      'D5 . . . . . . . . . . . . . . .',
-      '. . . . . . . . Ab4 . . . . . . .',
-      'F4 . . . . . . . . . . . . . . .',
-      '. . . . . . . . Eb4 . . . D4 . . .'
+      'D4 . . . . . . . . . . . . . . .',
+      '. . . . . . . . . . . . . . . .',
+      'Eb4 . . . . . . . . . . . . . . .',
+      'A3 . . . . . . . . . . . . . . .'
     ])
   },
   // Game over: a slow dirge.
   dirge: {
     bars: 2, drone: 26, bassDur: 7,
+    choir: chords(['D3 F3 A3 D4', 'Eb3 G3 Bb3 D4']),
     bass: parse([
       'D2 . . . . . . . Ab2 . . . . . . .',
       'F2 . . . . . . . Eb2 . . . . . . .'
@@ -293,9 +319,11 @@ var TRACKS = {
 // sanity: every pattern must span bars*16 steps
 Object.keys(TRACKS).forEach(function(k){
   var tr = TRACKS[k], len = tr.bars * 16;
-  ['bass','lead','bell','snare','hat'].forEach(function(p){
+  ['bass','lead','bell','box','snare','hat','arp'].forEach(function(p){
     if (tr[p] && tr[p].length !== len) throw new Error('track ' + k + '.' + p + ' has ' + tr[p].length + ' steps, expected ' + len);
   });
+  if (tr.choir && (tr.choir.length !== tr.bars || tr.choir.some(function(c){ return c.length !== 4; })))
+    throw new Error('track ' + k + '.choir needs one four-voice chord per bar');
 });
 
 // ----- instruments -----
@@ -363,6 +391,22 @@ function bell(t, n){
   tone({freq:f0*5.4,   t:t, dur:0.4, vol:0.02, type:'sine', attack:0.002, bus:musicBus});
   tone({freq:f0,       t:t, dur:1.6, vol:0.06, type:'sine', attack:0.006, bus:plateSend});
   tone({freq:f0,       t:t, dur:1.2, vol:0.05, type:'sine', attack:0.006, bus:delaySend});
+}
+// A music box with one bent tine. A pure tone with a quick inharmonic tick
+// (the comb's tooth), its pitch sagging a hair as the note rings like a
+// spring running down, and every F a quarter-tone flat: close to right, and
+// never quite. It lives up at A5..F6, where a phone speaker is at its best.
+var BENT = 5, BENT_CENTS = -26;
+function box(t, n){
+  sends();
+  t += drift();
+  var cents = (n % 12 === BENT ? BENT_CENTS : 0) + (Math.random() - 0.5) * 6;
+  var f0 = midi(n) * Math.pow(2, cents / 1200), v = 0.075 * hum();
+  tone({freq:f0,        slide:f0 * 0.993, t:t, dur:2.6, vol:v,        type:'sine', attack:0.003, bus:musicBus});
+  tone({freq:f0 * 2,    t:t, dur:0.8,  vol:v * 0.22, type:'sine', attack:0.002, bus:musicBus});
+  tone({freq:f0 * 4.2,  t:t, dur:0.12, vol:v * 0.2,  type:'sine', attack:0.001, bus:musicBus});
+  tone({freq:f0,        slide:f0 * 0.993, t:t, dur:2.2, vol:v * 0.9, type:'sine', attack:0.003, bus:plateSend});
+  tone({freq:f0,        t:t, dur:1.4,  vol:v * 0.6, type:'triangle', attack:0.003, bus:delaySend});
 }
 function snare(t, v){
   sends();
@@ -437,8 +481,67 @@ function startBreath(){
   layer([ws, wl], w);
   whisperGain = w;
 }
+// The choir: four voices of two detuned saws each, a slightly different
+// vibrato on alternate voices, all through one mouth — three formant filters
+// that drift between 'oo' and 'ah' over about fifteen seconds. On each new
+// bar every voice glides to its note in the next chord and the whole thing
+// swells a little and settles. It sits between 200 Hz and 3 kHz on purpose:
+// the drone and the rumble live below that, where a phone plays nothing.
+// measured: 0.25 puts it at ~0.056 rms on the music bus, under the heart's
+// ~0.085, so it is a bed and never the lead
+var CHOIR = 0.25, choirV = null;
+function startChoir(chord, open){
+  sends();
+  var a = actx, now = a.currentTime;
+  var g = a.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(CHOIR, now + 4);
+  var mouth = a.createGain(); mouth.gain.value = 1;
+  // [centre, Q, level, drift]: 'oo' by default, 'ah' when open
+  var F = open ? [[700, 6, 1, 110], [1150, 8, 0.55, 160], [2650, 11, 0.2, 0]]
+               : [[440, 6, 1, 150], [900, 8, 0.5, 200], [2600, 11, 0.16, 0]];
+  var vowel = a.createOscillator(); vowel.type = 'sine'; vowel.frequency.value = 0.065;
+  F.forEach(function(f){
+    var bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f[0]; bp.Q.value = f[1];
+    var fg = a.createGain(); fg.gain.value = f[2];
+    mouth.connect(bp); bp.connect(fg); fg.connect(g);
+    if (f[3]){ var dg = a.createGain(); dg.gain.value = f[3]; vowel.connect(dg); dg.connect(bp.frequency); }
+  });
+  // a little of the chest, unshaped, so it is not all nasal
+  var chest = a.createBiquadFilter(); chest.type = 'lowpass'; chest.frequency.value = 520;
+  var cg = a.createGain(); cg.gain.value = 0.16; mouth.connect(chest); chest.connect(cg); cg.connect(g);
+  var vibs = [4.7, 5.3].map(function(hz){
+    var l = a.createOscillator(); l.frequency.value = hz;
+    var lg = a.createGain(); lg.gain.value = 11; l.connect(lg); l.start();
+    return { o: l, g: lg };
+  });
+  var oscs = [];
+  chord.forEach(function(n, i){
+    [-7, 7].forEach(function(dt){
+      var o = a.createOscillator(); o.type = 'sawtooth';
+      o.frequency.value = midi(n); o.detune.value = dt + (Math.random() - 0.5) * 5;
+      vibs[i % 2].g.connect(o.detune);
+      o.connect(mouth); o.start(); oscs.push(o);
+    });
+  });
+  g.connect(musicBus);
+  var wet = a.createGain(); wet.gain.value = 0.8; g.connect(wet); wet.connect(plateSend);
+  var dw = a.createGain(); dw.gain.value = 0.25; g.connect(dw); dw.connect(delaySend);
+  vowel.start();
+  layer(oscs.concat([vowel, vibs[0].o, vibs[1].o]), g);
+  choirV = { oscs: oscs, g: g };
+}
+function choirTo(chord, t){
+  if (!choirV) return;
+  chord.forEach(function(n, i){
+    for (var j=0;j<2;j++){ var o = choirV.oscs[i * 2 + j]; if (o) o.frequency.setTargetAtTime(midi(n), t, 0.22); }
+  });
+  var g = choirV.g.gain;
+  g.setTargetAtTime(CHOIR * 1.3, t, 0.7);
+  g.setTargetAtTime(CHOIR, t + 1.8, 1.4);
+}
 function stopLayers(fade){
-  whisperGain = null;
+  whisperGain = null; choirV = null;
   if (!layers.length) return;
   var a = actx, now = a.currentTime, old = layers; layers = [];
   fade = fade == null ? 0.8 : fade;
@@ -630,6 +733,8 @@ function scheduleStep(tr, step, t, spb){
   if (tr.bass  && (n = tr.bass[step]))  bass(t, n, spb * (tr.bassDur || 1.6));
   if (tr.lead  && (n = tr.lead[step]))  lead(t, n, spb * (tr.leadDur || 1.6), tr.leadType);
   if (tr.bell  && (n = tr.bell[step]))  bell(t, n);
+  if (tr.box   && (n = tr.box[step]))   box(t, n);
+  if (tr.choir && step % 16 === 0)      choirTo(tr.choir[step / 16], t);
   if (tr.snare && (n = tr.snare[step])) snare(t, n);
   if (tr.hat   && (n = tr.hat[step]))   hat(t, n);
 }
@@ -640,6 +745,7 @@ music.play = function(name, force){
   var tr = TRACKS[name]; if (!tr) return;
   seq.name = name; seq.track = tr; seq.step = 0;
   if (tr.drone) startDrone(tr.drone);
+  if (tr.choir) startChoir(tr.choir[0], tr.choirOpen);
   if (tr.bed) startBed();
   if (tr.breath) startBreath();
 };
@@ -682,6 +788,8 @@ window.BTD_AUDIO = {
   unlock: ctx,
   fire: { update: fireUpdate },
   meter: meter,
+  // debug: set the choir's level live, for balancing it against the heart
+  choirLevel: function(v){ if (v != null){ CHOIR = v; if (choirV) choirV.g.gain.setTargetAtTime(v, actx.currentTime, 0.05); } return CHOIR; },
   setMuted: function(m){ muted = !!m; if (master) master.gain.value = muted ? 0 : MASTER_GAIN; },
   // the beat heard from inside a closed fist
   muffle: function(on){

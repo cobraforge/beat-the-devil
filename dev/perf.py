@@ -4,7 +4,7 @@ Drives a separate Chrome (its own profile) over the DevTools protocol:
 390x844 @ 3x DPR, touch, CPU throttled 1x/4x/6x, optionally with the 2D canvas in software
 (--software) so raster cost lands on the throttled thread. For each scenario the game
 is warmed up, the ring in BTD_PERF is reset, and frame times are read after a
-measurement window during which a finger drags the heart in circles.
+measurement window during which a thumb works the joystick in circles.
 
     python dev/perf.py [--rates 1,4,6] [--scenes survive,boss] [--url http://127.0.0.1:8080/] [--label before]
 
@@ -77,16 +77,25 @@ def launch(profile, software):
     sys.exit("Chrome did not expose a page target")
 
 
-def touch_drag(cdp, seconds, cx, cy, r=90):
-    """a finger circling the heart for `seconds`. Each move waits for the
-    renderer's ack, as a real touchscreen coalesces moves to one per frame;
-    flooding a throttled page would stall the socket and stretch the window."""
+def stick_home(cdp):
+    """the joystick's centre and radius in page css px (BTD_STICK is logical)"""
+    return json.loads(cdp.js("(function(){ var r = document.getElementById('c').getBoundingClientRect(), S = BTD_STICK;"
+                             " return JSON.stringify({x: r.left + S.x / 420 * r.width, y: r.top + S.y / 640 * r.height, R: S.R / 420 * r.width}); })()"))
+
+
+def touch_drag(cdp, seconds, k=0.8):
+    """a thumb on the joystick for `seconds`, circling at `k` of full
+    deflection so the heart keeps moving. Each move waits for the renderer's
+    ack, as a real touchscreen coalesces moves to one per frame; flooding a
+    throttled page would stall the socket and stretch the window."""
+    home = stick_home(cdp)
+    cx, cy, r = home["x"], home["y"], home["R"] * k
     t0 = time.perf_counter()
-    cdp.call("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": cx + r, "y": cy, "id": 1}])
+    cdp.call("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": cx, "y": cy, "id": 1}])
     i = 0
     while time.perf_counter() - t0 < seconds:
         a = (time.perf_counter() - t0) * 2.2
-        x, y = cx + r * math.cos(a), cy + r * 0.55 * math.sin(a)
+        x, y = cx + r * math.cos(a), cy + r * 0.6 * math.sin(a)
         cdp.call("Input.dispatchTouchEvent", type="touchMove", touchPoints=[{"x": x, "y": y, "id": 1}])
         i += 1
         time.sleep(1 / 60)
@@ -183,12 +192,12 @@ def main():
                     cdp.js("window.BTD_SKIP = {" + ",".join(k + ":true" for k in a.skip.split(",")) + "}; 'skip'")
                 cdp.call("Emulation.setCPUThrottlingRate", rate=rate)
                 # warm up under throttle (a light drag keeps the heart moving and alive)
-                touch_drag(cdp, WARMUP[scene], 195, 560, 60)
+                touch_drag(cdp, WARMUP[scene], 0.5)
                 info = cdp.js("({mode: BTD_G.mode, phase: BTD_G.phase, devil: BTD_G.devil && BTD_G.devil.state, flames: BTD_G.flames.length, forks: BTD_G.forks.length, parts: BTD_G.parts.length})")
                 cdp.js("BTD_PERF(true); 'reset'")
                 if a.profile:
                     cdp.call("Profiler.enable"); cdp.call("Profiler.setSamplingInterval", interval=200); cdp.call("Profiler.start")
-                n = touch_drag(cdp, a.measure, 195, 560, 90)
+                n = touch_drag(cdp, a.measure)
                 st = cdp.js("BTD_PERF(false)")
                 if a.profile:
                     prof = cdp.call("Profiler.stop")["profile"]

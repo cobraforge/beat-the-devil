@@ -50,7 +50,7 @@ resize();
 
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
 document.getElementById('tip').innerHTML = STORY + (isTouch
-  ? 'Drag anywhere to move<br>The round button fires'
+  ? 'Left thumb on the circle to move<br>Right thumb on the button to fire'
   : 'Arrows / WASD to move<br>Space to fire<br>P pause &middot; M mute');
 if (isTouch){
   document.body.classList.add('touch');
@@ -297,28 +297,49 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 26;
+  window.BTD_VERSION = 27;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
 // ---------- input ----------
 var keys = {};
 var fireQueued = false;
-// Pointers are tracked by id from the moment they land. One that lands on the
-// fire button is a 'fire' pointer for its whole life and never moves the
-// heart; the first to land anywhere else is the 'move' pointer and never
-// fires. Fingers that arrive while the move pointer is held do nothing.
+// On touch there are two controls and nothing else: the joystick bottom left
+// for the left thumb, the fire button bottom right for the right. Pointers
+// are tracked by id from the moment they land. One that lands on the button
+// fires on press and never steers; one that lands on the stick steers and
+// never fires; a touch anywhere else does nothing. A mouse keeps drag-to-move
+// and click-to-fire.
 var pointers = {}, movePtr = null, drag = null;
-var downT = 0, moved = 0;                         // mouse only: a tap fires
+var downT = 0, moved = 0;                         // mouse only: a click fires
 // the fire button: bottom right, in thumb reach, at least 72 css px across
 var fireBtn = { x: 0, y: 0, r: 40, press: 0 };
+// the joystick: bottom left, mirroring the button, always drawn. Analog and
+// measured from its fixed centre: a 12 % dead zone, then linear to full
+// speed at the rim, which is exactly the keys' speed.
+var stick = { x: 0, y: 0, R: 60, id: null, kx: 0, ky: 0, jx: 0, jy: 0 };
 function layoutFireBtn(){
-  if (!fireBtn) return;                           // resize() runs once before this block
-  fireBtn.r = clamp(38 / Math.max(0.2, scale), 30, 64);
+  if (!fireBtn || !stick) return;                 // resize() runs once before this block
+  var s = Math.max(0.2, scale);
+  fireBtn.r = clamp(38 / s, 30, 64);
   fireBtn.x = LW - 10 - fireBtn.r; fireBtn.y = LH - 10 - fireBtn.r;
+  stick.R = clamp(56 / s, 44, 86);                // 112 css px across
+  stick.x = 10 + stick.R; stick.y = LH - 10 - stick.R;
+  if (stick.id == null){ stick.kx = stick.x; stick.ky = stick.y; }
 }
 layoutFireBtn();
 function onFireBtn(x, y){ return isTouch && Math.hypot(x - fireBtn.x, y - fireBtn.y) <= fireBtn.r * 1.15; }
+// generous: a thumb that lands a little off the ring still takes the stick
+function onStick(x, y){ return isTouch && Math.hypot(x - stick.x, y - stick.y) <= stick.R * 1.5; }
+function stickTo(x, y){
+  var dx = x - stick.x, dy = y - stick.y, d = Math.hypot(dx, dy), R = stick.R;
+  var c = d > R ? R / d : 1;                      // the knob stops at the rim
+  stick.kx = stick.x + dx * c; stick.ky = stick.y + dy * c;
+  var m = Math.min(1, d / R), k = m < 0.12 ? 0 : (m - 0.12) / 0.88;
+  stick.jx = d > 0 ? dx / d * k : 0; stick.jy = d > 0 ? dy / d * k : 0;
+}
+function stickRelease(){ stick.id = null; stick.jx = stick.jy = 0; }
+if (/debug/.test(location.hash)) window.BTD_STICK = stick;   // the joystick, in logical px
 
 window.addEventListener('keydown', function(e){
   var k = e.key, space = k === ' ' || e.code === 'Space';
@@ -338,7 +359,7 @@ window.addEventListener('keydown', function(e){
   }
 });
 window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
-window.addEventListener('blur', function(){ keys = {}; pointers = {}; movePtr = null; drag = null; });
+window.addEventListener('blur', function(){ keys = {}; pointers = {}; movePtr = null; drag = null; stickRelease(); });
 document.addEventListener('visibilitychange', function(){
   if (document.hidden && G.mode === 'play' && !G.paused && !window.BTD_FREEZE) togglePause();
 });
@@ -363,7 +384,16 @@ stage.addEventListener('pointerdown', function(e){
     fireBtn.press = 1; fireQueued = true;          // on press, not release
     return;
   }
-  if (movePtr != null) return;
+  if (onStick(p.x, p.y)){
+    if (stick.id != null) return;                  // one thumb on it at a time
+    stick.id = e.pointerId;
+    pointers[e.pointerId] = { kind: 'stick' };
+    stickTo(p.x, p.y);
+    G.idleT = 0;
+    return;
+  }
+  // a finger anywhere else does nothing; only a mouse drags
+  if (e.pointerType !== 'mouse' || movePtr != null) return;
   movePtr = e.pointerId;
   pointers[e.pointerId] = { kind: 'move', x: p.x, y: p.y };
   // the heart rides above the finger: whatever offset it lands with eases
@@ -374,7 +404,9 @@ stage.addEventListener('pointerdown', function(e){
 });
 stage.addEventListener('pointermove', function(e){
   var pt = pointers[e.pointerId];
-  if (!pt || pt.kind !== 'move') return;
+  if (!pt) return;
+  if (pt.kind === 'stick'){ var q = toLogical(e); stickTo(q.x, q.y); return; }
+  if (pt.kind !== 'move') return;
   var p = toLogical(e);
   moved += Math.abs(p.x - pt.x) + Math.abs(p.y - pt.y);
   pt.x = p.x; pt.y = p.y;
@@ -382,6 +414,7 @@ stage.addEventListener('pointermove', function(e){
 function endPointer(e){
   var pt = pointers[e.pointerId];
   delete pointers[e.pointerId];
+  if (pt && pt.kind === 'stick'){ stickRelease(); return; }
   if (!pt || pt.kind !== 'move') return;
   // a mouse tap (no button on screen) fires; a finger never does
   if (!isTouch && G.mode === 'play' && !G.paused && moved < 10 && performance.now() - downT < 300) fireQueued = true;
@@ -861,6 +894,10 @@ function update(dt){
   G.lightning = decay(G.lightning, 2.0, dt);
   G.recoil = decay(G.recoil, 8, dt);
   fireBtn.press = decay(fireBtn.press, 5, dt);
+  if (stick.id == null){                          // let go, the knob springs home
+    var sk = Math.min(1, dt * 14);
+    stick.kx = lerp(stick.kx, stick.x, sk); stick.ky = lerp(stick.ky, stick.y, sk);
+  }
   if (G.herald > 0) G.herald -= dt;
   if (G.hold > 0) G.hold -= dt;
   if (G.devil) G.devil.kick = decay(G.devil.kick, 3, dt);
@@ -915,6 +952,9 @@ function update(dt){
   if (keys['arrowright']|| keys['d']) mx += 1;
   if (keys['arrowup']   || keys['w']) my -= 1;
   if (keys['arrowdown'] || keys['s']) my += 1;
+  // the joystick adds its analog vector to the keys'. Nothing else about touch
+  // is special: the speed and every penalty are the same multipliers.
+  mx += stick.jx; my += stick.jy;
   var dragging = false;
   if (drag && movePtr != null && pointers[movePtr]){
     // the target: the finger plus an offset that eases to sit above it
@@ -926,6 +966,9 @@ function update(dt){
     if (dd > 0.5){ mx = ddx / dd; my = ddy / dd; dragging = true; }
     if (dragging && dd < sp * dt) sp = dd / dt;   // no overshoot
   }
+  // how hard: keys, a drag and a stick at the rim are all 1; a stick pushed
+  // halfway is half. Taken before the burn's jitter, which only bends the way.
+  var mag = Math.min(1, Math.hypot(mx, my));
   if (pen === 'burn' && (mx || my)){ mx += rnd(-0.45, 0.45); my += rnd(-0.45, 0.45); }
   // knocked: the fork's momentum carries the heart, and the hand on the controls
   // is weaker for it (down to 40 %), never gone
@@ -942,11 +985,11 @@ function update(dt){
     if (vk === 0 || (!sh.vx && !sh.vy)) G.shove = null;
   }
   if (mx || my){
-    var m = Math.hypot(mx,my) || 1;
+    var m = (Math.hypot(mx,my) || 1) / mag;
     p.x += mx/m * sp * dt * (1 - 0.6 * shoveK);
     p.y += my/m * sp * dt * (1 - 0.6 * shoveK);
     G.idleT = 0;
-  } else if (movePtr == null){
+  } else if (movePtr == null && stick.id == null){
     G.idleT += dt;
     if (G.idleT > 3 && !G.heart.flutterDue){ G.heart.flutterDue = true; G.idleT = -2; }   // it flutters, then waits again
   }
@@ -3351,9 +3394,51 @@ function drawHUD(){
   var label = G.phase === 'survive' ? 'S' : (G.devil && !G.devil.dying && (G.devil.state === 'open' || G.devil.state === 'attack') ? (open ? 'O' : 'C') : '-');
   var key = [Math.floor(G.score), hi, G.ammo, G.phase, Math.round(clamp(G.surv / G.SURV, 0, 1) * 200), alive, label].join('|');
   hudLayer.draw(key, drawHUDStatic);
-  if (isTouch) drawFireBtn();
+  if (isTouch){ drawStick(); drawFireBtn(); }
   // lives, beating too
   for (var i=0;i<G.lives;i++) drawGem(18 + i*20, 44, 6.5 * (1 + (G.heart.scale - 1) * 0.6), { alpha: 0.9, pulse: G.heart.pulse * 0.5 });
+}
+// The joystick: the same dark glass and cyan rim as the fire button, with four
+// chevrons so it reads as a stick at a glance. Held, the rim brightens and
+// lights toward the push; the knob follows the thumb and springs home.
+function drawStick(){
+  var s = stick, R = s.R, held = s.id != null, kr = R * 0.44;
+  var push = Math.hypot(s.jx, s.jy);
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = 'rgba(10,6,32,' + (held ? 0.64 : 0.52) + ')';
+  ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, 6.2832); ctx.fill();
+  ctx.lineWidth = held ? 3 : 2;
+  ctx.strokeStyle = col('heart', held ? 0.95 : 0.72);
+  ctx.stroke();
+  // the dead zone, faintly
+  ctx.lineWidth = 1; ctx.strokeStyle = col('heart', 0.18);
+  ctx.beginPath(); ctx.arc(s.x, s.y, R * 0.56, 0, 6.2832); ctx.stroke();
+  // four chevrons just inside the rim
+  ctx.fillStyle = col('heart', held ? 0.3 : 0.5);
+  for (var i=0;i<4;i++){
+    var a = i * Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a), c = R * 0.8, w = R * 0.1;
+    ctx.beginPath();
+    ctx.moveTo(s.x + ca * (c + w), s.y + sa * (c + w));
+    ctx.lineTo(s.x + ca * (c - w * 0.6) - sa * w * 1.1, s.y + sa * (c - w * 0.6) + ca * w * 1.1);
+    ctx.lineTo(s.x + ca * (c - w * 0.6) + sa * w * 1.1, s.y + sa * (c - w * 0.6) - ca * w * 1.1);
+    ctx.closePath(); ctx.fill();
+  }
+  // the rim lights where the thumb is pushing, brighter the harder
+  if (held && push > 0){
+    var pa = Math.atan2(s.jy, s.jx);
+    ctx.strokeStyle = col('heart', 0.35 + 0.6 * push); ctx.lineWidth = 3 + 4 * push;
+    ctx.beginPath(); ctx.arc(s.x, s.y, R + 1, pa - 0.55, pa + 0.55); ctx.stroke();
+  }
+  // the knob
+  var kg = ctx.createRadialGradient(s.kx - kr * 0.3, s.ky - kr * 0.35, 1, s.kx, s.ky, kr);
+  kg.addColorStop(0, held ? '#ffffff' : col('heart', 0.95));
+  kg.addColorStop(0.55, col('heart', held ? 0.9 : 0.6));
+  kg.addColorStop(1, col('heart', held ? 0.5 : 0.28));
+  ctx.fillStyle = kg;
+  ctx.beginPath(); ctx.arc(s.kx, s.ky, kr, 0, 6.2832); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = col('heart', 0.85); ctx.stroke();
+  ctx.restore();
 }
 function drawFireBtn(){
   var b = fireBtn, r = b.r, k = b.press;

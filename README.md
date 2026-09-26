@@ -159,16 +159,21 @@ whole run, and two of them are for his eyes.
 
 ## On a phone
 
-- **Touch controls.** Drag anywhere to move the heart; it rides about 90 px
-  above the finger so the thumb never covers it. A round button in the
-  bottom-right corner (at least 72 css px across, in thumb reach) fires on
-  press, not release, and shows the bolts left. Pointers are tracked by id: a
-  finger that lands on the button never moves the heart, a drag never fires,
-  and a second finger can fire mid-drag. The drag is a target the heart moves
-  toward at its normal speed, so the embed and burn penalties apply to touch
-  exactly as to keys. The title card explains the button on touch devices.
+- **Touch controls.** A joystick in the bottom-left corner for the left thumb
+  and the fire button in the bottom-right for the right, mirrored and always
+  visible during play. The joystick is a fixed circle 112 css px across with
+  four chevrons and a knob that follows the thumb, stops at the rim and
+  springs home when let go; the rim lights toward the push. It is analog from
+  its centre: a 12 % dead zone, then linear to the keys' full speed at the
+  rim. The fire button (at least 72 css px across) fires on press, not
+  release, and shows the bolts left. Pointers are tracked by id: the stick
+  thumb never fires, the fire thumb never steers, both work at once, and a
+  touch anywhere else does nothing. The stick adds to the key vector, so the
+  embed and burn penalties apply to touch exactly as to keys. The title card
+  names both controls on touch devices. A mouse still drags and clicks.
 - **Layout.** On screens under 600 px the bezel goes and the glass takes the
-  whole width; the mute button moves to the bottom-left.
+  whole width; on touch the sound button moves to the top centre, out of the
+  thumbs' corners.
 - **Performance.** Touch devices cap the device pixel ratio at 1.5. Three
   quality tiers (`QUALITY` in `game.js`: full, medium, low) trade heat
   shimmer, smoke, glow sprites, particle share, flame edge detail, fire
@@ -214,7 +219,9 @@ Open `http://localhost:8080/#debug` and the console gets `BTD_G` (the state
 object), `BTD_STEP(dt)` (advance one frame by hand) and `BTD_VERSION`. Set
 `window.BTD_FREEZE = true` to hold the state without the pause overlay, and
 `window.BTD_HEART_SCALE = 5` to magnify the heart for a look at its damage.
-Handy for jumping to the fight: `BTD_G.surv = 41.9`.
+Handy for jumping to the fight: `BTD_G.surv = 41.9`. `BTD_STICK` is the
+joystick (centre, radius, knob and the analog vector, in logical px), and
+`BTD_AUDIO.choirLevel(v)` sets the choir's level live for balancing it.
 
 The scripts and the stylesheet are loaded with a `?v=` query. A browser will
 keep serving the cached copy while that number is unchanged, so an edit can
@@ -235,7 +242,7 @@ effects or drawing blocks out to measure their cost, and
 
 `dev/perf.py` drives a separate Chrome (its own throwaway profile) over the
 DevTools protocol: 390×844 at 3× DPR, touch, CPU throttled 1×/4×/6×, and a
-finger dragging the heart in circles while it reads `BTD_PERF()`. Needs the
+thumb working the joystick in circles while it reads `BTD_PERF()`. Needs the
 dev server running and `pip install websocket-client`.
 
 ```
@@ -258,6 +265,25 @@ and the fight from 49 to 19; on the GPU path the game never leaves the top
 tier.
 
 ## Sound
+
+The eerie part of the score is two layers over the chiptune:
+
+- **A choir.** Four voices of two detuned sawtooths each, alternate voices on
+  slightly different vibratos, all through one "mouth" of three formant
+  filters that drift between *oo* and *ah* over about fifteen seconds (the
+  fight holds it open on *ah*). It changes chord on every bar, each voice
+  gliding to its note in the next chord, with a small swell as it lands: Dm,
+  Gm, F minor, Eb in the survive phase; the tritone chord, a minor ninth and a
+  diminished seventh in the fight; a lullaby's Dm, Bb, Ebmaj7, A on the title.
+- **A music box with a bent tine.** A pure tone with a quick inharmonic tick,
+  its pitch sagging a hair as it rings, and every F a quarter-tone flat, so
+  the lullaby is close to right and never quite. It plays a four-bar lullaby
+  on the title and a few sparse notes high over the survive phase.
+
+Both sit between 200 Hz and 3 kHz, where a phone speaker actually plays; the
+drone, rumble and bass below that are felt on headphones and lost on a phone.
+The choir is balanced as a bed (`CHOIR = 0.25`, ~0.056 RMS against the
+heart's ~0.085).
 
 The music runs through two sends — a dotted-eighth delay that darkens as it
 repeats, and a short plate — fed by the lead, the bell, the snare and the
@@ -300,9 +326,12 @@ heartbeat (its own bus, lowpass-muffled inside his fist), and fire.
 Patterns live in `audio.js` under `TRACKS`, 16 steps per bar and four steps per
 heartbeat, written as note names (`D2 . Eb2 .`) or drum hits (`x` / `o` / `.`).
 There is no kick: the heartbeat is the kick, and the tempo is the heart rate.
-Each track has `bars` and optional `drone` (MIDI note), `bed` (low rumble) and
-`breath` (the breathing layer plus the whisper layer). A sanity check at load
-throws if a pattern's length doesn't match `bars * 16`.
+Each track has `bars` and optional `drone` (MIDI note), `bed` (low rumble),
+`breath` (the breathing layer plus the whisper layer), `choir` (one
+four-voice chord per bar, via `chords([...])`, with `choirOpen` for the *ah*
+vowel) and `box` (a music-box pattern). A sanity check at load throws if a
+pattern's length doesn't match `bars * 16` or a choir isn't one four-note
+chord per bar.
 
 ## Single-file build
 
