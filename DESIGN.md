@@ -203,28 +203,48 @@ that fixed the look.
 
 ---
 
-## 7. Touch: one finger moves, the button fires
+## 7. Touch: a stick on the left, the button on the right
 
-**Rule.** On touch devices the only way to fire is the round button in the
-bottom-right corner (≥ 72 css px, thumb reach, showing the bolts left). It
-fires on press. Pointers are tracked by id for their whole life: one that
-lands on the button never moves the heart, the first to land anywhere else is
-the move pointer and never fires, and a tap away from the button does
-nothing. The heart rides ≥ 90 px above the finger. A drag is a *target* the
-heart moves toward at its normal speed, so every movement penalty (rule 2)
-applies to touch exactly as to keys.
+**Rule.** On touch devices there are exactly two controls, mirrored in the
+playfield's bottom corners and always drawn during play:
 
-**Why.** Tap-to-fire on a drag surface meant every hesitant touch spent a
-bolt, and with five bolts for the whole run (rule 1) that is a lost game, not
-a mistake. Firing on press keeps the shot where the eye is. Tracking by id is
-what makes two thumbs work: without it a second finger either fired the drag
-or dragged the fire. The offset keeps the thumb off the heart, and the
-target-not-teleport movement keeps rule 2 honest — an earlier version let a
-drag move the heart 1:1, which made the embed penalty vanish on a phone.
+- **The joystick**, bottom left: a fixed, visible circle (112 css px across,
+  `R = 56 / scale` logical) with a knob that follows the thumb and stops at
+  the rim. Analog, measured from the circle's fixed centre: a 12 % dead zone,
+  then linear to full speed at the rim — and full speed is exactly the keys'
+  265 px/s. A thumb that lands within 1.5 × R takes it. Let go and the heart
+  stops and the knob springs home.
+- **The fire button**, bottom right (≥ 72 css px, showing the bolts left). It
+  fires on press.
 
-**In code.** `pointers`, `movePtr`, `drag`, `fireBtn`, `onFireBtn()`, the
-`pointerdown/move/up` handlers and the drag block in `update()`; the button is
-`drawFireBtn()` in the HUD.
+Pointers are tracked by id for their whole life: one that lands on the button
+never steers, one that lands on the stick never fires, and a touch anywhere
+else does nothing at all. Both thumbs work at once — moving while firing is
+the core action. The stick's vector is added to the keys' vector, so the
+speed and every movement penalty (rule 2) are the same multipliers on touch
+as on keys, with no special case. The sound button moves to the top centre on
+touch, out of both thumbs' corners. A mouse keeps drag-to-move and
+click-to-fire.
+
+**Why.** Drag-anywhere made the player chase the heart across the whole
+screen with a finger that covered it; the first fix (the heart riding 90 px
+above the finger) helped, but a drag is still a *target*, so the heart lags
+and overshoots under the thumb. A stick gives the left thumb a home it never
+has to leave, and a *visible* fixed circle tells a new player where that home
+is — an earlier floating stick that only appeared under the thumb, with a
+faint dashed outline at rest, did not read as a control. Tap-to-fire on a
+drag surface meant every hesitant touch spent a bolt, and with five bolts for
+the run (rule 1) that is a lost game, so the stick thumb can never fire and
+stray touches do nothing. Firing on press keeps the shot where the eye is.
+Tracking by id is what makes two thumbs work. Adding the stick to the key
+vector keeps rule 2 honest: an embedded heart is 65 % slow under a pushed
+stick exactly as under a held key.
+
+**In code.** `stick`, `onStick()`, `stickTo()`, `stickRelease()`, `fireBtn`,
+`onFireBtn()`, `layoutFireBtn()` (lays out both), the `pointerdown/move/up`
+handlers, the `mx += stick.jx` line and `mag` in `update()`; drawn by
+`drawStick()` and `drawFireBtn()` in the HUD. `body.touch #mute` in
+`style.css`.
 
 ---
 
@@ -252,9 +272,17 @@ would play differently on a slow phone.
 
 - **The heartbeat is the master clock.** 68 bpm at rest to 150 at full
   danger; the floor glow, embers, aura and the music sequencer all pulse from
-  `G.heart`. Hits stop it for 200 ms, then arrhythmia. In the mix the heart
-  must always be audible: `HEART_GAIN 1.3`, fire ducks under every lub, and
-  the laugh ducks everything but leaves the heart at 50 %.
+  `G.heart`. The choir changes chord on the bar and the music box plays on
+  the steps, so the eerie score speeds up with the heart too. Hits stop it
+  for 200 ms, then arrhythmia. In the mix the heart must always be audible:
+  `HEART_GAIN 1.3`, fire ducks under every lub, and the laugh ducks
+  everything but leaves the heart at 50 %.
+- **The score is a bed, not a lead.** The choir (`CHOIR = 0.25`) sits at
+  ~0.056 RMS on the music bus, under the heart's ~0.085; at 0.9 it was 2.5×
+  the heart and buried it. The choir and music box live between 200 Hz and
+  3 kHz on purpose: a phone speaker plays almost nothing below 200 Hz, where
+  the drone, rumble and bass live, so without them a phone heard little
+  music at all.
 - **All audio is synthesised.** No asset files; Web Audio only. Sound counts
   are capped (thuds 3, fire voices 4) so the mix cannot clip.
 - **The palette lives in `style.css`.** JS reads the custom properties once

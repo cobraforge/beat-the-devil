@@ -50,7 +50,7 @@ resize();
 
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
 document.getElementById('tip').innerHTML = STORY + (isTouch
-  ? 'Drag anywhere to move<br>The round button fires'
+  ? 'Left thumb on the circle to move<br>Right thumb on the button to fire'
   : 'Arrows / WASD to move<br>Space to fire<br>P pause &middot; M mute');
 if (isTouch){
   document.body.classList.add('touch');
@@ -297,28 +297,49 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 19;
+  window.BTD_VERSION = 27;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
 // ---------- input ----------
 var keys = {};
 var fireQueued = false;
-// Pointers are tracked by id from the moment they land. One that lands on the
-// fire button is a 'fire' pointer for its whole life and never moves the
-// heart; the first to land anywhere else is the 'move' pointer and never
-// fires. Fingers that arrive while the move pointer is held do nothing.
+// On touch there are two controls and nothing else: the joystick bottom left
+// for the left thumb, the fire button bottom right for the right. Pointers
+// are tracked by id from the moment they land. One that lands on the button
+// fires on press and never steers; one that lands on the stick steers and
+// never fires; a touch anywhere else does nothing. A mouse keeps drag-to-move
+// and click-to-fire.
 var pointers = {}, movePtr = null, drag = null;
-var downT = 0, moved = 0;                         // mouse only: a tap fires
+var downT = 0, moved = 0;                         // mouse only: a click fires
 // the fire button: bottom right, in thumb reach, at least 72 css px across
 var fireBtn = { x: 0, y: 0, r: 40, press: 0 };
+// the joystick: bottom left, mirroring the button, always drawn. Analog and
+// measured from its fixed centre: a 12 % dead zone, then linear to full
+// speed at the rim, which is exactly the keys' speed.
+var stick = { x: 0, y: 0, R: 60, id: null, kx: 0, ky: 0, jx: 0, jy: 0 };
 function layoutFireBtn(){
-  if (!fireBtn) return;                           // resize() runs once before this block
-  fireBtn.r = clamp(38 / Math.max(0.2, scale), 30, 64);
+  if (!fireBtn || !stick) return;                 // resize() runs once before this block
+  var s = Math.max(0.2, scale);
+  fireBtn.r = clamp(38 / s, 30, 64);
   fireBtn.x = LW - 10 - fireBtn.r; fireBtn.y = LH - 10 - fireBtn.r;
+  stick.R = clamp(56 / s, 44, 86);                // 112 css px across
+  stick.x = 10 + stick.R; stick.y = LH - 10 - stick.R;
+  if (stick.id == null){ stick.kx = stick.x; stick.ky = stick.y; }
 }
 layoutFireBtn();
 function onFireBtn(x, y){ return isTouch && Math.hypot(x - fireBtn.x, y - fireBtn.y) <= fireBtn.r * 1.15; }
+// generous: a thumb that lands a little off the ring still takes the stick
+function onStick(x, y){ return isTouch && Math.hypot(x - stick.x, y - stick.y) <= stick.R * 1.5; }
+function stickTo(x, y){
+  var dx = x - stick.x, dy = y - stick.y, d = Math.hypot(dx, dy), R = stick.R;
+  var c = d > R ? R / d : 1;                      // the knob stops at the rim
+  stick.kx = stick.x + dx * c; stick.ky = stick.y + dy * c;
+  var m = Math.min(1, d / R), k = m < 0.12 ? 0 : (m - 0.12) / 0.88;
+  stick.jx = d > 0 ? dx / d * k : 0; stick.jy = d > 0 ? dy / d * k : 0;
+}
+function stickRelease(){ stick.id = null; stick.jx = stick.jy = 0; }
+if (/debug/.test(location.hash)) window.BTD_STICK = stick;   // the joystick, in logical px
 
 window.addEventListener('keydown', function(e){
   var k = e.key, space = k === ' ' || e.code === 'Space';
@@ -338,7 +359,7 @@ window.addEventListener('keydown', function(e){
   }
 });
 window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
-window.addEventListener('blur', function(){ keys = {}; pointers = {}; movePtr = null; drag = null; });
+window.addEventListener('blur', function(){ keys = {}; pointers = {}; movePtr = null; drag = null; stickRelease(); });
 document.addEventListener('visibilitychange', function(){
   if (document.hidden && G.mode === 'play' && !G.paused && !window.BTD_FREEZE) togglePause();
 });
@@ -363,7 +384,16 @@ stage.addEventListener('pointerdown', function(e){
     fireBtn.press = 1; fireQueued = true;          // on press, not release
     return;
   }
-  if (movePtr != null) return;
+  if (onStick(p.x, p.y)){
+    if (stick.id != null) return;                  // one thumb on it at a time
+    stick.id = e.pointerId;
+    pointers[e.pointerId] = { kind: 'stick' };
+    stickTo(p.x, p.y);
+    G.idleT = 0;
+    return;
+  }
+  // a finger anywhere else does nothing; only a mouse drags
+  if (e.pointerType !== 'mouse' || movePtr != null) return;
   movePtr = e.pointerId;
   pointers[e.pointerId] = { kind: 'move', x: p.x, y: p.y };
   // the heart rides above the finger: whatever offset it lands with eases
@@ -374,7 +404,9 @@ stage.addEventListener('pointerdown', function(e){
 });
 stage.addEventListener('pointermove', function(e){
   var pt = pointers[e.pointerId];
-  if (!pt || pt.kind !== 'move') return;
+  if (!pt) return;
+  if (pt.kind === 'stick'){ var q = toLogical(e); stickTo(q.x, q.y); return; }
+  if (pt.kind !== 'move') return;
   var p = toLogical(e);
   moved += Math.abs(p.x - pt.x) + Math.abs(p.y - pt.y);
   pt.x = p.x; pt.y = p.y;
@@ -382,6 +414,7 @@ stage.addEventListener('pointermove', function(e){
 function endPointer(e){
   var pt = pointers[e.pointerId];
   delete pointers[e.pointerId];
+  if (pt && pt.kind === 'stick'){ stickRelease(); return; }
   if (!pt || pt.kind !== 'move') return;
   // a mouse tap (no button on screen) fires; a finger never does
   if (!isTouch && G.mode === 'play' && !G.paused && moved < 10 && performance.now() - downT < 300) fireQueued = true;
@@ -861,6 +894,10 @@ function update(dt){
   G.lightning = decay(G.lightning, 2.0, dt);
   G.recoil = decay(G.recoil, 8, dt);
   fireBtn.press = decay(fireBtn.press, 5, dt);
+  if (stick.id == null){                          // let go, the knob springs home
+    var sk = Math.min(1, dt * 14);
+    stick.kx = lerp(stick.kx, stick.x, sk); stick.ky = lerp(stick.ky, stick.y, sk);
+  }
   if (G.herald > 0) G.herald -= dt;
   if (G.hold > 0) G.hold -= dt;
   if (G.devil) G.devil.kick = decay(G.devil.kick, 3, dt);
@@ -915,6 +952,9 @@ function update(dt){
   if (keys['arrowright']|| keys['d']) mx += 1;
   if (keys['arrowup']   || keys['w']) my -= 1;
   if (keys['arrowdown'] || keys['s']) my += 1;
+  // the joystick adds its analog vector to the keys'. Nothing else about touch
+  // is special: the speed and every penalty are the same multipliers.
+  mx += stick.jx; my += stick.jy;
   var dragging = false;
   if (drag && movePtr != null && pointers[movePtr]){
     // the target: the finger plus an offset that eases to sit above it
@@ -926,6 +966,9 @@ function update(dt){
     if (dd > 0.5){ mx = ddx / dd; my = ddy / dd; dragging = true; }
     if (dragging && dd < sp * dt) sp = dd / dt;   // no overshoot
   }
+  // how hard: keys, a drag and a stick at the rim are all 1; a stick pushed
+  // halfway is half. Taken before the burn's jitter, which only bends the way.
+  var mag = Math.min(1, Math.hypot(mx, my));
   if (pen === 'burn' && (mx || my)){ mx += rnd(-0.45, 0.45); my += rnd(-0.45, 0.45); }
   // knocked: the fork's momentum carries the heart, and the hand on the controls
   // is weaker for it (down to 40 %), never gone
@@ -942,11 +985,11 @@ function update(dt){
     if (vk === 0 || (!sh.vx && !sh.vy)) G.shove = null;
   }
   if (mx || my){
-    var m = Math.hypot(mx,my) || 1;
+    var m = (Math.hypot(mx,my) || 1) / mag;
     p.x += mx/m * sp * dt * (1 - 0.6 * shoveK);
     p.y += my/m * sp * dt * (1 - 0.6 * shoveK);
     G.idleT = 0;
-  } else if (movePtr == null){
+  } else if (movePtr == null && stick.id == null){
     G.idleT += dt;
     if (G.idleT > 3 && !G.heart.flutterDue){ G.heart.flutterDue = true; G.idleT = -2; }   // it flutters, then waits again
   }
@@ -1803,7 +1846,8 @@ function flameColumn(x, h, w, seed, flare){
   if (Q.smoke) smokePlume(x, top, w, seed, t);
   floorSpill(x, w, h);
   var glowK = 0.8 + 0.5 * fl;
-  drawGlow(x, LH - h * 0.42, 40, [255, 96, 20], glowK, w * 2.8 + 30, h + 90);
+  drawGlow(x, LH - h * 0.10, 40, [255, 110, 30], glowK, w * 4.4 + 40, h * 0.62 + 60);   // the pool at its foot
+  drawGlow(x, LH - h * 0.52, 40, [255, 84, 16], glowK * 0.5, w * 2.4, h * 0.7);         // and the body's haze
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -1872,8 +1916,13 @@ function flameColumn(x, h, w, seed, flare){
   if (fl){
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = 'rgba(255,230,170,' + (0.35 * fl) + ')';
-    ctx.beginPath(); ctx.ellipse(x, LH - h * 0.3, w * 1.1, h * 0.55, 0, 0, 6.2832); ctx.fill();
+    var er = w * 1.5 + h * 0.28, ey2 = LH - h * 0.2;
+    var eg = ctx.createRadialGradient(x, ey2, 2, x, ey2, er);
+    eg.addColorStop(0, 'rgba(255,238,195,' + (0.42 * fl) + ')');
+    eg.addColorStop(0.35, 'rgba(255,170,70,' + (0.2 * fl) + ')');
+    eg.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = eg;
+    ctx.fillRect(x - er, ey2 - er, er * 2, er * 2);
     ctx.restore();
   }
   // sparks torn off the tips
@@ -2753,8 +2802,10 @@ function drawTitleHearts(){
 function makeArms(){
   return {
     present: 0, reach: 0, creep: Math.max(0, 3 - G.lives),   // each life lost, they come further in
-    l: { side: -1, hx: -140, hy: LH*0.56, rot: 0, curl: 0.3, spread: 0.6, mode: 'idle', k: 0, breath: rnd(0, 6) },
-    r: { side:  1, hx: LW + 140, hy: LH*0.56, rot: 0, curl: 0.3, spread: 0.6, mode: 'idle', k: 0, breath: rnd(0, 6) }
+    // side: which edge it enters from. reach: which way the hand reaches, so
+    // both palms face the centre. His right hand comes in from screen left.
+    l: { side: -1, reach:  1, hand: 'right', hx: -140, hy: LH*0.56, rot: 0, curl: 0.3, spread: 0.6, mode: 'idle', k: 0, breath: rnd(0, 6) },
+    r: { side:  1, reach: -1, hand: 'left',  hx: LW + 140, hy: LH*0.56, rot: 0, curl: 0.3, spread: 0.6, mode: 'idle', k: 0, breath: rnd(0, 6) }
   };
 }
 function updateArms(dt){
@@ -2879,7 +2930,9 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
     left.push({ x: pts[k].x + ty * r, y: pts[k].y - tx * r });
     right.push({ x: pts[k].x - ty * r, y: pts[k].y + tx * r });
   }
-  var tip = pts[n], tipAng = ang + bendSign * (0.35 + curl * 0.55), cl = len * (thumb ? 0.28 : 0.38);
+  var hook = thumb ? (0.14 + 0.16 * curl) : (0.2 + 0.24 * curl);
+  var tipAng = ang + bendSign * hook, cl = len * (thumb ? 0.28 : 0.38);
+  var tip = pts[n];
   function outline(ox, oy){
     ctx.beginPath();
     ctx.moveTo(left[0].x + ox, left[0].y + oy);
@@ -2930,7 +2983,7 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
   ctx.restore();
   // the talon: long, hooked, thick at the root and tapering to a point; black
   // and glossy, with one small highlight
-  var dx = Math.cos(tipAng), dy = Math.sin(tipAng), nx = -dy, ny = dx, hook = bendSign * 0.42;
+  var dx = Math.cos(tipAng), dy = Math.sin(tipAng), nx = -dy, ny = dx, curve = bendSign * 0.42;
   var tb = r1 * 1.05;
   // start it a little way back inside the flesh and blend the root in
   tip = { x: tip.x - dx * r1 * 0.7, y: tip.y - dy * r1 * 0.7 };
@@ -2942,7 +2995,7 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
   ctx.beginPath();
   ctx.moveTo(tip.x + nx * tb, tip.y + ny * tb);
   ctx.quadraticCurveTo(tip.x + dx * cl * 0.5 + nx * tb * 0.9, tip.y + dy * cl * 0.5 + ny * tb * 0.9,
-                       tip.x + dx * cl + nx * hook * cl, tip.y + dy * cl + ny * hook * cl);
+                       tip.x + dx * cl + nx * curve * cl, tip.y + dy * cl + ny * curve * cl);
   ctx.quadraticCurveTo(tip.x + dx * cl * 0.55 - nx * tb * 0.1, tip.y + dy * cl * 0.55 - ny * tb * 0.1,
                        tip.x - nx * tb, tip.y - ny * tb);
   ctx.closePath(); ctx.fill();
@@ -2950,10 +3003,25 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
   ctx.strokeStyle = 'rgba(255,190,170,.45)'; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(tip.x + nx * tb * 0.55, tip.y + ny * tb * 0.55);
-  ctx.quadraticCurveTo(tip.x + dx * cl * 0.45 + nx * tb * 0.55, tip.y + dy * cl * 0.45 + ny * tb * 0.55, tip.x + dx * cl * 0.8 + nx * hook * cl * 0.75, tip.y + dy * cl * 0.8 + ny * hook * cl * 0.75);
+  ctx.quadraticCurveTo(tip.x + dx * cl * 0.45 + nx * tb * 0.55, tip.y + dy * cl * 0.45 + ny * tb * 0.55, tip.x + dx * cl * 0.8 + nx * curve * cl * 0.75, tip.y + dy * cl * 0.8 + ny * curve * cl * 0.75);
   ctx.stroke();
   ctx.fillStyle = 'rgba(255,230,220,.7)';
   ctx.beginPath(); ctx.ellipse(tip.x + dx * cl * 0.18 + nx * tb * 0.35, tip.y + dy * cl * 0.18 + ny * tb * 0.35, 1.6, 0.9, tipAng, 0, 6.2832); ctx.fill();
+  // BTD_SPINE: debug. The digit's skeleton and where its claw actually points.
+  if (window.BTD_SPINE){
+    (window.__DIG = window.__DIG || []).push({ thumb: !!thumb, rootX: Math.round(J[0].x), rootY: Math.round(J[0].y), tipX: Math.round(tip.x), tipY: Math.round(tip.y), aimDeg: Math.round(tipAng * 180 / Math.PI) });
+    ctx.save();
+    ctx.strokeStyle = thumb ? '#00ffe0' : '#7fd0ff'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(J[0].x, J[0].y);
+    for (var q=1;q<J.length;q++) ctx.lineTo(J[q].x, J[q].y);
+    ctx.stroke();
+    ctx.fillStyle = thumb ? '#00ffe0' : '#7fd0ff';
+    ctx.beginPath(); ctx.arc(J[0].x, J[0].y, 2.6, 0, 6.2832); ctx.fill();          // the root
+    ctx.strokeStyle = '#ffee00'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tip.x, tip.y); ctx.lineTo(tip.x + dx * 26, tip.y + dy * 26); ctx.stroke();   // where the claw points
+    ctx.beginPath(); ctx.arc(tip.x + dx * 26, tip.y + dy * 26, 2.2, 0, 6.2832); ctx.fill();
+    ctx.restore();
+  }
   return J;
 }
 // His right hand enters from the screen's left, his left from the right: he
@@ -2968,43 +3036,50 @@ function drawFinger(x0, y0, a1, len, curl, r0, r1, bendSign, fire, thumb){
 // into a sprite in its local frame and re-rendered only when the pose moves,
 // and each frame just places the sprite. The lights that depend on where it
 // is (the held heart, fire spill) are drawn live over it.
-var ARM_X0 = -490, ARM_Y0 = -130, ARM_W = 620, ARM_H = 270, armRenderedAt = -1;
+var ARM_Y0 = -130, ARM_W = 620, ARM_H = 270, armRenderedAt = -1;
+// the body runs from the shoulder (behind) to the talons (ahead), so the box
+// sits mostly behind the wrist — on whichever side the arm comes in from
+function armX0(reach){ return reach > 0 ? -490 : -130; }
 function armSprite(a){
-  var S = cvs.width / LW, key = a.side < 0 ? 'l' : 'r';
+  var S = cvs.width / LW, reach = a.reach;
   var c = a.sprite || (a.sprite = { canvas: document.createElement('canvas'), curl: -1, spread: -1, fire: -1, S: 0 });
   // the pose is quantised so the idle sway does not re-render every few frames;
   // a slam crosses several steps and re-renders as it goes
   var qc = Q.hide ? 0.06 : 0.1, curl = Math.round(a.curl / qc) * qc, spread = Math.round((a.spread == null ? 0.6 : a.spread) / 0.1) * 0.1;
-  var fire = Math.round(clamp(fireLight(a.hx, a.hy).k * 1.4, 0, 1) * 4) / 4;
-  var stale = c.S !== S || c.curl !== curl || c.spread !== spread || c.fire !== fire || c.hide !== Q.hide;
+  var fire = window.BTD_LIGHT ? 1 : Math.round(clamp(fireLight(a.hx, a.hy).k * 1.4, 0, 1) * 4) / 4;
+  var stale = c.S !== S || c.curl !== curl || c.spread !== spread || c.fire !== fire || c.hide !== Q.hide || c.reach !== reach;
   // at most one arm re-renders per frame
   if (stale && c.S !== 0 && armRenderedAt === PERF.total) return c.canvas;
   if (stale){
     armRenderedAt = PERF.total;
     if (c.S !== S){ c.canvas.width = Math.ceil(ARM_W * S); c.canvas.height = Math.ceil(ARM_H * S); c.S = S; }
-    c.curl = curl; c.spread = spread; c.fire = fire; c.hide = Q.hide;
+    c.curl = curl; c.spread = spread; c.fire = fire; c.hide = Q.hide; c.reach = reach;
     var cx = c.canvas.getContext('2d');
     cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, c.canvas.width, c.canvas.height);
-    cx.setTransform(S, 0, 0, S, -ARM_X0 * S, -ARM_Y0 * S);
+    cx.setTransform(S, 0, 0, S, -armX0(reach) * S, -ARM_Y0 * S);
     var saved = ctx; ctx = cx;
-    drawArmBody(curl, spread, fire);
+    drawArmBody(reach, curl, spread, fire);
     ctx = saved;
   }
   return c.canvas;
 }
+// Each hand is drawn for its own side of the screen. Nothing is mirrored:
+// a flip would hand the far arm a light source from the wrong side of a world
+// that has one fire in it, and it makes the two hands one shape with two
+// spellings rather than two hands.
 function drawArm(a){
   var sp = armSprite(a);
   ctx.save();
   ctx.translate(a.hx, a.hy);
-  ctx.scale(a.side < 0 ? 1 : -1, 1);      // local +x reaches into the arena
-  ctx.rotate(a.rot);
-  ctx.drawImage(sp, ARM_X0, ARM_Y0, ARM_W, ARM_H);
+  ctx.rotate(a.reach > 0 ? a.rot : -a.rot);
+  ctx.drawImage(sp, armX0(a.reach), ARM_Y0, ARM_W, ARM_H);
   // the held heart underlights the fingers
   if (G.taken && G.taken.grabbed && G.mode === 'ending'){
     var hl = G.heart.light * (G.taken.glow == null ? 1 : G.taken.glow);
     if (hl > 0.02){
-      var wx = G.player.x - a.hx, wy = G.player.y - a.hy; if (a.side > 0) wx = -wx;
-      var cr = Math.cos(-a.rot), sr = Math.sin(-a.rot), lx2 = wx * cr - wy * sr, ly2 = wx * sr + wy * cr;
+      var wx = G.player.x - a.hx, wy = G.player.y - a.hy;
+      var rr = a.reach > 0 ? -a.rot : a.rot;
+      var cr = Math.cos(rr), sr = Math.sin(rr), lx2 = wx * cr - wy * sr, ly2 = wx * sr + wy * cr;
       var hg3 = ctx.createRadialGradient(lx2, ly2, 3, lx2, ly2, 110);
       hg3.addColorStop(0, col('heart', 0.55 * hl)); hg3.addColorStop(1, col('heart', 0));
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = hg3; ctx.fillRect(lx2 - 110, ly2 - 110, 220, 220); ctx.restore();
@@ -3013,7 +3088,7 @@ function drawArm(a){
   // light spill: brighter and warm-rimmed on the side facing a fire
   var fl = fireLight(a.hx, a.hy);
   if (fl.k > 0.03){
-    var lx = fl.dx * (a.side < 0 ? 1 : -1) * 70, ly = fl.dy * 70;
+    var lx = fl.dx * 70, ly = fl.dy * 70;      // world direction: the fire does not mirror
     var sg = ctx.createRadialGradient(lx, ly, 4, lx * 0.3, ly * 0.3, 130);
     sg.addColorStop(0, 'rgba(255,150,50,' + (0.45 * fl.k) + ')');
     sg.addColorStop(1, 'rgba(255,90,20,0)');
@@ -3022,9 +3097,29 @@ function drawArm(a){
     ctx.fillRect(-140, -90, 260, 180);
   }
   ctx.restore();
+  if (window.BTD_LIGHT){
+    ctx.save();
+    ctx.font = "7px 'Press Start 2P', monospace"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('HIS ' + a.hand.toUpperCase() + ' HAND', clamp(a.hx, 70, LW - 70), a.hy - 96);
+    ctx.font = "6px 'Press Start 2P', monospace"; ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.fillText('enters from ' + (a.side < 0 ? 'screen left' : 'screen right'), clamp(a.hx, 78, LW - 78), a.hy - 84);
+    ctx.restore();
+  }
 }
-// the arm's shape, in its local frame: +x reaches into the arena, -y is up
-function drawArmBody(curl, spread, fire){
+// The hand, described rather than transformed.
+//   reach  +1 = it reaches toward screen right (the arm entering from the
+//               left: his right hand), -1 = toward screen left (his left).
+//   thumb  always the top edge, -y, for both hands.
+//   fingers always the bottom edge, curling toward the centre and up.
+// X() places a distance along the reach; A() aims an angle along it; B()
+// turns a curl direction into the one that closes this hand. Shading that
+// depends on the world — the fire below, the heart's light at the centre —
+// is written in world terms and is NOT flipped with the geometry.
+function drawArmBody(reach, curl, spread, fire){
+  function X(v){ return reach * v; }
+  function A(a){ return reach > 0 ? a : Math.PI - a; }
+  function B(sgn){ return reach > 0 ? sgn : -sgn; }
   var C = COLORS.claw, Cd = 'rgb(96,9,7)', Cdd = 'rgb(26,2,2)';
   ctx.save();
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -3034,32 +3129,32 @@ function drawArmBody(curl, spread, fire){
   ag.addColorStop(0, 'rgb(120,20,12)'); ag.addColorStop(0.25, C); ag.addColorStop(0.62, Cd); ag.addColorStop(1, Cdd);
   ctx.fillStyle = ag;
   ctx.beginPath();
-  ctx.moveTo(-40, -wr);
-  ctx.bezierCurveTo(-76, -wr - 22, -116, -84, -180, -92);      // the extensor rises
-  ctx.bezierCurveTo(-250, -100, -344, -90, -444, -78);
-  ctx.bezierCurveTo(-478, -36, -478, 56, -444, 92);
-  ctx.bezierCurveTo(-340, 104, -240, 116, -170, 102);          // the flexor hangs below
-  ctx.bezierCurveTo(-116, 90, -74, wr + 26, -40, wr + 4);
-  ctx.bezierCurveTo(-22, wr - 10, -22, -wr + 8, -40, -wr);
+  ctx.moveTo(X(-40), -wr);
+  ctx.bezierCurveTo(X(-76), -wr - 22, X(-116), -84, X(-180), -92);      // the extensor rises
+  ctx.bezierCurveTo(X(-250), -100, X(-344), -90, X(-444), -78);
+  ctx.bezierCurveTo(X(-478), -36, X(-478), 56, X(-444), 92);
+  ctx.bezierCurveTo(X(-340), 104, X(-240), 116, X(-170), 102);          // the flexor hangs below
+  ctx.bezierCurveTo(X(-116), 90, X(-74), wr + 26, X(-40), wr + 4);
+  ctx.bezierCurveTo(X(-22), wr - 10, X(-22), -wr + 8, X(-40), -wr);
   ctx.closePath(); ctx.fill();
   ctx.save(); ctx.clip();
   hideOver(0.55);
   // the crease between the two muscles, and the underside falling to black
   ctx.strokeStyle = 'rgba(14,1,1,.6)'; ctx.lineWidth = 6;
-  ctx.beginPath(); ctx.moveTo(-66, 14); ctx.bezierCurveTo(-150, 4, -250, -6, -380, 12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X(-66), 14); ctx.bezierCurveTo(X(-150), 4, X(-250), -6, X(-380), 12); ctx.stroke();
   var und = ctx.createLinearGradient(0, -90, 0, 110);
   und.addColorStop(0, 'rgba(0,0,0,.4)'); und.addColorStop(0.45, 'rgba(0,0,0,0)'); und.addColorStop(0.8, 'rgba(0,0,0,0)'); und.addColorStop(1, 'rgba(255,120,50,' + (0.1 + 0.3 * fire) + ')');
-  ctx.fillStyle = und; ctx.fillRect(-500, -120, 520, 240);
+  ctx.fillStyle = und; ctx.fillRect(reach > 0 ? -500 : -20, -120, 520, 240);
   // veins standing on the extensor: each wanders, forks once, a ridge lit above and shadowed below
   [[-56, -40, -300, -58, 14], [-70, -8, -330, -26, -12]].forEach(function(v, i){
     var x0 = v[0], y0 = v[1], x1 = v[2], y1 = v[3], wob = v[4];
     function vein(off, style, w){
       ctx.strokeStyle = style; ctx.lineWidth = w;
-      ctx.beginPath(); ctx.moveTo(x0, y0 + off);
-      ctx.bezierCurveTo(x0 - 60, y0 + off - wob, x0 - 110, y0 + off + wob * 1.4, x0 - 160, y0 + off + wob * 0.3);
-      ctx.bezierCurveTo(x0 - 210, y0 + off - wob, x1 + 60, y1 + off + wob * 0.8, x1, y1 + off);
-      ctx.moveTo(x0 - 120, y0 + off + wob * 0.9);                          // a branch
-      ctx.bezierCurveTo(x0 - 150, y0 + off + wob * 2.2, x0 - 190, y0 + off + wob * 2.6 + 12, x0 - 230, y0 + off + wob * 1.6 + 22);
+      ctx.beginPath(); ctx.moveTo(X(x0), y0 + off);
+      ctx.bezierCurveTo(X(x0 - 60), y0 + off - wob, X(x0 - 110), y0 + off + wob * 1.4, X(x0 - 160), y0 + off + wob * 0.3);
+      ctx.bezierCurveTo(X(x0 - 210), y0 + off - wob, X(x1 + 60), y1 + off + wob * 0.8, X(x1), y1 + off);
+      ctx.moveTo(X(x0 - 120), y0 + off + wob * 0.9);                       // a branch
+      ctx.bezierCurveTo(X(x0 - 150), y0 + off + wob * 2.2, X(x0 - 190), y0 + off + wob * 2.6 + 12, X(x0 - 230), y0 + off + wob * 1.6 + 22);
       ctx.stroke();
     }
     vein(2, 'rgba(0,0,0,.34)', 2.6);
@@ -3074,44 +3169,44 @@ function drawArmBody(curl, spread, fire){
   hg.addColorStop(0, 'rgb(168,42,24)'); hg.addColorStop(0.35, 'rgb(150,30,18)'); hg.addColorStop(0.75, C); hg.addColorStop(1, 'rgb(96,16,10)');
   ctx.fillStyle = hg;
   ctx.beginPath();
-  ctx.moveTo(-40, -wr + 2);
-  ctx.bezierCurveTo(-26, -44, -6, -52, 12, -46);                // the thumb's mound, top and back
-  ctx.bezierCurveTo(32, -40, 44, -26, 48, -10);                 // over to the first knuckle
-  ctx.bezierCurveTo(52, 10, 46, 32, 34, 44);                    // the knuckle line, the fingers' edge
-  ctx.bezierCurveTo(16, 54, -14, 52, -40, wr + 2);
-  ctx.bezierCurveTo(-24, wr - 10, -24, -wr + 8, -40, -wr + 2);
+  ctx.moveTo(X(-40), -wr + 2);
+  ctx.bezierCurveTo(X(-26), -44, X(-6), -52, X(12), -46);       // the thumb's mound, top and back
+  ctx.bezierCurveTo(X(32), -40, X(44), -26, X(48), -10);        // over to the first knuckle
+  ctx.bezierCurveTo(X(52), 10, X(46), 32, X(34), 44);           // the knuckle line, the fingers' edge
+  ctx.bezierCurveTo(X(16), 54, X(-14), 52, X(-40), wr + 2);
+  ctx.bezierCurveTo(X(-24), wr - 10, X(-24), -wr + 8, X(-40), -wr + 2);
   ctx.closePath(); ctx.fill();
   ctx.save(); ctx.clip();
   hideOver(0.55);
   // the bones of the hand: tendons standing out from the wrist to each knuckle
-  var kn = [[42, -8], [45, 8], [42, 24], [34, 37]];
+  var kn = [[X(42), -8], [X(45), 8], [X(42), 24], [X(34), 37]];
   for (var i=0;i<4;i++){
     var ext = 1 - curl;
     ctx.strokeStyle = 'rgba(0,0,0,' + (0.2 + 0.16 * ext) + ')'; ctx.lineWidth = 2.2;
-    ctx.beginPath(); ctx.moveTo(-26, -10 + i * 7); ctx.bezierCurveTo(0, -6 + i * 9, 18, kn[i][1] - 8, kn[i][0] - 4, kn[i][1] - 1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(-26), -10 + i * 7); ctx.bezierCurveTo(X(0), -6 + i * 9, X(18), kn[i][1] - 8, kn[i][0] - X(4), kn[i][1] - 1); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,150,120,' + (0.1 + 0.14 * ext) + ')'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(-26, -12 + i * 7); ctx.bezierCurveTo(0, -8 + i * 9, 18, kn[i][1] - 10, kn[i][0] - 4, kn[i][1] - 3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(-26), -12 + i * 7); ctx.bezierCurveTo(X(0), -8 + i * 9, X(18), kn[i][1] - 10, kn[i][0] - X(4), kn[i][1] - 3); ctx.stroke();
   }
   // the knuckles themselves, swelling as the hand closes
   kn.forEach(function(k){
-    var kg = ctx.createRadialGradient(k[0] - 3, k[1] - 4, 1, k[0], k[1], 12);
+    var kg = ctx.createRadialGradient(k[0] - X(3), k[1] - 4, 1, k[0], k[1], 12);
     kg.addColorStop(0, 'rgba(255,150,110,' + (0.18 + 0.22 * curl) + ')');
     kg.addColorStop(0.55, 'rgba(0,0,0,0)'); kg.addColorStop(1, 'rgba(0,0,0,' + (0.3 + 0.2 * curl) + ')');
     ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(k[0], k[1], 12, 0, 6.2832); ctx.fill();
   });
   // the thumb's mound, a mass of muscle at the top by the wrist
-  var tm = ctx.createRadialGradient(-6, -32, 2, -6, -30, 26);
+  var tm = ctx.createRadialGradient(X(10), -30, 2, X(10), -28, 26);
   tm.addColorStop(0, 'rgba(255,140,100,.22)'); tm.addColorStop(0.6, 'rgba(255,120,80,.05)'); tm.addColorStop(1, 'rgba(0,0,0,.35)');
-  ctx.fillStyle = tm; ctx.beginPath(); ctx.arc(-6, -30, 26, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = tm; ctx.beginPath(); ctx.arc(X(10), -28, 26, 0, 6.2832); ctx.fill();
   // a vein wandering over the bones, and the hollow between them
   ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(-34, -6); ctx.bezierCurveTo(-12, 0, 6, -10, 24, -2); ctx.bezierCurveTo(34, 2, 38, 10, 40, 18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X(-34), -6); ctx.bezierCurveTo(X(-12), 0, X(6), -10, X(24), -2); ctx.bezierCurveTo(X(34), 2, X(38), 10, X(40), 18); ctx.stroke();
   ctx.strokeStyle = 'rgba(255,150,120,.16)'; ctx.lineWidth = 1.4;
-  ctx.beginPath(); ctx.moveTo(-34, -9); ctx.bezierCurveTo(-12, -3, 6, -13, 24, -5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X(-34), -9); ctx.bezierCurveTo(X(-12), -3, X(6), -13, X(24), -5); ctx.stroke();
   // fire from below: warm along the lower edge, the top in shadow
   var pg = ctx.createLinearGradient(0, -60, 0, 52);
   pg.addColorStop(0, 'rgba(0,0,0,.3)'); pg.addColorStop(0.5, 'rgba(0,0,0,0)'); pg.addColorStop(1, 'rgba(255,130,50,' + (0.16 + 0.3 * fire) + ')');
-  ctx.fillStyle = pg; ctx.fillRect(-60, -80, 160, 160);
+  ctx.fillStyle = pg; ctx.fillRect(reach > 0 ? -60 : -100, -80, 160, 160);
   ctx.restore();
   // --- the four fingers: they leave the hand's leading edge pointing into
   //     the arena (local +x is toward the heart), stacked down the lower half,
@@ -3132,15 +3227,15 @@ function drawArmBody(curl, spread, fire){
     [45,  8, 0.56, 78, 8.8, 0.0],      // the longest, nearest the thumb
     [42, -8, 0.40, 66, 8.2, 0.3]
   ];
-  var grip = 0.24 + 0.34 * curl;                                // never a fist
-  fingers.forEach(function(f){
+  var grip = 0.2 + 0.28 * curl;                                 // never a fist, never past the vertical
+  if (!window.BTD_THUMB_ONLY) fingers.forEach(function(f){
     ctx.save();
     if (f[5] > 0) ctx.globalAlpha = 1 - 0.18 * f[5];            // set back in the shade
-    drawFinger(f[0], f[1], f[2] * (0.7 + 0.5 * spread), f[3], grip, f[4], 5.2, -1, fire);
+    drawFinger(X(f[0]), f[1], A(f[2] * (0.7 + 0.5 * spread)), f[3], grip, f[4], 5.2, B(-1), fire);
     if (f[5] > 0){                                              // and a little darker still
       ctx.globalAlpha = 0.26 * f[5];
       ctx.fillStyle = '#000';
-      ctx.beginPath(); ctx.ellipse(f[0] + f[3] * 0.45, f[1] + f[3] * 0.18, f[3] * 0.6, f[3] * 0.5, 0, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(X(f[0] + f[3] * 0.45), f[1] + f[3] * 0.18, f[3] * 0.6, f[3] * 0.5, 0, 0, 6.2832); ctx.fill();
     }
     ctx.restore();
   });
@@ -3149,7 +3244,12 @@ function drawArmBody(curl, spread, fire){
   //     from the hand, then folds down over it so its talon comes to meet the
   //     fingers rising from below. Two segments, a base half again as thick as
   //     a finger's, and barely two-thirds the length.
-  drawFinger(-8, -34, -0.16 + 0.22 * spread, 52, 0.42 + 0.34 * curl, 15, 9, 1, fire, true);
+  // It has to close on something. Rooted back by the wrist its tip finished
+  // 80 px behind the fingertips, hooking down into nothing — which is what
+  // makes a thumb look bent the wrong way. It sits forward on the top edge
+  // now, over the knuckles, so its claw comes down onto the fingers rising to
+  // meet it and the two make a ring.
+  drawFinger(X(22), -32, A(0.2 + 0.12 * spread), 58, 0.2 + 0.2 * curl, 15, 9, B(1), fire, true);
   ctx.restore();
 }
 var armsLayer = makeLayer(), devilLayer = makeLayer();
@@ -3294,9 +3394,51 @@ function drawHUD(){
   var label = G.phase === 'survive' ? 'S' : (G.devil && !G.devil.dying && (G.devil.state === 'open' || G.devil.state === 'attack') ? (open ? 'O' : 'C') : '-');
   var key = [Math.floor(G.score), hi, G.ammo, G.phase, Math.round(clamp(G.surv / G.SURV, 0, 1) * 200), alive, label].join('|');
   hudLayer.draw(key, drawHUDStatic);
-  if (isTouch) drawFireBtn();
+  if (isTouch){ drawStick(); drawFireBtn(); }
   // lives, beating too
   for (var i=0;i<G.lives;i++) drawGem(18 + i*20, 44, 6.5 * (1 + (G.heart.scale - 1) * 0.6), { alpha: 0.9, pulse: G.heart.pulse * 0.5 });
+}
+// The joystick: the same dark glass and cyan rim as the fire button, with four
+// chevrons so it reads as a stick at a glance. Held, the rim brightens and
+// lights toward the push; the knob follows the thumb and springs home.
+function drawStick(){
+  var s = stick, R = s.R, held = s.id != null, kr = R * 0.44;
+  var push = Math.hypot(s.jx, s.jy);
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = 'rgba(10,6,32,' + (held ? 0.64 : 0.52) + ')';
+  ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, 6.2832); ctx.fill();
+  ctx.lineWidth = held ? 3 : 2;
+  ctx.strokeStyle = col('heart', held ? 0.95 : 0.72);
+  ctx.stroke();
+  // the dead zone, faintly
+  ctx.lineWidth = 1; ctx.strokeStyle = col('heart', 0.18);
+  ctx.beginPath(); ctx.arc(s.x, s.y, R * 0.56, 0, 6.2832); ctx.stroke();
+  // four chevrons just inside the rim
+  ctx.fillStyle = col('heart', held ? 0.3 : 0.5);
+  for (var i=0;i<4;i++){
+    var a = i * Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a), c = R * 0.8, w = R * 0.1;
+    ctx.beginPath();
+    ctx.moveTo(s.x + ca * (c + w), s.y + sa * (c + w));
+    ctx.lineTo(s.x + ca * (c - w * 0.6) - sa * w * 1.1, s.y + sa * (c - w * 0.6) + ca * w * 1.1);
+    ctx.lineTo(s.x + ca * (c - w * 0.6) + sa * w * 1.1, s.y + sa * (c - w * 0.6) - ca * w * 1.1);
+    ctx.closePath(); ctx.fill();
+  }
+  // the rim lights where the thumb is pushing, brighter the harder
+  if (held && push > 0){
+    var pa = Math.atan2(s.jy, s.jx);
+    ctx.strokeStyle = col('heart', 0.35 + 0.6 * push); ctx.lineWidth = 3 + 4 * push;
+    ctx.beginPath(); ctx.arc(s.x, s.y, R + 1, pa - 0.55, pa + 0.55); ctx.stroke();
+  }
+  // the knob
+  var kg = ctx.createRadialGradient(s.kx - kr * 0.3, s.ky - kr * 0.35, 1, s.kx, s.ky, kr);
+  kg.addColorStop(0, held ? '#ffffff' : col('heart', 0.95));
+  kg.addColorStop(0.55, col('heart', held ? 0.9 : 0.6));
+  kg.addColorStop(1, col('heart', held ? 0.5 : 0.28));
+  ctx.fillStyle = kg;
+  ctx.beginPath(); ctx.arc(s.kx, s.ky, kr, 0, 6.2832); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = col('heart', 0.85); ctx.stroke();
+  ctx.restore();
 }
 function drawFireBtn(){
   var b = fireBtn, r = b.r, k = b.press;
@@ -3417,6 +3559,7 @@ function drawLightning(){
 
 // darkness closes in over the survive phase: radius 0.72 → 0.5
 function drawVignette(){
+  if (window.BTD_LIGHT) return;
   var step = Math.round(G.prog * 40);
   vignetteLayer.draw(step, function(){
     var r = lerp(0.72, 0.5, step / 40);
@@ -3492,6 +3635,7 @@ function draw(){
     ctx.fillRect(-20, LH - 300, LW + 40, 320);
   }
   }
+  if (window.BTD_LIGHT){ ctx.fillStyle = '#6d6774'; ctx.fillRect(-20, -20, LW + 40, LH + 40); }
   if (G.mode === 'title') drawTitleHearts();
 
   // embers
