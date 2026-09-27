@@ -183,6 +183,8 @@ var sfx = {
   lanternHit: function(){ noise({dur:0.12, vol:0.4, type:'highpass', freq:3000}); tone({freq:2400, slide:1900, dur:0.7, vol:0.12, type:'sine'}); tone({freq:3520, dur:0.5, vol:0.06, type:'sine'}); },
   lanternShatter: function(){ explosion(210, 1.1); for (var i = 0; i < 12; i++) later(i * 35 + Math.random() * 40, function(){ noise({dur:0.05 + Math.random() * 0.08, vol:0.18, type:'highpass', freq:3000 + Math.random() * 4000}); }); chimes([1760, 2349.3, 2637, 3520], 0.05, 0.08); },
   cagesBurst: function(){ for (var i = 0; i < 7; i++) later(i * 120, function(){ chimes([1174.7 + Math.random() * 600], 0, 0.07); noise({dur:0.08, vol:0.1, type:'bandpass', freq:1800, q:2}); }); },
+  // the gates of heaven opening: bells climbing D major, and a shimmer rising under them
+  gatesOpen: function(){ chimes([587.3, 740, 880, 1174.7, 1480, 1760, 2349.3], 0.13, 0.08); noise({dur:2.2, vol:0.12, type:'highpass', freq:3000, slide:9000, attack:0.9}); tone({freq:293.7, dur:2.6, vol:0.12, type:'sine', attack:0.6}); },
   cageSlam: function(){ tone({freq:80, slide:40, dur:0.6, vol:0.6, type:'sine'}); noise({dur:0.25, vol:0.4, type:'bandpass', freq:900, q:1.2, slide:300}); noise({dur:0.06, vol:0.3, type:'highpass', freq:4000}); },
   breathWarn: function(){ tone({freq:48, slide:110, dur:1.0, vol:0.35, type:'sawtooth', filter:300, attack:0.3}); },
   breath: function(){ noise({dur:0.9, vol:0.45, freq:2200, slide:300, attack:0.03}); },

@@ -219,7 +219,10 @@ starts again from the pit. The rules are DESIGN.md rule 11; in short:
   through his cloak.
 - **Endings.** Break the lantern and every cage bursts; his armour falls apart
   into the crust, his knights burn away, and the souls join the heart as the light takes them all
-  up. Run out of bolts first and he locks the heart in a cage with them.
+  up. At the top of the light the gates of heaven appear and swing open (to
+  chimes), the heart and the souls rise through them, and they fade before the
+  panel (`RELEASE.gates`, `drawGates()`). Run out of bolts first and he locks
+  the heart in a cage with them.
 - **Score** adds 500 for each soul you brought out (delivered, plus those still
   with you when the lantern breaks), on a board of its own.
 
@@ -378,7 +381,10 @@ domain), which the game slows, drops, doubles, distorts and drowns in reverb.
 (the first of each level with its spoken name) and the rest from `SPOKEN` —
 and writes `voice/<key>.mp3` and `voice/timings.json` (each line's length and,
 for story pages, when each paragraph is spoken, for the typing). After
-changing a line, re-render it and bump `VOICE_V` in `game.js`:
+changing a line, re-render it and bump `VOICE_V` in `game.js`. In a man's
+line, `~` after a word draws that word out into a cry, and a last word in
+CAPITALS is shouted after a beat, the words before it spat
+(*"No~... They were MINE!"*):
 
 ```
 pip install soundfile numpy
