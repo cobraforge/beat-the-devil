@@ -77,9 +77,96 @@ if (isTouch){
 }
 
 // ---------- storage ----------
-var hi = 0;
-try { var v = localStorage.getItem('btd.hi'); if (v) hi = parseInt(v,10) || 0; } catch(e){}
-function saveHi(){ try { localStorage.setItem('btd.hi', String(hi)); } catch(e){} }
+// the best completed run on this device, in board points
+var best = 0;
+try { var v = localStorage.getItem('btd.best'); if (v) best = parseInt(v,10) || 0; } catch(e){}
+function saveBest(){ try { localStorage.setItem('btd.best', String(best)); } catch(e){} }
+
+// ---------- scoring ----------
+// Only a completed run scores: hearts left are worth a thousand each, and
+// speed up to 2,500 more, so one heart is worth a hundred seconds. The clock
+// runs from the first step into the pit to the bolt that kills him, and it
+// never stops, not for a pause. The server keeps its own clock and computes
+// the score that goes on the board; this copy is for showing it at once.
+function boardScore(hearts, seconds){ return hearts * 1000 + Math.max(0, Math.round((300 - seconds) * 10)); }
+function clock(s){ s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function thousands(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function runSeconds(){ return G.runSecs != null ? G.runSecs : (G.mode === 'play' && G.runStart ? (performance.now() - G.runStart) / 1000 : 0); }
+
+// ---------- the world: scoreboard and soul counters ----------
+// All of it lives behind /api: a Cloudflare Pages Function over a D1 database
+// (functions/api/[[route]].js). The game never waits on it. Every call has a
+// short timeout, and if there is no server — a static host answering with a
+// page, or no database bound — the board is hidden and the game plays the same.
+var WORLD = { online: null, top: [], souls: null, run: null, runP: null, endP: null, result: null, naming: false, mine: null };
+function api(path, body){
+  if (WORLD.online === false) return Promise.reject(new Error('offline'));
+  var ac = window.AbortController ? new AbortController() : null;
+  var timer = ac && setTimeout(function(){ ac.abort(); }, 6000);
+  return fetch('/api/' + path, {
+    method: body ? 'POST' : 'GET', cache: 'no-store', signal: ac ? ac.signal : undefined,
+    headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined
+  }).then(function(r){
+    if (timer) clearTimeout(timer);
+    if ((r.headers.get('content-type') || '').indexOf('application/json') < 0){ WORLD.online = false; throw new Error('no api'); }
+    return r.json().then(function(j){
+      if (r.status === 503){ WORLD.online = false; throw new Error(j.error); }   // no database yet
+      WORLD.online = true;
+      if (!r.ok) throw new Error(j.error || String(r.status));
+      return j;
+    });
+  }, function(e){ if (timer) clearTimeout(timer); throw e; });
+}
+function worldLoad(){
+  return api('board').then(function(j){ WORLD.top = j.top || []; WORLD.souls = j.souls || null; }).catch(function(){}).then(renderWorld);
+}
+function worldStart(){
+  WORLD.run = null; WORLD.result = null; WORLD.endP = null; WORLD.naming = false;
+  WORLD.runP = api('start', {}).then(function(j){ WORLD.run = j.run; }).catch(function(){});
+}
+// outcome 'freed' or 'stolen', sent the moment it is decided
+function worldEnd(outcome, hearts){
+  if (!WORLD.runP) return;
+  WORLD.endP = WORLD.runP.then(function(){
+    if (!WORLD.run) throw new Error('no run');
+    return api('end', { run: WORLD.run, outcome: outcome, hearts: hearts });
+  }).then(function(j){ WORLD.result = j; if (j.souls) WORLD.souls = j.souls; renderWorld(); return j; });
+  WORLD.endP.catch(function(){});
+}
+function dateOf(ms){
+  var d = new Date(ms), M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  return d.getDate() + ' ' + M[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2);
+}
+function hiScore(){ return Math.max(best, WORLD.top.length ? WORLD.top[0].score : 0); }
+function soulsLine(){ return WORLD.souls ? thousands(WORLD.souls.stolen) + ' souls stolen' : ''; }
+// the title's counter and board, and the lose panel's count
+function renderWorld(){
+  var s = WORLD.souls, sl = document.getElementById('souls');
+  if (s){
+    sl.hidden = false;
+    sl.textContent = '';
+    sl.appendChild(document.createTextNode(thousands(s.stolen) + ' souls stolen'));
+    var fr = document.createElement('span'); fr.textContent = ' \u00b7 ' + thousands(s.freed) + ' freed'; sl.appendChild(fr);
+  } else sl.hidden = true;
+  var bd = document.getElementById('board'), rows = document.getElementById('board-rows');
+  bd.hidden = !WORLD.online;
+  if (WORLD.online){
+    rows.textContent = '';
+    if (!WORLD.top.length){
+      var li0 = document.createElement('li'); li0.className = 'empty'; li0.textContent = 'No soul has been freed yet'; rows.appendChild(li0);
+    }
+    WORLD.top.slice(0, 5).forEach(function(e, i){
+      var li = document.createElement('li');
+      [String(i + 1), e.name, thousands(e.score), e.hearts + '\u2665', clock(e.seconds), dateOf(e.at)].forEach(function(t){
+        var sp = document.createElement('span'); sp.textContent = t; li.appendChild(sp);
+      });
+      if (WORLD.mine && WORLD.mine.name === e.name && WORLD.mine.score === e.score) li.className = 'me';
+      rows.appendChild(li);
+    });
+  }
+  if (G.mode === 'over' && s) document.getElementById('over-hi').textContent = soulsLine();
+}
+if (/debug/.test(location.hash)){ window.BTD_WORLD = WORLD; window.BTD_WORLD_LOAD = worldLoad; }
 
 // ---------- helpers ----------
 function rnd(a,b){ return a + Math.random()*(b-a); }
@@ -278,7 +365,9 @@ function reset(){
   G.mode = 'title';           // title | play | ending | over | won
   G.tier = tier;
   G.t = 0;
-  G.score = 0;
+  G.score = 0;                // board points, set when the devil dies
+  G.runStart = 0;             // performance.now() at the first step into the pit
+  G.runSecs = null;           // the run's time, fixed the moment it is decided
   G.lives = LIVES;
   G.ammo = AMMO;
   G.phase = 'survive';        // survive | devil
@@ -326,7 +415,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 32;
+  window.BTD_VERSION = 33;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -390,6 +479,7 @@ if (/debug/.test(location.hash)){ window.BTD_STICK = stick; window.BTD_FIREBTN =
 resize();
 
 window.addEventListener('keydown', function(e){
+  if (e.target && e.target.closest && e.target.closest('.name')) return;   // typing a name
   var k = e.key, space = k === ' ' || e.code === 'Space';
   if (k === '`' || e.code === 'Backquote'){ if (!e.repeat) perfShow = !perfShow; e.preventDefault(); return; }   // the overlay, and nothing else
   if (space || ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].indexOf(k) >= 0) e.preventDefault();
@@ -425,6 +515,7 @@ function toLogical(e){
 // picture. A mouse still has to press on the picture itself.
 window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
+  if (e.target.closest && e.target.closest('.name')) return;
   var onPicture = stage.contains(e.target);
   if (!isTouch && !onPicture) return;
   var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
@@ -497,6 +588,7 @@ var scrWin   = document.getElementById('scr-win');
 
 function tryStart(){
   AUDIO.unlock();
+  if (WORLD.naming) return;                       // a winner is giving a name
   if (G.mode === 'title' || G.mode === 'over' || G.mode === 'won'){
     if (G.mode !== 'title' && G.endT < 0.9) return;
     startGame();
@@ -506,14 +598,47 @@ function startGame(){
   reset();
   AUDIO.muffle(false);
   G.mode = 'play';
+  G.runStart = performance.now();
   scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true;
+  closeNameForm();
   music.play('survive');
+  worldStart();
 }
 function showTitle(){
-  document.getElementById('hi-title').textContent = hi ? ('Best ' + hi) : '';
+  document.getElementById('hi-title').textContent = best ? ('Your best ' + thousands(best)) : '';
   scrTitle.hidden = false;
 }
 showTitle();
+worldLoad();
+
+// ---------- a name for the board ----------
+var nameForm = document.getElementById('name-form'), nameIn = document.getElementById('name-in');
+var winHint = document.getElementById('win-hint'), winHi = document.getElementById('win-hi');
+function openNameForm(){
+  WORLD.naming = true;
+  nameForm.hidden = false; winHint.hidden = true;
+  try { nameIn.value = localStorage.getItem('btd.name') || ''; } catch(e){}
+  if (!isTouch) setTimeout(function(){ nameIn.focus(); }, 60);   // a phone opens its keyboard on the tap
+}
+function closeNameForm(){
+  WORLD.naming = false;
+  nameForm.hidden = true; winHint.hidden = false;
+  if (document.activeElement === nameIn) nameIn.blur();
+}
+nameForm.addEventListener('submit', function(e){
+  e.preventDefault();
+  var n = nameIn.value.trim();
+  if (!n) return;
+  try { localStorage.setItem('btd.name', n); } catch(err){}
+  winHi.textContent = 'Carving it in\u2026';
+  api('name', { run: WORLD.run, name: n }).then(function(j){
+    WORLD.top = j.top || WORLD.top; WORLD.mine = { name: j.name, score: WORLD.result && WORLD.result.score };
+    winHi.textContent = j.name + ' \u00b7 #' + j.rank + ' in the world';
+    renderWorld();
+  }, function(){ winHi.textContent = 'The board would not take it'; }).then(closeNameForm);
+  G.endT = 0;                                      // no accidental restart on the same tap
+});
+document.getElementById('name-skip').addEventListener('click', function(){ closeNameForm(); G.endT = 0; });
 
 // ---------- the heartbeat ----------
 // Two-beat cycle: a lub (1.0 → 1.14 over ~90 ms) then a smaller dub. Rate
@@ -815,8 +940,13 @@ function beginEnding(kind, dur){
 // He takes it. Input is cut; the heart keeps beating, slowing, and drifts —
 // no longer yours. His hand closes around it; the beat goes on inside the
 // fist. He turns and points at the player. The beat stops. Black.
+function runOver(outcome){
+  G.runSecs = runSeconds();
+  worldEnd(outcome, outcome === 'freed' ? G.lives : 0);
+}
 function loseHeart(){
   var d = G.devil;
+  runOver('stolen');
   beginEnding('taken', 9.8);
   d.state = 'taken';
   d.eyes.forEach(function(e){ e.open = false; e.wide = 0; });
@@ -868,6 +998,7 @@ function updateTaken(dt){
   }
 }
 function heartGaveOut(){
+  runOver('stolen');
   beginEnding('dead', 1.9);
   G.shake = 1.4;
   music.stop();
@@ -895,6 +1026,7 @@ var FREE = { reach: [0.2, 1.0], close: [1.0, 1.4], dead: 2.4, char: [2.5, 3.7], 
              crack: 3.9, beam: [4.1, 4.8], heal: [4.8, 6.4], rise: [6.2, 8.4], end: 8.8 };
 function devilDies(){
   var d = G.devil;
+  runOver('freed');
   d.dying = true; d.dieT = 0;
   beginEnding('devil', FREE.end);
   G.white = 1; G.shake = 1.6;
@@ -1005,28 +1137,38 @@ function updateEnding(dt){
 function gameOver(why, quiet){
   G.mode = 'over';
   G.endT = 0;
-  G.score = Math.floor(G.score);
-  if (G.score > hi){ hi = G.score; saveHi(); }
   document.getElementById('over-why').textContent = why;
   scrOver.classList.toggle('low', !!quiet);
-  document.getElementById('over-score').textContent = 'Score ' + G.score;
-  document.getElementById('over-hi').textContent = 'Best ' + hi;
+  document.getElementById('over-score').textContent = G.runSecs != null ? 'You lasted ' + clock(G.runSecs) : '';
+  document.getElementById('over-hi').textContent = soulsLine() || (best ? 'Your best ' + thousands(best) : '');
   scrOver.hidden = false;
   if (!quiet) sfx.over();
   setTimeout(function(){ if (G.mode === 'over'){ AUDIO.muffle(false); G.heart.override = -1; music.play('dirge'); } }, quiet ? 2500 : 1000);
 }
+function showWinScore(hearts, secs, score){
+  document.getElementById('win-score').textContent = hearts + ' heart' + (hearts > 1 ? 's' : '') + ' \u00b7 ' + clock(secs) + ' \u00b7 ' + thousands(score) + ' points';
+}
 function victory(){
   G.mode = 'won';
   G.endT = 0;
-  var spare = G.ammo;
-  G.score = Math.floor(G.score + 10000 + G.lives * 2500 + spare * 1500);
-  if (G.score > hi){ hi = G.score; saveHi(); }
+  var spare = G.ammo, secs = G.runSecs || 0;
+  G.score = boardScore(G.lives, secs);
+  if (G.score > best){ best = G.score; saveBest(); }
   document.getElementById('win-why').innerHTML = 'Your soul is free.<br>' + (spare
     ? ('Two eyes. ' + spare + ' bolt' + (spare > 1 ? 's' : '') + ' to spare.')
     : 'Two eyes. Not a bolt to spare.');
-  document.getElementById('win-score').textContent = 'Score ' + G.score;
-  document.getElementById('win-hi').textContent = 'Best ' + hi;
+  showWinScore(G.lives, secs, G.score);
+  winHi.textContent = WORLD.endP ? 'Asking the world\u2026' : (best ? 'Your best ' + thousands(best) : '');
   scrWin.hidden = false;
+  // the server's clock is the one that counts: when it answers, its time and
+  // score replace ours, and a place on the board asks for a name
+  if (WORLD.endP) WORLD.endP.then(function(r){
+    if (G.mode !== 'won' || r.score == null) return;
+    showWinScore(G.lives, r.seconds, r.score);
+    if (r.score > best){ best = r.score; saveBest(); }
+    winHi.textContent = '#' + r.rank + ' in the world' + (r.qualifies ? '' : ' \u00b7 the board holds ten');
+    if (r.qualifies) openNameForm();
+  }, function(){ if (G.mode === 'won') winHi.textContent = 'Scoreboard offline \u00b7 your best ' + thousands(best); });
   sfx.win();
   setTimeout(function(){ if (G.mode === 'won') music.play('win'); }, 900);
 }
@@ -1181,7 +1323,6 @@ function update(dt){
   // phase logic
   if (G.phase === 'survive'){
     G.surv += dt;
-    G.score += dt * 10;
     var prog = G.prog = G.surv / G.SURV;
     music.whisper(prog > 0.7 ? (prog - 0.7) / 0.3 : 0);
 
@@ -1301,9 +1442,7 @@ function moveHazards(dt, live){
       if (Math.abs(bb.x - f.x) < f.r + 5 && Math.abs(bb.y - f.y) < f.r + 12){
         G.bolts.splice(j,1);
         G.forks.splice(i,1);
-        G.score += 100;
         burst(f.x, f.y, '#ff6a1f', 6, 180);
-        addText(f.x, f.y - 10, '+100', COLORS.ash, 0.6, 7);
         sfx.pop();
         hit = true;
         checkAmmo();
@@ -1314,11 +1453,10 @@ function moveHazards(dt, live){
     if (f.state !== 'fly' && f.state !== 'stuck') continue;
     var hp = forkHazardPos(f);
     if (hits(p, hp.x, hp.y, f.r)){ hurt('fork', hp.x, hp.y, f.vx || 0, f.vy || 1); break; }   // hurt() clears the forks
-    // graze: a near miss pays
+    // graze: a near miss is marked
     if (f.state === 'fly' && !f.grazed && G.invuln <= 0 && Math.hypot(p.x - f.x, p.y - f.y) < f.r + 8 + 16){
       f.grazed = true;
-      G.score += 50;
-      addText(p.x, p.y - 26, '+50', COLORS.sulfur, 0.6, 7);
+      addText(p.x, p.y - 26, 'CLOSE', COLORS.sulfur, 0.6, 7);
       sfx.graze();
     }
   }
@@ -1697,7 +1835,6 @@ function eyeHit(d, e){
   e.dead = true; e.open = false; e.ember = 0;
   d.rage++;
   d.kick = 1;                 // head snaps back
-  G.score += 3000;
   G.shake = 1.3;
   G.white = 0.6;
   burst(ex, ey, COLORS.sulfur, 8, 220);
@@ -3563,7 +3700,7 @@ var hudLayer = makeLayer(), vignetteLayer = makeLayer(), mistStrip = null;
 function drawHUD(){
   var alive = G.devil ? livingEyes(G.devil).length : 0, open = G.devil ? anyEyeOpen(G.devil) : false;
   var label = G.phase === 'survive' ? 'S' : (G.devil && !G.devil.dying && (G.devil.state === 'open' || G.devil.state === 'attack') ? (open ? 'O' : 'C') : '-');
-  var key = [Math.floor(G.score), hi, G.ammo, G.phase, Math.round(clamp(G.surv / G.SURV, 0, 1) * 200), alive, label].join('|');
+  var key = [Math.floor(runSeconds()), hiScore(), G.ammo, G.phase, Math.round(clamp(G.surv / G.SURV, 0, 1) * 200), alive, label].join('|');
   hudLayer.draw(key, drawHUDStatic);
 
   // lives, beating too
@@ -3652,10 +3789,10 @@ function drawHUDStatic(){
   ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(253,248,240,.9)';
   ctx.textAlign = 'left';
-  ctx.fillText(String(Math.floor(G.score)).padStart(6,'0'), 12, 12);
+  ctx.fillText('TIME ' + clock(runSeconds()), 12, 12);       // the clock that scores
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(199,154,143,.9)';
-  ctx.fillText('HI ' + String(hi).padStart(6,'0'), LW - 12, 12);
+  ctx.fillText('HI ' + String(hiScore()).padStart(5,'0'), LW - 12, 12);   // the world's, when it answers
 
   drawQuiver();
 

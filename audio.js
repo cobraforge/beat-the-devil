@@ -40,6 +40,32 @@ function ctx(){
 }
 function running(){ return actx && actx.state === 'running'; }
 
+// ----- unlocking, for iPhones -----
+// iOS Safari starts audio only from inside a gesture it counts as one — a
+// touchend or a click, NOT a touchstart or pointerdown, which is where the
+// game's taps are handled — and only while that event is being handled; a
+// resume() from anywhere else does nothing. So every such event tries until
+// the context runs, and plays one silent sample inside it, which older iOS
+// also needs. Separately, the ringer switch silences Web Audio on an iPhone
+// unless the page's audio session is 'playback', as a music or video page's
+// is; that is set on the same gesture (Safari 16.4 and later).
+function unlock(){
+  var a = ctx(); if (!a) return;
+  try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch(e){}
+  if (a.state !== 'running'){
+    try { a.resume(); } catch(e){}
+    try {
+      var b = a.createBuffer(1, 1, a.sampleRate), src = a.createBufferSource();
+      src.buffer = b; src.connect(a.destination); src.start(0);
+    } catch(e){}
+  }
+}
+['touchend', 'pointerup', 'click', 'keydown'].forEach(function(type){
+  window.addEventListener(type, function(){ if (!running()) unlock(); }, true);
+});
+// after a call or a trip to another app iOS leaves it 'interrupted'; the next touch resumes it
+document.addEventListener('visibilitychange', function(){ if (!document.hidden && actx && actx.state !== 'running') try { actx.resume(); } catch(e){} });
+
 // ---------- primitives ----------
 // tone({freq, dur, vol, type, slide, attack, filter, q, detune, t, bus})
 function tone(o){
@@ -830,7 +856,7 @@ music.resume = function(){ if (pausedName) music.play(pausedName, true); pausedN
 window.BTD_AUDIO = {
   sfx: sfx,
   music: music,
-  unlock: ctx,
+  unlock: function(){ unlock(); return actx; },
   fire: { update: fireUpdate },
   meter: meter,
   // debug: set the choir's level live, for balancing it against the heart
