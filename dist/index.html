@@ -227,6 +227,15 @@ body.touch #ctl{display:block}
 /* the thumbs have the ground under the picture; sound sits at the top centre,
    between the lives and the bolts in play and just under the banner on the title */
 body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));transform:translateX(-50%)}
+/* in play the pause button sits beside it: sound just left of centre, pause just right */
+body.touch.playing #mute{transform:translateX(calc(-100% - 3px))}
+#pausebtn{display:none}
+body.touch #pausebtn{display:block;position:absolute;z-index:3;left:calc(50% + 3px);top:calc(30px * var(--s));
+  min-width:calc(22px * var(--s));background:transparent;border:1px solid rgba(159,232,255,.3);color:rgba(159,232,255,.8);
+  font-family:inherit;font-size:calc(7px * var(--s));padding:calc(5px * var(--s)) calc(7px * var(--s));border-radius:2px;cursor:pointer;touch-action:manipulation}
+body.touch #pausebtn[hidden]{display:none}
+/* a thumb-sized target round a small button */
+body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px -2px}
 /* the glass itself: a soft reflection that sells the barrel curve */
 #stage::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
@@ -305,10 +314,13 @@ body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));trans
 /* the end panels: the way back to the title */
 .endbtns{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(8px * var(--s))}
 .endbtns[hidden]{display:none}
-.menubtn{font-family:inherit;font-size:max(10px, calc(8px * var(--s)));letter-spacing:1px;cursor:pointer;
+.menubtn,.pausebtn{font-family:inherit;font-size:max(10px, calc(8px * var(--s)));letter-spacing:1px;cursor:pointer;
   padding:calc(6px * var(--s)) calc(12px * var(--s));color:var(--ash);background:rgba(14,3,2,.65);
   border:1px solid rgba(199,154,143,.4);border-radius:2px;touch-action:manipulation}
-.menubtn:hover,.menubtn:focus-visible{border-color:var(--bone);color:var(--bone)}
+.menubtn:hover,.menubtn:focus-visible,.pausebtn:hover,.pausebtn:focus-visible{border-color:var(--bone);color:var(--bone)}
+#pause-resume{color:var(--heart);border-color:rgba(159,232,255,.55)}
+/* the version, in the title's bottom-left corner */
+.ver{position:absolute;left:calc(8px * var(--s));bottom:calc(6px * var(--s));font-size:calc(5.5px * var(--s));color:var(--ash);opacity:.7;letter-spacing:1px}
 .board-tabs{display:flex;justify-content:center;gap:calc(6px * var(--s));margin-bottom:calc(4px * var(--s))}
 .board-tabs button{font-family:inherit;font-size:max(9px, calc(6px * var(--s)));cursor:pointer;padding:.4em .8em;
   color:var(--ash);background:transparent;border:1px solid rgba(199,154,143,.3);border-radius:2px;touch-action:manipulation}
@@ -352,6 +364,7 @@ body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));trans
         <div class="blink" id="start-hint">Press space to start</div>
         <div class="stat" id="hi-title"></div>
         <div class="souls" id="souls" hidden></div>
+        <div class="ver" id="ver"></div>
         <div class="board" id="board" hidden>
           <div class="board-head">The world's best &middot; scroll for more</div>
           <div class="board-tabs"><button type="button" data-view="1" class="on">I &middot; The Pit</button><button type="button" data-view="2">II &middot; The Stolen</button></div>
@@ -382,7 +395,14 @@ body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));trans
         <div class="endbtns" id="win-btns"><button type="button" class="menubtn">Main menu</button></div>
       </div>
 
+      <div class="screen" id="scr-pause" hidden>
+        <div class="big">PAUSED</div>
+        <div class="blink" id="pause-hint">Press P or Esc to resume</div>
+        <div class="endbtns"><button type="button" class="pausebtn" id="pause-resume">Resume</button><button type="button" class="pausebtn" id="pause-menu">Main menu</button></div>
+      </div>
+
       <button id="mute" type="button">Sound on</button>
+      <button id="pausebtn" type="button" aria-label="Pause" hidden>II</button>
     </div>
     <div id="vents" aria-hidden="true"></div>
     <div id="panel" aria-hidden="true">
@@ -1509,6 +1529,9 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', function(){ setTimeout(resize, 120); });
 resize();
 
+// the version the title shows; bump it with each release (BTD_VERSION counts builds)
+var GAME_VERSION = '1.0';
+document.getElementById('ver').textContent = 'v' + GAME_VERSION;
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
 document.getElementById('tip').innerHTML = STORY + (isTouch
   ? 'Left thumb on the circle to move<br>Right thumb on the button to fire'
@@ -1885,7 +1908,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 39;
+  window.BTD_VERSION = 40;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -1958,6 +1981,7 @@ window.addEventListener('keydown', function(e){
   keys[lk] = true;
   if (lk === 'm'){ toggleMute(); return; }
   if (lk === 'escape' && G.mode !== 'play'){ goTitle(); return; }
+  if (lk === 'q' && G.paused){ toTitle(); return; }            // from the pause screen, the main menu
   if (lk === 'p' || lk === 'escape'){ togglePause(); return; }
   if (space || k === 'Enter'){
     if (G.mode === 'play'){ if (!G.paused) fireQueued = true; }
@@ -1986,7 +2010,7 @@ function toLogical(e){
 // picture. A mouse still has to press on the picture itself.
 window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  if (e.target.closest && e.target.closest('.name, .board, .menubtn, #dev')) return;   // the name box, the board and the buttons take their own touches
+  if (e.target.closest && e.target.closest('.name, .board, .menubtn, .pausebtn, #pausebtn, #dev')) return;   // the name box, the board and the buttons take their own touches
   var onPicture = stage.contains(e.target);
   if (!isTouch && !onPicture) return;
   var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
@@ -2055,7 +2079,8 @@ muteBtn.addEventListener('click', function(e){ e.stopPropagation(); toggleMute()
 function togglePause(){
   if (G.mode !== 'play') return;
   G.paused = !G.paused;
-  keys = {}; fireQueued = false;
+  keys = {}; fireQueued = false; stickRelease();
+  document.getElementById('scr-pause').hidden = !G.paused;
   sfx.pause();
   if (G.paused) music.pause(); else music.resume();
 }
@@ -2092,13 +2117,19 @@ function startGame(level){
 // from an end panel back to the title: the pit, the board fresh from the world, and its music
 function goTitle(){
   if (WORLD.naming || (G.mode !== 'over' && G.mode !== 'won') || G.endT < 0.9) return;
+  toTitle();
+}
+// back to the title from anywhere: an end panel, or the pause screen (the run is abandoned)
+function toTitle(){
+  G.paused = false;
+  document.getElementById('scr-pause').hidden = true;
   reset(1);
   AUDIO.muffle(false);
   scrOver.hidden = true; scrWin.hidden = true;
   closeNameForm();
   showTitle();
   worldLoad();
-  music.play('title');
+  music.play('title', true);
 }
 function showTitle(){
   document.getElementById('hi-title').textContent = (bests[1] ? 'Your best ' + thousands(bests[1]) : '') + (bests[2] ? ' \u00b7 II ' + thousands(bests[2]) : '');
@@ -2113,6 +2144,20 @@ function endHints(){
 [].forEach.call(document.querySelectorAll('.menubtn'), function(b){
   b.addEventListener('click', function(e){ e.stopPropagation(); b.blur(); goTitle(); });
 });
+// pausing: the phone's pause button (a keyboard has P and Esc), and the pause screen's buttons
+var pauseBtn = document.getElementById('pausebtn'), pauseShown = false;
+pauseBtn.addEventListener('click', function(e){ e.stopPropagation(); pauseBtn.blur(); AUDIO.unlock(); if (G.mode === 'play' && !G.paused) togglePause(); });
+document.getElementById('pause-resume').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); if (G.paused) togglePause(); });
+document.getElementById('pause-menu').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); if (G.paused) toTitle(); });
+if (isTouch) document.getElementById('pause-hint').textContent = 'Tap to resume';
+else document.getElementById('pause-menu').textContent = 'Main menu (Q)';
+// the pause button shows only in play (and the sound button moves over for it)
+function pauseUI(){
+  var want = G.mode === 'play' && !G.paused;
+  if (want === pauseShown) return;
+  pauseShown = want; pauseBtn.hidden = !want;
+  document.body.classList.toggle('playing', want);
+}
 // ---------- dev mode ----------
 // Five clicks on the cabinet's rainbow badge, then five on its orange power
 // lamp, turn it on; the same knock (or its own button) turns it off. It stays
@@ -3703,6 +3748,20 @@ function chainArc(fl){
   return [Math.max(-fl.A, lo), Math.min(fl.A, hi)];
 }
 function ballFromAngle(fl){ fl.bx = fl.ax + Math.sin(fl.th) * fl.len; fl.by = fl.ay + Math.cos(fl.th) * fl.len; }
+function ballVelocity(fl){
+  if (fl.state === 'drop') return { x: 0, y: fl.vy * fl.ts };
+  if (fl.state !== 'swing') return { x: 0, y: 0 };
+  var v = fl.om * fl.len * fl.ts;
+  return { x: Math.cos(fl.th) * v, y: -Math.sin(fl.th) * v };
+}
+// how hot it is: it heats in its clamp or his fist through the telegraph,
+// burns from the moment it is let go, and dies down as it is hauled up
+function chainHeat(fl){
+  if (fl.state === 'aim') return 0.15 + 0.45 * Math.min(1, fl.t / fl.aimT);
+  if (fl.state === 'lock') return 0.75;
+  if (fl.state === 'drop' || fl.state === 'swing') return 1;
+  return Math.max(0, 1 - fl.t / CHAIN.REEL);
+}
 // the chain itself: a rope of nodes pinned at the pivot and the ball
 function ropeInit(fl, x0, y0, x1, y1){
   fl.nodes = [];
@@ -3817,6 +3876,12 @@ function stepChain(fl, dt, live){
     }
   }
   var out = fl.state === 'drop' || fl.state === 'swing';
+  if (out && Math.random() < 0.6){
+    // it burns: embers shed from the ball, and now and then from a link
+    var V = ballVelocity(fl), n = fl.nodes && fl.nodes[1 + Math.floor(Math.random() * (fl.nodes.length - 2))];
+    addPart({ x: fl.bx + rnd(-5, 5), y: fl.by + rnd(-5, 5), vx: -V.x * 0.15 + rnd(-30, 30), vy: -V.y * 0.15 - rnd(20, 80), life: rnd(0.4, 0.9), t: 0, c: Math.random() < 0.5 ? '#ffb050' : '#ff6a10', r: rnd(1, 2.2), g: -40, turb: 20 });
+    if (n && Math.random() < 0.4) addPart({ x: n.x, y: n.y, vx: rnd(-20, 20), vy: rnd(-70, -20), life: rnd(0.3, 0.7), t: 0, c: '#ff9a40', r: rnd(0.8, 1.6), g: -30, turb: 15 });
+  }
   if (out){
     // it smashes a cage it meets (the soul spills out) and ends a shade
     if (G.cages) G.cages.forEach(function(c){ if (c.state === 'hang' && c.soul && Math.hypot(c.x - fl.bx, c.y - fl.by) < fl.r + 18) smashCage(c, fl); });
@@ -4546,8 +4611,57 @@ function drawClamp(x, y, r, open){
   ctx.fillStyle = '#161111'; ctx.fillRect(x - 9, top, 18, 5);
   ctx.restore();
 }
+// the chain on fire: the iron glowing along its length, flames licking up
+// off the links (more toward the ball)
+function chainFire(pts, heat, seed){
+  if (heat <= 0.02 || !pts || pts.length < 2) return;
+  var i;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.strokeStyle = 'rgba(255,90,20,' + (0.3 * heat) + ')'; ctx.lineWidth = 9; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,170,60,' + (0.35 * heat) + ')'; ctx.lineWidth = 3.5; ctx.stroke();
+  for (i = 2; i < pts.length; i += 2){
+    var u = i / (pts.length - 1), q = pts[i], nz = FIRE.at(i * 37 + seed * 100, G.t * 60), r = (2.2 + 3.2 * u) * (0.6 + 0.6 * nz) * heat;
+    if (r < 0.6) continue;
+    drawLick(q.x, q.y + r * 0.4, r, 0.75, 'rgba(255,120,30,1)');
+    drawLick(q.x, q.y + r * 0.3, r * 0.55, 0.85, 'rgba(255,225,140,1)');
+  }
+  ctx.restore();
+}
+// the ball on fire: a glow round it, flames streaming back from its motion
+// (and up, when it is slow), and its iron red-hot
+function ballFire(x, y, r, V, heat, seed){
+  if (heat <= 0.02) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  drawGlow(x, y, 32, [255, 110, 30], 0.9 * heat, r * 6, r * 6);
+  var sp = Math.hypot(V.x, V.y), k = Math.min(1, sp / 500);
+  var dx = sp > 1 ? -V.x / sp * k : 0, dy = (sp > 1 ? -V.y / sp * k : 0) - (1 - k), dl = Math.hypot(dx, dy) || 1;
+  var ang = Math.atan2(dx / dl, -dy / dl);
+  for (var i = 0; i < 6; i++){
+    var a = ang + (i - 2.5) * 0.35, nz = FIRE.at(i * 53 + seed * 80, G.t * 70), len = r * (0.8 + 0.9 * nz) * (1 + k * 0.9) * heat;
+    ctx.save(); ctx.translate(x + Math.sin(a) * r * 0.6, y - Math.cos(a) * r * 0.6); ctx.rotate(a);
+    drawLick(0, 0, len * 0.45, 0.8, 'rgba(255,110,25,1)');
+    drawLick(0, 0, len * 0.25, 0.9, 'rgba(255,220,130,1)');
+    ctx.restore();
+  }
+  ctx.restore();
+}
+function ballHot(x, y, r, heat){
+  if (heat <= 0.02) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  var g = ctx.createRadialGradient(x, y + r * 0.2, 1, x, y, r * 1.1);
+  g.addColorStop(0, 'rgba(255,170,70,' + (0.6 * heat) + ')'); g.addColorStop(0.7, 'rgba(255,80,20,' + (0.35 * heat) + ')'); g.addColorStop(1, 'rgba(255,60,10,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.1, 0, 6.2832); ctx.fill();
+  ctx.restore();
+}
 // the chain: its telegraph (the drop and the arc it will swing), the pulley,
-// the links, and the ball, smeared along its arc when it is fast
+// the links, and the ball, smeared along its arc when it is fast — all of it
+// on fire once it is let go
 function drawChain(fl){
   ctx.save();
   if (fl.state === 'aim' || fl.state === 'lock'){
@@ -4566,7 +4680,10 @@ function drawChain(fl){
     drawPulley(fl.ax, fl.ay, fl.wheel);
     if (fl.state === 'aim' || fl.state === 'lock'){
       chainLinks([{ x: fl.ax, y: fl.ay }, { x: (fl.ax + fl.hx) / 2, y: fl.ay + 6 }, { x: fl.bx, y: fl.by }], 0.9);
+      var h0 = chainHeat(fl);
+      ballFire(fl.bx, fl.by, fl.r, { x: 0, y: 0 }, h0 * 0.8, fl.seed);
       drawSpikeBall(fl.bx, fl.by, fl.r, fl.spin);
+      ballHot(fl.bx, fl.by, fl.r, h0);
       drawClamp(fl.hx, fl.by, fl.r, 0);
       ctx.restore();
       return;
@@ -4574,6 +4691,8 @@ function drawChain(fl){
     var ca = fl.state === 'drop' ? 1 : (fl.state === 'swing' ? Math.max(0, 1 - fl.t / 0.6) : 0);
     if (ca > 0){ ctx.globalAlpha = ca; drawClamp(fl.hx, fl.ay + 6, fl.r, 1); ctx.globalAlpha = 1; }
   }
+  var heat = chainHeat(fl);
+  if (fl.nodes && fl.state !== 'aim' && fl.state !== 'lock') chainFire(fl.nodes, heat, fl.seed);
   if (fl.nodes) chainLinks(fl.nodes, fl.from === 'fist' ? 1.1 : 1);
   if (fl.state === 'swing' && Math.abs(fl.om * fl.len) > 280){
     ctx.fillStyle = '#3a2e2b';
@@ -4584,7 +4703,9 @@ function drawChain(fl){
     }
     ctx.globalAlpha = 1;
   }
+  ballFire(fl.bx, fl.by, fl.r, ballVelocity(fl), heat, fl.seed);
   drawSpikeBall(fl.bx, fl.by, fl.r, fl.spin);
+  ballHot(fl.bx, fl.by, fl.r, heat);
   ctx.restore();
 }
 
@@ -7495,23 +7616,6 @@ function drawVignette(){
   }
 }
 
-function drawPaused(){
-  ctx.save();
-  ctx.fillStyle = 'rgba(4,1,10,.72)';
-  ctx.fillRect(0, 0, LW, LH);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = "14px 'Press Start 2P', monospace";
-  ctx.fillStyle = COLORS.sulfur;
-  ctx.shadowColor = COLORS.sulfur; ctx.shadowBlur = shadowR(12);
-  ctx.fillText('PAUSED', LW/2, LH/2 - 12);
-  ctx.shadowBlur = 0;
-  ctx.font = "7px 'Press Start 2P', monospace";
-  ctx.fillStyle = COLORS.ash;
-  ctx.fillText(isTouch ? 'Tap to resume' : 'P to resume', LW/2, LH/2 + 14);
-  ctx.restore();
-}
-
 function draw(){
   var prog = G.prog, pulse = G.heart.pulse;
   if (G.black >= 1){
@@ -7643,7 +7747,6 @@ function draw(){
     ctx.fillStyle = 'rgba(255,255,255,' + (G.white * 0.55) + ')';
     ctx.fillRect(0, 0, LW, LH);
   }
-  if (G.paused) drawPaused();
 }
 
 // ---------- frame-time telemetry ----------
@@ -7713,6 +7816,7 @@ function frame(now){
     console.error(err);
   }
   if (isTouch) drawControls();
+  pauseUI();
   perfPush(frameMs, performance.now() - t0);
   adapt(frameMs);
   if (perfShow) drawPerf();

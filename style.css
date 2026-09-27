@@ -215,6 +215,15 @@ body.touch #ctl{display:block}
 /* the thumbs have the ground under the picture; sound sits at the top centre,
    between the lives and the bolts in play and just under the banner on the title */
 body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));transform:translateX(-50%)}
+/* in play the pause button sits beside it: sound just left of centre, pause just right */
+body.touch.playing #mute{transform:translateX(calc(-100% - 3px))}
+#pausebtn{display:none}
+body.touch #pausebtn{display:block;position:absolute;z-index:3;left:calc(50% + 3px);top:calc(30px * var(--s));
+  min-width:calc(22px * var(--s));background:transparent;border:1px solid rgba(159,232,255,.3);color:rgba(159,232,255,.8);
+  font-family:inherit;font-size:calc(7px * var(--s));padding:calc(5px * var(--s)) calc(7px * var(--s));border-radius:2px;cursor:pointer;touch-action:manipulation}
+body.touch #pausebtn[hidden]{display:none}
+/* a thumb-sized target round a small button */
+body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px -2px}
 /* the glass itself: a soft reflection that sells the barrel curve */
 #stage::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
@@ -293,10 +302,13 @@ body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));trans
 /* the end panels: the way back to the title */
 .endbtns{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(8px * var(--s))}
 .endbtns[hidden]{display:none}
-.menubtn{font-family:inherit;font-size:max(10px, calc(8px * var(--s)));letter-spacing:1px;cursor:pointer;
+.menubtn,.pausebtn{font-family:inherit;font-size:max(10px, calc(8px * var(--s)));letter-spacing:1px;cursor:pointer;
   padding:calc(6px * var(--s)) calc(12px * var(--s));color:var(--ash);background:rgba(14,3,2,.65);
   border:1px solid rgba(199,154,143,.4);border-radius:2px;touch-action:manipulation}
-.menubtn:hover,.menubtn:focus-visible{border-color:var(--bone);color:var(--bone)}
+.menubtn:hover,.menubtn:focus-visible,.pausebtn:hover,.pausebtn:focus-visible{border-color:var(--bone);color:var(--bone)}
+#pause-resume{color:var(--heart);border-color:rgba(159,232,255,.55)}
+/* the version, in the title's bottom-left corner */
+.ver{position:absolute;left:calc(8px * var(--s));bottom:calc(6px * var(--s));font-size:calc(5.5px * var(--s));color:var(--ash);opacity:.7;letter-spacing:1px}
 .board-tabs{display:flex;justify-content:center;gap:calc(6px * var(--s));margin-bottom:calc(4px * var(--s))}
 .board-tabs button{font-family:inherit;font-size:max(9px, calc(6px * var(--s)));cursor:pointer;padding:.4em .8em;
   color:var(--ash);background:transparent;border:1px solid rgba(199,154,143,.3);border-radius:2px;touch-action:manipulation}

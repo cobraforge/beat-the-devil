@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=39">
+<link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
 <div id="wrap">
@@ -24,6 +24,7 @@
         <div class="blink" id="start-hint">Press space to start</div>
         <div class="stat" id="hi-title"></div>
         <div class="souls" id="souls" hidden></div>
+        <div class="ver" id="ver"></div>
         <div class="board" id="board" hidden>
           <div class="board-head">The world's best &middot; scroll for more</div>
           <div class="board-tabs"><button type="button" data-view="1" class="on">I &middot; The Pit</button><button type="button" data-view="2">II &middot; The Stolen</button></div>
@@ -54,7 +55,14 @@
         <div class="endbtns" id="win-btns"><button type="button" class="menubtn">Main menu</button></div>
       </div>
 
+      <div class="screen" id="scr-pause" hidden>
+        <div class="big">PAUSED</div>
+        <div class="blink" id="pause-hint">Press P or Esc to resume</div>
+        <div class="endbtns"><button type="button" class="pausebtn" id="pause-resume">Resume</button><button type="button" class="pausebtn" id="pause-menu">Main menu</button></div>
+      </div>
+
       <button id="mute" type="button">Sound on</button>
+      <button id="pausebtn" type="button" aria-label="Pause" hidden>II</button>
     </div>
     <div id="vents" aria-hidden="true"></div>
     <div id="panel" aria-hidden="true">
@@ -87,7 +95,7 @@
 <!-- the touch controls: drawn here, outside the picture -->
 <canvas id="ctl" aria-hidden="true"></canvas>
 
-<script src="audio.js?v=39"></script>
-<script src="game.js?v=39"></script>
+<script src="audio.js?v=40"></script>
+<script src="game.js?v=40"></script>
 </body>
 </html>

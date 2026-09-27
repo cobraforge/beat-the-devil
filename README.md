@@ -199,8 +199,10 @@ starts again from the pit. The rules are DESIGN.md rule 11; in short:
   the chain runs out, catches with a jolt, and swings as a real pendulum,
   clanging off the walls, then is hauled back up. The chain is a rope of
   links (a Verlet rope pinned at the pulley and the ball) that bows and trails
-  as it swings. A ball that meets a hanging cage **smashes it**, spilling the
-  soul for you to pick up; it ends a shade too.
+  as it swings. What hurts is on fire: the ball glows in its clamp as it
+  heats, and once let go it burns, flames streaming off it and along the
+  chain, until it is hauled back up. A ball that meets a hanging cage
+  **smashes it**, spilling the soul for you to pick up; it ends a shade too.
 - **Dark knights** march in from the sides and patrol the floor, their helms
   turned up to follow the heart; touching one is a hit. Now and then they
   attack: spearmen stride under the heart, a pale line over each pike showing
@@ -231,6 +233,15 @@ into the light) serve both. The Warden's body is drawn once into two sprites
 at the canvas's resolution (behind his arms and in front of them); his arms,
 eyes, lantern and flail are drawn live. The music is `stolen` (the souls'
 music box heard through the bars) and `warden` (a march in iron).
+
+## Pause, the menu, the version
+
+**P** or **Esc** pauses on a keyboard; on a phone, the **II** button beside
+*Sound* at the top (shown only in play). The pause screen has **Resume** and
+**Main menu** (**Q** on a keyboard), which abandons the run and goes back to
+the title. The title shows the game's version in its bottom-left corner:
+`GAME_VERSION` in `game.js` (bump it for a release; `BTD_VERSION` counts
+builds and busts caches).
 
 ## Dev mode
 

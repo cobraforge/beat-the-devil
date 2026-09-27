@@ -238,8 +238,11 @@ never steers, one that lands on the stick never fires, and a touch anywhere
 else — including on the picture — does nothing at all. Both thumbs work at
 once. The stick's vector is added to the keys' vector, so the speed and every
 movement penalty (rule 2) are the same multipliers on touch as on keys. The
-sound button sits at the top centre. A mouse keeps drag-to-move and
-click-to-fire, and only on the picture.
+sound button sits at the top centre, and in play the pause button beside it
+(a phone has no Esc or P); they are buttons, not controls, and a tap on either
+does nothing else. Paused, a tap anywhere but the pause screen's buttons
+resumes. A mouse keeps drag-to-move and click-to-fire, and only on the
+picture.
 
 **Why.** Drag-anywhere made the player chase the heart with a finger that
 covered it. The first stick sat in the playfield's bottom-left corner, and a
@@ -406,7 +409,12 @@ the top centre. You free the souls and carry them up into it.
 | Crossbow attack | a crossbowman of the patrol stops, raises his crossbow to his shoulder (0.3 s) and aims up at the heart along a pale line, 0.7 s | line solid, flashes, 0.22 s; **at lock, not led** | a quarrel along that line at 720 px/s, into the roof or a wall; a plain hit |
 
 The chain's ball hurts from the moment it is let go (within 19 px of the
-heart's centre); its chain hurts once it swings (within 11 px). **One swinging
+heart's centre); its chain hurts once it swings (within 11 px). **What hurts
+is on fire**: the ball heats in its clamp through the aim and lock (a glow,
+then flames), and from the moment it is let go the ball burns — flames
+streaming back from its motion, embers shedding — and the chain glows and
+burns along its length; the fire dies down as it is hauled up, when it no
+longer hurts. His flail burns the same way. **One swinging
 chain at a time.** It is let go on the far side of the heart when there is
 room (down through the bottom and up through the heart), or dropped beyond
 it on the heart's own side, whichever carries the swing past it.
