@@ -57,6 +57,13 @@ invulnerability without its penalty.
 - Both leave a permanent scar on the heart (crack / char) that persists across
   lives. That is cosmetic and never affects movement.
 
+There are five lives (`LIVES = 5`, raised from three). How hurt the heart looks
+and sounds stays three stages whatever the count — whole, wounded, last life
+(`wounds()`) — so the last-life state (guttering, arrhythmic, the red
+vignette) always means exactly one more hit ends it. His arms creep in by
+the fraction of lives lost (`armCreep()`), reaching the same furthest point
+on the last life as they did with three.
+
 **Why.** A penalty that lasts past invulnerability is a second hit the player
 did nothing to earn: they come out of the flashing state still slow, get hit
 again, and it feels like the game cheated. A penalty shorter than

@@ -1278,8 +1278,15 @@ function rgba(r,g,b,a){ return 'rgba(' + (r|0) + ',' + (g|0) + ',' + (b|0) + ','
 
 // ---------- constants ----------
 var AMMO = 5;        // bolts for the whole run; two are for his eyes, but nothing enforces it
+var LIVES = 5;       // hearts for the whole run
 var BOLT_SPEED = 640;
 var FORK_SPEED = 520;
+// How hurt the heart looks and sounds, in three stages whatever LIVES is:
+// 0 whole (no life lost yet), 1 wounded (dimmer, the odd stumble), 2 the last
+// life (colour drained, glow guttering, never a regular beat again).
+function wounds(){ return G.lives >= LIVES ? 0 : (G.lives > 1 ? 1 : 2); }
+// how far his arms have crept in: 0 at full health to 2 on the last life
+function armCreep(){ return clamp((LIVES - G.lives) / (LIVES - 1), 0, 1) * 2; }
 // the palette lives in style.css; read it once, never hardcode hex in draw calls
 var cssVars = getComputedStyle(document.documentElement);
 function cssColor(name, fallback){ var v = cssVars.getPropertyValue(name).trim(); return v || fallback; }
@@ -1453,7 +1460,7 @@ function reset(){
   G.tier = tier;
   G.t = 0;
   G.score = 0;
-  G.lives = 3;
+  G.lives = LIVES;
   G.ammo = AMMO;
   G.phase = 'survive';        // survive | devil
   G.surv = 0;
@@ -1500,7 +1507,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 31;
+  window.BTD_VERSION = 32;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -1751,7 +1758,7 @@ function updateHeart(dt){
   if (h.since >= h.next){
     h.since = 0; h.dubDone = false;
     var big = h.big; h.big = false;
-    var dmg = (G.mode === 'play' || G.mode === 'ending') && !(G.freed && G.freed.heal > 0.3) ? 3 - G.lives : 0;
+    var dmg = (G.mode === 'play' || G.mode === 'ending') && !(G.freed && G.freed.heal > 0.3) ? wounds() : 0;
     var pen = G.penalty ? G.penalty.kind : '';
     h.lubScale = big ? 1.32 : (pen === 'burn' ? 1.06 : (pen === 'fork' ? 1.24 : (dmg >= 2 ? 1.2 : 1.14)));
     h.pulse = pen === 'burn' ? 0.7 : 1;                                   // fast and shallow
@@ -2668,7 +2675,7 @@ function hurt(kind, hx, hy, vx, vy){
   for (var li=0; li<16; li++)
     addPart({ x: p.x, y: p.y, vx: rnd(-90, 90), vy: rnd(-120, 20), life: rnd(0.5, 1.1), t: 0,
                    c: Math.random() < 0.5 ? COLORS.heart : '#ffffff', r: rnd(1, 2.6), g: -10, turb: 30 });
-  if (G.arms) G.arms.creep = Math.max(0, 3 - G.lives);
+  if (G.arms) G.arms.creep = armCreep();
   // the penalty, and the scar it leaves
   var dx = (hx == null ? 0 : hx - p.x), dy = (hy == null ? -1 : hy - p.y), dl = Math.hypot(dx, dy) || 1;
   var dir = { x: dx / dl, y: dy / dl };
@@ -2975,7 +2982,7 @@ function drawPlayer(){
   }
   if (heal > 0) drawGlow(p.x + dx, y + dy, 48, RGB.grace, 0.9 * heal, 150 * (0.5 + 0.5 * heal), 150 * (0.5 + 0.5 * heal));
   drawGem(p.x + dx, y + dy, s, {
-    pulse: h.pulse, lit: lit, dmg: 3 - G.lives, light: lerp(h.light * (G.taken && G.taken.glow != null ? G.taken.glow : 1), 1.3, heal), fire: fire, scars: G.scars,
+    pulse: h.pulse, lit: lit, dmg: wounds(), light: lerp(h.light * (G.taken && G.taken.glow != null ? G.taken.glow : 1), 1.3, heal), fire: fire, scars: G.scars,
     burnK: burn ? Math.max(0, 1 - pen.t / 0.6) : 0, heal: heal,
     sx: sx, sy: sy, rot: rot, veins: true, leak: heal < 0.3 && (G.lives <= 1 || (pen && pen.kind === 'fork')),
     breath: 0.82 + 0.18 * Math.sin(t * 1.1 + 0.7),                  // its own slower cycle
@@ -4129,7 +4136,7 @@ function drawTitleHearts(){
 // At the end they are what close around the heart.
 function makeArms(){
   return {
-    present: 0, reach: 0, creep: Math.max(0, 3 - G.lives),   // each life lost, they come further in
+    present: 0, reach: 0, creep: armCreep(),   // each life lost, they come further in
     // side: which edge it enters from. reach: which way the hand reaches, so
     // both palms face the centre. His right hand comes in from screen left.
     l: { side: -1, reach:  1, hand: 'right', hx: -140, hy: LH*0.56, rot: 0, curl: 0.3, spread: 0.6, mode: 'idle', k: 0, breath: rnd(0, 6) },
