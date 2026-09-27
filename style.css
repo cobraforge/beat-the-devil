@@ -286,6 +286,13 @@ body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));trans
 .levelbtn.locked{color:rgba(199,154,143,.5);border-color:rgba(199,154,143,.25);text-shadow:none;cursor:default}
 .levelbtn[hidden]{display:none}
 .levelnote{font-size:calc(6px * var(--s));color:var(--ash);margin-top:calc(-8px * var(--s))}
+/* the end panels: the other level and the way back to the title, side by side */
+.endbtns{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(8px * var(--s))}
+.endbtns[hidden]{display:none}
+.menubtn{font-family:inherit;font-size:max(10px, calc(8px * var(--s)));letter-spacing:1px;cursor:pointer;
+  padding:calc(6px * var(--s)) calc(12px * var(--s));color:var(--ash);background:rgba(14,3,2,.65);
+  border:1px solid rgba(199,154,143,.4);border-radius:2px;touch-action:manipulation}
+.menubtn:hover,.menubtn:focus-visible{border-color:var(--bone);color:var(--bone)}
 .levelnote:empty{display:none}
 .board-tabs{display:flex;justify-content:center;gap:calc(6px * var(--s));margin-bottom:calc(4px * var(--s))}
 .board-tabs button{font-family:inherit;font-size:max(9px, calc(6px * var(--s)));cursor:pointer;padding:.4em .8em;
