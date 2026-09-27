@@ -164,7 +164,6 @@ var sfx = {
   cageOpen: function(){ chimes([880, 1318.5, 1760], 0.07, 0.09); noise({dur:0.3, vol:0.12, type:'bandpass', freq:1400, q:2, slide:600}); },
   deliver: function(){ chimes([587.3, 740, 880, 1174.7, 1480], 0.08, 0.1); tone({freq:293.7, dur:1.6, vol:0.1, type:'sine', attack:0.2}); },
   snatch: function(){ wail(); },
-  shade: function(){ noise({dur:0.9, vol:0.12, type:'bandpass', freq:900, q:4, slide:300, attack:0.6}); },
   chainRattle: function(x){ chainRattle(x); },
   chainDrop: function(x){ chainDrop(x); },
   chainSnap: function(x){ chainSnap(x); },
@@ -927,14 +926,25 @@ function narrDuck(on){
   musicBus.gain.setTargetAtTime(MUSIC_GAIN * (on ? 0.32 : 1), actx.currentTime, on ? 0.15 : 0.6);
 }
 // play a loaded line at `rate`; its length in seconds, or 0 if it could not
-function narrPlay(key, rate, onEnd){
+// fx 'fear': she trembles (a 6.5 Hz shake in her level), a little thinner and
+// further off in the reverb
+function narrPlay(key, rate, onEnd, fx){
   narrStop();
   var b = narr.bufs[key]; if (!b || !running()) return 0;
   var a = actx, src = a.createBufferSource(), g = a.createGain(), send = a.createGain();
   src.buffer = b; src.playbackRate.value = rate || 1;
   g.gain.value = 1.15;
   send.gain.value = 0.26;                          // the dungeon around her
-  src.connect(g); g.connect(master); g.connect(send); send.connect(reverbGet().input);
+  var head = src;
+  if (fx === 'fear'){
+    var hp = a.createBiquadFilter(), shake = a.createGain(), lfo = a.createOscillator(), depth = a.createGain();
+    hp.type = 'highpass'; hp.frequency.value = 260;
+    shake.gain.value = 0.72; lfo.frequency.value = 6.5; depth.gain.value = 0.28;
+    lfo.connect(depth); depth.connect(shake.gain); lfo.start(); lfo.stop(a.currentTime + b.duration / (rate || 1) + 0.5);
+    src.connect(hp); hp.connect(shake); head = shake;
+    send.gain.value = 0.45;
+  }
+  head.connect(g); g.connect(master); g.connect(send); send.connect(reverbGet().input);
   // and a ghost just behind her: the same voice through a slowly wavering
   // delay, darker and quieter, so she never quite speaks alone
   var dl = a.createDelay(0.1), lfo = a.createOscillator(), depth = a.createGain(), lp = a.createBiquadFilter(), ghost = a.createGain();
@@ -957,14 +967,15 @@ function softClip(k){
   for (var i = 0; i < n; i++){ var x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / d; }
   return c;
 }
-function wardenSay(key){
+// deep: the devil's — dropped further (0.66), darker, torn harder
+function wardenSay(key, deep){
   var b = narr.bufs[key]; if (!b || !running()) return 0;
   var a = actx, shaper = a.createWaveShaper(), lp = a.createBiquadFilter(), out = a.createGain(), send = a.createGain();
-  shaper.curve = softClip(2.6); lp.type = 'lowpass'; lp.frequency.value = 2300;
-  out.gain.value = 1.05; send.gain.value = 0.55;
+  shaper.curve = softClip(deep ? 3.4 : 2.6); lp.type = 'lowpass'; lp.frequency.value = deep ? 1500 : 2300;
+  out.gain.value = deep ? 1.25 : 1.05; send.gain.value = deep ? 0.7 : 0.55;
   shaper.connect(lp); lp.connect(out); out.connect(master); out.connect(send); send.connect(reverbGet().input);
-  var slow = 0.775;
-  [[0.8, 0.85], [slow, 0.55]].forEach(function(v){
+  var slow = deep ? 0.64 : 0.775;
+  [[deep ? 0.66 : 0.8, 0.85], [slow, 0.55]].forEach(function(v){
     var s = a.createBufferSource(), g = a.createGain();
     s.buffer = b; s.playbackRate.value = v[0]; g.gain.value = v[1];
     s.connect(g); g.connect(shaper); s.start();

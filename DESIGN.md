@@ -432,9 +432,13 @@ room (down through the bottom and up through the heart), or dropped beyond
 it on the heart's own side, whichever carries the swing past it.
 **The patrol.** Dark knights march in from the sides as the meter fills (a
 spearman as the level's card clears, another at 20 %, a crossbowman at 40 %,
-a spearman at 70 %; four at most) and pace the floor at 30 px/s, turning at
-the walls, every 4–7 s, and short of each other, their helms turned up to
-follow the heart. **Touching one is a hit** (within 20 px of his middle, below
+a spearman at 70 %; four at most). They are not a patrol: **they hunt the
+heart.** Spearmen keep under it at 48 px/s, each in his slot (the first
+straight under it, then 66 px either side, then 132), so wherever the heart
+goes low they are waiting; **crossbowmen hold the two sides** (34 px in from
+each wall, the first on the left), standing, their crossbows half raised and
+following the heart. All of them keep their helms turned up to it.
+**Touching one is a hit** (within 20 px of his middle, below
 the top of his helm, 100 px up). The patrol itself is not a hazard for the cap
 of two; its attacks are — a spear attack is one group, a crossbow attack (and
 its quarrel in flight) another. Spear attacks come from 20 % of the phase (one
@@ -445,13 +449,9 @@ meter fills); a chain is tried every 3.4–4.4 s.
 220 px/s) — and the soul spills out. It does not wait: it sinks toward the
 crust at 22 px/s, guttering in its last 1.6 s, and after 4.5 s the pit takes
 it back to be caged again (*LOST*). The heart collects it by touching it, if
-there is room to carry it. A ball through a shade ends the shade.
-**Shades** come while you carry souls or while a spilled soul waits, and go
-for your last soul, or failing that the nearest spilled one: a dark swirl gathers at a wall for
-0.8 s, then drifts at 85 px/s (the heart moves at 265) toward your *last*
-soul. Touching the soul takes it back to a cage; touching the heart does
-nothing. A shade lasts 6 s, and a bolt ends one — a bolt spent there is a
-bolt not spent on the lantern.
+there is room to carry it. (There were shades once, swirls that stole the
+last soul you carried; they are gone — the knights and the chains are enough,
+and a thing that stole souls felt unfair more than dangerous.)
 
 **The Warden** arrives when the meter fills: the cages are hoisted out of
 reach (spilled souls are taken back up with them), the ceiling drops to
@@ -469,6 +469,8 @@ game slows and drops to 0.8, doubles a shade lower (0.775), tears with a soft
 clip, darkens and throws hard into the long reverb, his eyes burning as he
 says it and the words written under him; he attacks 0.4 s after it ends (if
 the sound is off, or the line is not there, he roars instead, as before).
+**When the lantern breaks he has last words** — *"No... They were mine."* — in
+the same voice, 0.45 s after it shatters.
 *"You have five bolts. Two are for his lantern."* is said once, on
 the level's briefing (rule 13), and never again; once play starts, a grace of
 `STOLEN.INTRO = 1.5` s passes before its hazards. His attacks cycle: his **flail** (the
@@ -606,9 +608,15 @@ her line (`AUDIO.whenRunning()`), then starts the page from its beginning;
 the first version checked once, found no sound yet, and stayed silent until
 the second run. The narrator is silent when the game is muted (the sound
 button is the only switch for her); starting the level, Skip, or the title
-stops her. **She speaks once more**: 1.4 s after level 1's win panel comes up,
-*"You beat the devil. — But it is not over yet. The others he took are still
-down there. — We have to save them."* (`SPOKEN.win1`), the NEXT box beside it. (The first version used the
+stops her. **She speaks again at the turns of the story** (`SPOKEN`): in the
+silence before the devil lands she whispers, afraid, *"He's here."* (her voice
+trembling — a 6.5 Hz shake in its level — thinner, and further off); 1.4 s
+after level 1's win panel comes up, *"You beat the devil. — But it is not over
+yet. The others he took are still down there. — We have to save them."*, the
+NEXT box beside it; and 1.4 s after level 2's, *"You brought them back. — You
+saved them. — Thank you, hero."* **The devil speaks once**, dying: *"No! No...
+NO!"* over his death cry, in the Warden's treatment made deeper (0.66, darker,
+torn harder). (The first version used the
 browser's own speech synthesis; on Windows it was the old desktop voice, and
 it sounded cheap. The second was a man's voice, read flat.)
 

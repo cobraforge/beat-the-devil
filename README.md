@@ -203,15 +203,12 @@ starts again from the pit. The rules are DESIGN.md rule 11; in short:
   as it swings. What hurts is on fire: the ball glows in its clamp as it
   heats, and once let go it burns, flames streaming off it and along the
   chain, until it is hauled back up. A ball that meets a hanging cage
-  **smashes it**, spilling the soul for you to pick up; it ends a shade too.
-- **Dark knights** march in from the sides and patrol the floor, their helms
-  turned up to follow the heart; touching one is a hit. Now and then they
-  attack: spearmen stride under the heart, a pale line over each pike showing
-  its reach, lock, and drive their pikes straight up one after another; a
-  crossbowman stops, raises his crossbow along a pale line to the heart, and
-  looses a quarrel along it.
-- **Shades** gather at a wall while you carry souls and drift after the last
-  one; a bolt ends a shade, at the cost of the bolt.
+  **smashes it**, spilling the soul — grab it before it sinks back into the dark.
+- **Dark knights** march in from the sides and hunt the heart: spearmen keep
+  under it, spread either side, and crossbowmen hold the two walls with their
+  crossbows up at it; touching one is a hit. When they attack, spearmen lock a
+  pale line over each pike and drive them straight up one after another; a
+  crossbowman aims along a pale line to the heart and looses a quarrel along it.
 - **The Warden** arrives when the meter fills: a knight in black iron with a
   horned helm and a fire in its slit, his cloak in tatters. The cages are
   hoisted out of reach, and his lantern is the target: it hangs from his fist
@@ -373,7 +370,8 @@ The spoken lines are neural voices made with [Piper](https://github.com/rhasspy/
 (a British woman's, public domain, trained on LibriVox audiobook readings),
 read with a little more life than the default and a held pause before each
 page's last line; the game plays her with some reverb and a faint ghost
-behind her voice. The Warden is `en_US-norman-medium` (a man's, public
+behind her voice; she also whispers, afraid, as the devil comes, and speaks
+after each win. The Warden (and the devil, dying) is `en_US-norman-medium` (a man's, public
 domain), which the game slows, drops, doubles, distorts and drowns in reverb.
 `dev/voice.py` reads the lines out of `game.js` — the story pages from `BRIEF`
 (the first of each level with its spoken name) and the rest from `SPOKEN` —

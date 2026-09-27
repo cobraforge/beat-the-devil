@@ -1,7 +1,8 @@
 """Render the game's spoken lines into small MP3s in voice/ (the game's only
 audio files): every briefing's story pages and the narrator's other lines,
-read by a woman's neural voice, and the Warden's line, read by a man's (the
-game slows, drops and distorts his as it plays).
+read by a woman's neural voice (one of them afraid), and the Warden's and the
+devil's, read by a man's (the game slows, drops and distorts theirs as it
+plays).
 
 The words are read out of game.js — BRIEF (page 0 of each level prefixed with
 the level's spoken name, its `say`) and SPOKEN — so the recordings always say
@@ -44,7 +45,13 @@ NOISE_SCALE, NOISE_W = 0.82, 0.95   # more life in the voice than the model's de
 # it.") is its sting: a held pause before it, and she draws it out
 STING_SCALE, STING_SILENCE = 1.3, 0.9
 LEAD, TAIL = 0.08, 0.25    # silence before a line, and after
-WARDEN = dict(scale=0.95, noise=0.75, noise_w=0.9)   # he says it straight; the game makes it terrible
+# the men's lines are said straight (the man's voice); the game makes them
+# terrible as it plays them. The devil draws his out.
+WARDEN = dict(scale=0.95, noise=0.75, noise_w=0.9)
+DEVIL = dict(scale=1.35, noise=0.8, noise_w=1.0)
+# the narrator afraid: quicker, and less steady
+SCARED = dict(scale=0.88, noise=1.0, noise_w=1.1)
+MEN = {'warden': WARDEN, 'devil': DEVIL}
 
 def js_string(s):
     """a single-quoted JS string literal's body, unescaped"""
@@ -125,8 +132,9 @@ def main():
     timings = json.loads(tpath.read_text(encoding='utf-8')) if only and tpath.exists() else {}
     for key, who, say, text in lines():
         if only and key not in only: continue
-        if who == 'warden':
-            data = speak(a.piper, a.warden, ' '.join(text.split('\n')), WARDEN['scale'], WARDEN['noise'], WARDEN['noise_w'])
+        if who in MEN or who == 'scared':
+            v, model = (MEN[who], a.warden) if who in MEN else (SCARED, a.model)
+            data = speak(a.piper, model, ' '.join(text.split('\n')), v['scale'], v['noise'], v['noise_w'])
             audio, segs = finish(np.concatenate([np.zeros(int(LEAD * SR), dtype='float32'), data, np.zeros(int(TAIL * SR), dtype='float32')])), []
         else:
             audio, segs = render(a.piper, a.model, say, text)
