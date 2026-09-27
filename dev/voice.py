@@ -52,10 +52,52 @@ DEVIL = dict(scale=1.35, noise=0.8, noise_w=1.0)
 # the narrator afraid: quicker, and less steady
 SCARED = dict(scale=0.88, noise=1.0, noise_w=1.1)
 MEN = {'warden': WARDEN, 'devil': DEVIL}
-# A word marked with a trailing ~ in a man's line ("No~... They were mine.") is
+# A word marked with a trailing ~ in a man's line ("No~... They were MINE!") is
 # drawn out into a cry: said very slowly, then stretched further as its pitch
 # sags and wavers (like a voice breaking), before a pause and the rest.
 CRY_SCALE, CRY_RATE, CRY_VIBRATO, CRY_PAUSE = 3.2, (0.92, 0.5), (5.2, 0.04), 0.4
+# After it, a man's line is spat: clipped and quick (SPITE_SCALE), held down
+# (SPITE_GAIN), and a last word in CAPITALS is shouted after a beat — driven
+# hard into a clip, the loudest thing in the line ("They were... MINE!").
+SPITE_SCALE, SPITE_GAIN, SHOUT_DRIVE, SHOUT_GAP = 0.86, 0.62, 2.4, 0.12
+
+def shout(x):
+    y = np.tanh(SHOUT_DRIVE * x / (float(np.max(np.abs(x))) or 1.0))
+    return (y / (float(np.max(np.abs(y))) or 1.0)).astype('float32')
+
+def word_start(x):
+    """where the last word of a said phrase begins, found by its sound: in
+    "they were mine" the m is a hum with next to nothing above 1 kHz, a run of
+    such frames just before the vowel's rise. The cut goes at the quietest
+    frame at the head of that run (None if there is no such run)"""
+    n, hop = 512, int(0.01 * SR)
+    f = np.fft.rfftfreq(n, 1 / SR)
+    hf, en = [], []
+    for i in range(0, len(x) - n, hop):
+        s = np.abs(np.fft.rfft(x[i:i + n] * np.hanning(n))) ** 2
+        hf.append(s[f > 1000].sum() / (s.sum() + 1e-12)); en.append(float(np.sqrt(np.mean(x[i:i + n] ** 2))))
+    runs, i, top = [], 0, max(en)
+    while i < len(hf):                                            # runs of hum
+        j = i
+        while j < len(hf) and hf[j] < 0.03: j += 1
+        if j - i >= 4: runs.append((i, j))
+        i = j + 1
+    run = next((a for a, b in reversed(runs)                      # the last one the vowel follows
+                if any(h >= 0.15 and e > 0.25 * top for h, e in zip(hf[b:b + 12], en[b:b + 12]))), None)
+    if run is None: return None
+    lo, hi = max(0, run - 4), min(len(en), run + 3)
+    return (lo + int(np.argmin(en[lo:hi]))) * hop
+
+def spat(piper, model, line, v):
+    """the rest of a man's line: said clipped and quick, its last word, in
+    CAPITALS, shouted. Piper cannot say one word on its own (it babbles for
+    seconds), so the whole is said at once and cut where that word begins"""
+    words = line.split()
+    loud = words[-1].strip('!?.,')
+    whole = speak(piper, model, ' '.join(words[:-1] + [words[-1].lower()]), SPITE_SCALE, v['noise'], v['noise_w'])
+    at = word_start(whole) if len(words) > 1 and len(loud) > 1 and loud.isupper() else None
+    if at is None: return whole
+    return np.concatenate([SPITE_GAIN * whole[:at], np.zeros(int(SHOUT_GAP * SR), dtype='float32'), shout(whole[at:])])
 
 def cry(x):
     """stretch a word, its pitch falling as it goes, with a waver in it"""
@@ -158,7 +200,7 @@ def main():
                 rest = rest.lstrip('. ').strip()
                 parts = [cry(speak(a.piper, model, word, CRY_SCALE, v['noise'], v['noise_w'])),
                          np.zeros(int(CRY_PAUSE * SR), dtype='float32')]
-                if rest: parts.append(speak(a.piper, model, rest, v['scale'], v['noise'], v['noise_w']))
+                if rest: parts.append(spat(a.piper, model, rest, v))
                 data = np.concatenate(parts)
             else:
                 data = speak(a.piper, model, line, v['scale'], v['noise'], v['noise_w'])

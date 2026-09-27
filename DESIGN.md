@@ -469,11 +469,16 @@ game slows and drops to 0.8, doubles a shade lower (0.775), tears with a soft
 clip, darkens and throws hard into the long reverb, his eyes burning as he
 says it and the words written under him; he attacks 0.4 s after it ends (if
 the sound is off, or the line is not there, he roars instead, as before).
-**When the lantern breaks he has last words** — *"Nooooo... they were mine."* —
+**When the lantern breaks he has last words** — *"Nooooo... they were MINE!"* —
 in the same voice, 0.25 s after it shatters: the *No* drawn out into a cry
 (said very slowly, then stretched further as its pitch sags and wavers —
-`cry()` in `dev/voice.py`, marked `No~` in `SPOKEN`), a pause, then the rest,
-his voice lingering as he burns away.
+`cry()` in `dev/voice.py`, marked `No~` in `SPOKEN`), a pause, then the rest
+**spat**: *they were* clipped, quick and held down (0.86 of the time, 0.62 of
+the level), a beat (0.12 s), and *MINE!* shouted — driven hard into a clip,
+three times as loud, the loudest thing he says (`spat()` and `shout()`; a word
+in CAPITALS in `SPOKEN` is shouted). His voice lingers as he burns away. (The
+rest was said flat at first, and sounded sorry more than spiteful: it is his
+loss, and he should hate you for it.)
 *"You have five bolts. Two are for his lantern."* is said once, on
 the level's briefing (rule 13), and never again; once play starts, a grace of
 `STOLEN.INTRO = 1.5` s passes before its hazards. His attacks cycle: his **flail** (the
@@ -495,8 +500,15 @@ pauldrons, breastplate, faulds, arms), *WASTED*. Bolts pass through his cloak.
 **Endings.** Break the lantern and every cage bursts: all the souls, caged
 and carried, join the heart; his armour comes apart (the helm and pauldrons
 fall into the crust) as he burns away, and his knights burn away with him; the roof splits, and the light takes
-them up together, healing the heart as in rule 9. Run out of bolts with the
-lantern whole, and he locks the heart in a cage with them.
+them up together, healing the heart as in rule 9. **At the top of the light
+the gates of heaven appear** — two pillars, an arch, two golden leaves — and
+swing open as the heart and the souls rise through them, then fade
+(`RELEASE.gates`: they come 4.3–5.1 s after the lantern breaks, open
+5.2–6.8 s to chimes climbing D major, and go 8.5–9.8 s; the rise is 5.8–8.6 s
+and the panel comes at 10.0 s). Level 1 ends with the heart going up into the
+light; this level is about where the souls go, so the win shows the way in,
+open, and then leaves the light alone before the panel. Run out of bolts with
+the lantern whole, and he locks the heart in a cage with them.
 
 **Score.** `hearts × 1000 + time bonus + 500 × souls you brought out` — those
 delivered into the light during the rescue, plus those still with you when
@@ -537,9 +549,9 @@ section of `game.js`: `STOLEN`, `stolenReset()`, `lowerCage()`,
 `knightEnter()`, `knightAttack()`, `updateKnights()`; `WARDEN`, `makeWarden()`,
 `wardenPose()`, `spawnFlail()`, `beamLine()`, `updateWarden()`, `wardenArmour()`,
 `wardenBolt()`,
-`updateWreck()`; the `released` and `caged` endings; and their drawing
-(`drawChain()`, `drawKnight()`, the Warden's sprites `wardenBack()` /
-`wardenFront()` and `drawWarden()`).
+`updateWreck()`; the `released` and `caged` endings (`RELEASE`, the gates in
+`G.gates`); and their drawing (`drawChain()`, `drawKnight()`, the Warden's
+sprites `wardenBack()` / `wardenFront()` and `drawWarden()`, `drawGates()`).
 
 ---
 
@@ -617,7 +629,8 @@ trembling — a 6.5 Hz shake in its level — thinner, and further off); 1.4 s
 after level 1's win panel comes up, *"You beat the devil. — But it is not over
 yet. The others he took are still down there. — We have to save them."*, the
 NEXT box beside it; and 1.4 s after level 2's, *"You brought them back. — You
-saved them. — Thank you, hero."* **The devil speaks once**, dying: *"No! No...
+saved them."* (It closed on *"Thank you, hero"* at first; that was cut — the
+gates say the rest.) **The devil speaks once**, dying: *"No! No...
 NO!"* over his death cry, in the Warden's treatment made deeper (0.66, darker,
 torn harder). (The first version used the
 browser's own speech synthesis; on Windows it was the old desktop voice, and

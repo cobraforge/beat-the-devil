@@ -680,6 +680,8 @@ var sfx = {
   lanternHit: function(){ noise({dur:0.12, vol:0.4, type:'highpass', freq:3000}); tone({freq:2400, slide:1900, dur:0.7, vol:0.12, type:'sine'}); tone({freq:3520, dur:0.5, vol:0.06, type:'sine'}); },
   lanternShatter: function(){ explosion(210, 1.1); for (var i = 0; i < 12; i++) later(i * 35 + Math.random() * 40, function(){ noise({dur:0.05 + Math.random() * 0.08, vol:0.18, type:'highpass', freq:3000 + Math.random() * 4000}); }); chimes([1760, 2349.3, 2637, 3520], 0.05, 0.08); },
   cagesBurst: function(){ for (var i = 0; i < 7; i++) later(i * 120, function(){ chimes([1174.7 + Math.random() * 600], 0, 0.07); noise({dur:0.08, vol:0.1, type:'bandpass', freq:1800, q:2}); }); },
+  // the gates of heaven opening: bells climbing D major, and a shimmer rising under them
+  gatesOpen: function(){ chimes([587.3, 740, 880, 1174.7, 1480, 1760, 2349.3], 0.13, 0.08); noise({dur:2.2, vol:0.12, type:'highpass', freq:3000, slide:9000, attack:0.9}); tone({freq:293.7, dur:2.6, vol:0.12, type:'sine', attack:0.6}); },
   cageSlam: function(){ tone({freq:80, slide:40, dur:0.6, vol:0.6, type:'sine'}); noise({dur:0.25, vol:0.4, type:'bandpass', freq:900, q:1.2, slide:300}); noise({dur:0.06, vol:0.3, type:'highpass', freq:4000}); },
   breathWarn: function(){ tone({freq:48, slide:110, dur:1.0, vol:0.35, type:'sawtooth', filter:300, attack:0.3}); },
   breath: function(){ noise({dur:0.9, vol:0.45, freq:2200, slide:300, attack:0.03}); },
@@ -1753,7 +1755,7 @@ var BRIEF = {
 // game's only recorded sound, and they play through Web Audio (AUDIO.narrator)
 // like the rest of it. Silent when the game is muted, or with the briefing's
 // Voice button (remembered on the device).
-var VOICE_V = 5;                      // bump when the recordings are re-rendered
+var VOICE_V = 6;                      // bump when the recordings are re-rendered
 var NARRATOR = { timings: null, rate: 0.97, loadP: null };
 // lines spoken outside the briefings, rendered by dev/voice.py like the stories:
 // the narrator's when level I is won, and the Warden's as he comes
@@ -1762,8 +1764,8 @@ var SPOKEN = {
   devildie: { who: 'devil', text: 'No! No... NO!' },
   win1: { who: 'narrator', text: 'You beat the devil.\n\nBut it is not over yet. The others he took are still down there.\n\nWe have to save them.' },
   warden: { who: 'warden', text: 'You will never escape.' },
-  wardendie: { who: 'warden', text: 'No~... They were mine.' },     // ~: that word drawn out into a cry
-  win2: { who: 'narrator', text: 'You brought them back.\n\nYou saved them.\n\nThank you, hero.' }
+  wardendie: { who: 'warden', text: 'No~... They were MINE!' },    // ~: that word drawn out into a cry; CAPITALS: shouted
+  win2: { who: 'narrator', text: 'You brought them back.\n\nYou saved them.' }
 };
 // the narrator says a line (not while the game is muted); its length, or 0
 function sayLine(key, fx){
@@ -2142,6 +2144,7 @@ function reset(level){
   else { G.cages = G.carried = G.rising = G.comers = G.strays = G.knights = G.quarrels = []; G.warden = null; G.cagedEnd = null; G.intro = 0; G.saved = 0; G.soulsOut = 0; G.shaft = 0; }
   G.freed = null;                          // the winning one: his last grasp, and the release
   G.heaven = null;                         // the light that comes down for it
+  G.gates = null;                          // level II's end: the gates of heaven in that light
   G.heartSilent = false;                   // after he takes it, the beat is never heard again
   G.paused = false;
   G.ending = null;
@@ -2164,7 +2167,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 49;
+  window.BTD_VERSION = 50;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
@@ -4688,7 +4691,9 @@ function lanternHit(w){
   checkAmmo();
 }
 // ----- the release: the lantern breaks, every cage bursts, the light takes them all
-var RELEASE = { cages: 1.3, dead: 2.0, crack: 2.6, beam: [2.8, 3.5], heal: [3.5, 5.0], rise: [4.8, 7.2], end: 7.8 };
+var RELEASE = { cages: 1.3, dead: 2.0, crack: 2.6, beam: [2.8, 3.5], heal: [3.5, 5.0], rise: [5.8, 8.6], end: 10.0,
+                // the gates of heaven at the top of the light: they come, they open, the heart and the souls go up through them, they fade
+                gates: { come: [4.3, 5.1], open: [5.2, 6.8], go: [8.5, 9.8] } };
 function wardenDies(){
   var w = G.warden, L = wardenLantern(w);
   runOver('freed');
@@ -4725,6 +4730,13 @@ function updateReleased(dt){
   updateCages(dt);
   updateCarried(dt);
   heavenAscent(t, RELEASE, dt);
+  var GT = RELEASE.gates;
+  if (t >= GT.come[0] && G.heaven){
+    if (!G.gates) G.gates = { a: 0, open: 0, sung: false };
+    G.gates.a = smooth((t - GT.come[0]) / (GT.come[1] - GT.come[0])) * (1 - smooth((t - GT.go[0]) / (GT.go[1] - GT.go[0])));
+    G.gates.open = smooth((t - GT.open[0]) / (GT.open[1] - GT.open[0]));
+    if (t >= GT.open[0] && !G.gates.sung){ G.gates.sung = true; sfx.gatesOpen(); }
+  }
 }
 // ----- out of bolts with the lantern whole: he locks the heart in with them
 function lockedIn(){
@@ -7797,6 +7809,81 @@ function drawHeaven(){
   ctx.restore();
 }
 
+// The gates of heaven, at the top of the light at level II's end: two golden
+// leaves of bars and scrollwork under an arch, between white pillars, clouds at
+// their feet. They open (each leaf swinging on its outer hinge, so it narrows
+// toward it) on a white radiance behind, the heart and the souls go up through
+// them, and they fade. Gold and white only: the palette's sulfur and grace.
+function drawGates(g){
+  var x = G.heaven.x, top = 34, bot = 238, w = 78, open = g.open, i;
+  ctx.save();
+  ctx.globalAlpha = g.a;
+  ctx.globalCompositeOperation = 'lighter';
+  drawGlow(x, (top + bot) / 2, 120, RGB.grace, 0.45 + 0.75 * open, 2 * w + 150, bot - top + 150);
+  var gap = open * w * 0.9;                                   // the radiance through the opening
+  if (gap > 0.5){
+    var rg = ctx.createLinearGradient(x - gap, 0, x + gap, 0);
+    rg.addColorStop(0, col('grace', 0)); rg.addColorStop(0.5, col('grace', 0.9 * open)); rg.addColorStop(1, col('grace', 0));
+    ctx.fillStyle = rg; ctx.fillRect(x - gap, top + 8, gap * 2, bot - top - 8);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // the pillars
+  [-1, 1].forEach(function(s){
+    var px = x + s * (w + 12), pg = ctx.createLinearGradient(px - 9, 0, px + 9, 0);
+    pg.addColorStop(0, col('grace', 0.55)); pg.addColorStop(0.5, col('grace', 0.95)); pg.addColorStop(1, col('grace', 0.5));
+    ctx.fillStyle = pg; ctx.fillRect(px - 8, top - 10, 16, bot - top + 18);
+    ctx.fillRect(px - 12, top - 16, 24, 7); ctx.fillRect(px - 12, bot + 4, 24, 7);        // capital and base
+    ctx.strokeStyle = col('sulfur', 0.45); ctx.lineWidth = 0.8;
+    for (i = -1; i <= 1; i++){ ctx.beginPath(); ctx.moveTo(px + i * 4, top - 8); ctx.lineTo(px + i * 4, bot + 4); ctx.stroke(); }   // fluting
+  });
+  // the arch over them, with rays at its crown
+  ctx.lineWidth = 3; ctx.strokeStyle = col('sulfur', 0.95);
+  ctx.beginPath(); ctx.arc(x, top + 30, w + 12, Math.PI, 0); ctx.stroke();
+  ctx.lineWidth = 1.2; ctx.strokeStyle = col('grace', 0.9);
+  ctx.beginPath(); ctx.arc(x, top + 30, w + 5, Math.PI, 0); ctx.stroke();
+  for (i = 0; i < 9; i++){
+    var ra = Math.PI + (i + 0.5) / 9 * Math.PI, r0 = w + 16, r1 = w + 26 + (i % 2) * 8;
+    ctx.beginPath(); ctx.moveTo(x + Math.cos(ra) * r0, top + 30 + Math.sin(ra) * r0); ctx.lineTo(x + Math.cos(ra) * r1, top + 30 + Math.sin(ra) * r1);
+    ctx.strokeStyle = col('sulfur', 0.7); ctx.lineWidth = 1.4; ctx.stroke();
+  }
+  ctx.fillStyle = col('grace', 0.95);
+  for (i = 0; i <= 12; i++){ var pa = Math.PI + i / 12 * Math.PI; ctx.beginPath(); ctx.arc(x + Math.cos(pa) * (w + 12), top + 30 + Math.sin(pa) * (w + 12), 1.6, 0, 6.2832); ctx.fill(); }   // pearls
+  // the two leaves, each on its outer hinge
+  [-1, 1].forEach(function(s){
+    var hx = x + s * w, lw = w * (1 - 0.86 * open), dir = -s;          // from the hinge toward the middle
+    function at(u){ return hx + dir * lw * u; }
+    function crown(u){ return top + 30 - Math.sin(u * Math.PI / 2) * 26; }   // the leaves' tops rise to the middle: an arch between them
+    // the frame
+    ctx.strokeStyle = col('sulfur', 0.95); ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(at(0), bot); ctx.lineTo(at(0), crown(0));
+    for (i = 1; i <= 10; i++) ctx.lineTo(at(i / 10), crown(i / 10));
+    ctx.lineTo(at(1), bot); ctx.closePath(); ctx.stroke();
+    // bars
+    ctx.lineWidth = 1.5; ctx.strokeStyle = col('sulfur', 0.85);
+    for (i = 1; i <= 6; i++){ var u = i / 7; ctx.beginPath(); ctx.moveTo(at(u), bot); ctx.lineTo(at(u), crown(u) + 4); ctx.stroke(); }
+    // rails
+    [bot - 18, (top + bot) / 2 + 20, top + 62].forEach(function(ry){ ctx.beginPath(); ctx.moveTo(at(0), ry); ctx.lineTo(at(1), ry); ctx.stroke(); });
+    // scrollwork: a curl in each panel under the crown
+    ctx.strokeStyle = col('grace', 0.85); ctx.lineWidth = 1.1;
+    for (i = 0; i < 3; i++){
+      var cu = (i + 0.5) / 3, cx = at(cu), cy = top + 50, cr = Math.max(1.5, lw / 9);
+      ctx.beginPath();
+      for (var k = 0; k <= 20; k++){ var aa = k / 20 * 5.5, rr = cr * (1 - k / 24); ctx.lineTo(cx + Math.cos(aa) * rr * s, cy + Math.sin(aa) * rr); }
+      ctx.stroke();
+    }
+    // a light down its edge as it turns
+    ctx.strokeStyle = col('grace', 0.5 + 0.5 * open); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(at(1), bot); ctx.lineTo(at(1), crown(1)); ctx.stroke();
+  });
+  // clouds at their feet
+  ctx.globalCompositeOperation = 'lighter';
+  for (i = 0; i < 7; i++){
+    var cx2 = x + (i - 3) * (w * 0.55) + Math.sin(G.t * 0.6 + i) * 4;
+    drawGlow(cx2, bot + 6 + (i % 2) * 5, 30, RGB.grace, 0.55, 90, 34);
+  }
+  ctx.restore();
+}
+
 // ---------- the pit ----------
 // The arena is the bowels of hell: a cavern of dark rock under a roof of
 // stalactites, crags standing black against the glow, a crust of floor over
@@ -8034,6 +8121,7 @@ function draw(){
     ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#c85a24'; ctx.lineWidth = 3; forkShape(); ctx.restore();
   });
   if (G.heaven) drawHeaven();                     // the light, behind the heart
+  if (G.gates && G.gates.a > 0.01) drawGates(G.gates);   // and in it, at level II's end, the gates
   G.bolts.forEach(drawBolt);
 
   // particles; blood droplets are drawn as small drops, with a short tail while falling
