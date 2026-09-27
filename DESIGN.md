@@ -324,6 +324,50 @@ would play differently on a slow phone.
 
 ---
 
+## 10. The score is the finish, and the world keeps it
+
+**Rule.** Only a completed run scores — the devil beaten. Its score is
+`hearts × 1000 + max(0, round((300 − seconds) × 10))`: a heart is worth a
+hundred seconds, and speed tops out at 2,500 more. The clock runs from the
+first step into the pit to the bolt that kills him and **never stops**, not
+for a pause. Nothing else earns points: grazes are marked (`CLOSE`) but pay
+nothing, and the HUD shows the clock and the world's high score, not a
+running total.
+
+The board is the world's: a Cloudflare Pages Function over a D1 database
+(`functions/api/[[route]].js`). **The server keeps the time.** A run starts
+with `/api/start` and is decided with `/api/end`, sent the moment the devil
+dies or the heart is lost; the seconds are the server's own clock between the
+two, and the server computes the score. The client sends only the outcome
+and the hearts left, checked for range; a win under 50 s is refused (the
+fastest real one is about 55). The ten best *named* runs make the board; a
+run that places gets fifteen minutes to take a name (twelve characters,
+upper case). Each is stored with its date. Every game counts toward the
+soul counters on the title: *stolen* (every loss — the heart gave out or he
+took it) and *freed* (every win).
+
+The game never waits on the world. Every call times out in 6 s; if there is
+no server — a static host answering with a page, or no database bound (503)
+— the board and counters are hidden and the game plays exactly the same,
+with a best score kept on the device.
+
+**Why.** The old points (ten a second of survival, fifty a graze, a hundred a
+fork, three thousand an eye, bonuses at the end) rewarded dawdling: a slow,
+careful run outscored a fast one, and the number meant nothing to anyone but
+the player. The board ranks what the game is about — getting out, fast, with
+the heart whole. A time the client reported would be a number anyone could
+type; the server's clock cannot be made to run faster than real time, which
+is why pauses count (the server cannot see them). The hearts are still the
+client's word: someone determined can post a fake win. The rate limit (12
+starts a minute per player, by a hash of the address, never the address) and
+the time floor keep that to deliberate effort, not a script.
+
+**In code.** `boardScore()`, `runSeconds()`, `runOver()`, `WORLD`, `api()`,
+`worldLoad/Start/End()`, `renderWorld()`, the name form; on the server
+`scoreFor()`, `MIN_SECONDS`, `TOP`, `NAME_MS`, `STARTS_PER_MINUTE`.
+
+---
+
 ## Checking a change
 
 1. `python build.py` must produce a single-file `dist/index.html`.
@@ -337,3 +381,5 @@ would play differently on a slow phone.
    Step through the win (`FREE`) too: the grasp, the ash, the light.
 6. `python dev/perf.py --software --rates 4` before and after anything that
    touches drawing; the numbers in the README are the reference.
+7. For anything touching the board, load `dev/api-sim.js` on a `#debug` page
+   and play a run through the real server code (see the README).

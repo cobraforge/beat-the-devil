@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=32">
+<link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 <div id="wrap">
@@ -23,6 +23,11 @@
         <div class="sub" id="tip">Arrow keys or A / D to move<br>Hold space to fire<br><br>Survive the pitchforks and the fire.<br>Then put a bolt through<br>each of his eyes.</div>
         <div class="blink" id="start-hint">Press space to start</div>
         <div class="stat" id="hi-title"></div>
+        <div class="souls" id="souls" hidden></div>
+        <div class="board" id="board" hidden>
+          <div class="board-head">The world's best</div>
+          <ol id="board-rows"></ol>
+        </div>
       </div>
 
       <div class="screen" id="scr-over" hidden>
@@ -38,6 +43,11 @@
         <div class="sub why" id="win-why"></div>
         <div class="stat" id="win-score"></div>
         <div class="stat" id="win-hi"></div>
+        <form class="name" id="name-form" hidden autocomplete="off">
+          <label for="name-in">Your name for the board</label>
+          <input id="name-in" name="name" maxlength="12" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="done">
+          <div class="name-btns"><button type="submit">Save</button><button type="button" id="name-skip">Skip</button></div>
+        </form>
         <div class="blink" id="win-hint">Press space to play again</div>
       </div>
 
@@ -60,7 +70,7 @@
 <!-- the touch controls: drawn here, outside the picture -->
 <canvas id="ctl" aria-hidden="true"></canvas>
 
-<script src="audio.js?v=32"></script>
-<script src="game.js?v=32"></script>
+<script src="audio.js?v=33"></script>
+<script src="game.js?v=33"></script>
 </body>
 </html>

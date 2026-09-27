@@ -180,6 +180,54 @@ roof splits and a shaft of light comes down; in it the heart heals and rises
 out of the pit. The timeline is `FREE` in `game.js`, the light is
 `drawHeaven()`, and the panel then sits low, under it.
 
+## The world board
+
+Only a completed run scores: **hearts left × 1,000, plus up to 2,500 for
+speed** (`(300 − seconds) × 10`), so a heart is worth a hundred seconds. The
+clock runs from the first step into the pit to the killing bolt and never
+stops. The HUD shows the clock and `HI`, the world's best when the server
+answers (the device's own best otherwise). A run that places in the world's
+top ten asks for a name on the win panel; the title shows the top five with
+score, hearts, time and date, and a counter of souls stolen (games lost
+worldwide) and freed (won).
+
+It is a Cloudflare Pages Function, `functions/api/[[route]].js`, over a D1
+database:
+
+| | |
+|---|---|
+| `GET /api/board` | the top ten and the counters |
+| `POST /api/start` | a run begins; returns its id |
+| `POST /api/end {run, outcome, hearts}` | `freed` or `stolen`; the server times it and scores it |
+| `POST /api/name {run, name}` | a placing winner's name |
+
+The server's own clock times the run and it computes the score; the client
+sends only the outcome and the hearts left. Wins under 50 s are refused,
+starts are limited to 12 a minute per player (by a hash of the address), and
+names are cleaned to 12 upper-case characters.
+
+**Setting it up** (once, in the Cloudflare dashboard):
+
+1. **Storage & Databases → D1 → Create database**, name it `beat-the-devil`.
+2. **Workers & Pages → beat-the-devil → Settings → Bindings → Add → D1
+   database**: variable name `DB`, database `beat-the-devil`. Add it for
+   Production (and Preview, if you want the board on preview builds).
+3. Redeploy: **Deployments → the latest → Retry deployment**, or push a commit.
+
+The tables create themselves on the first request. Until the binding exists
+`/api/*` answers 503 and the game hides the board and plays as before.
+
+**Testing it locally** without Cloudflare: `dev/api-sim.js` runs the real
+function in the page over SQLite compiled to wasm and routes the game's
+`/api/*` calls to it. On a `#debug` page:
+
+```
+var s = document.createElement('script'); s.src = '/dev/api-sim.js'; document.head.appendChild(s);
+await BTD_API_SIM()               // then play; the board and counters come alive
+BTD_API_SIM.skew(60e3)            // move the server's clock on, for a plausible win
+BTD_API_SIM.sql('SELECT * FROM runs')
+```
+
 ## On a phone
 
 - **Touch controls.** A joystick for the left thumb and the fire button for
@@ -220,7 +268,7 @@ No build step, no assets. Plain HTML/CSS/JS; all audio is synthesised at runtime
 
 ## Run
 
-The game reads `localStorage` for the high score, so serve it over HTTP rather
+The game reads `localStorage` for the best score, so serve it over HTTP rather
 than opening the file directly:
 
 ```
@@ -290,6 +338,13 @@ and the fight from 49 to 19; on the GPU path the game never leaves the top
 tier.
 
 ## Sound
+
+**On an iPhone** audio starts only from inside a touch that has *ended* (or
+a click) — a touchstart or pointerdown does not count, and a resume from
+anywhere else is ignored — so every touchend, pointerup, click and key tries
+to unlock it until it runs, playing one silent sample inside the gesture.
+The ringer switch mutes Web Audio unless the page's audio session is
+`playback`, which is set on the same gesture (Safari 16.4+).
 
 The win has its own music and sounds: his death cry (three sawtooth voices a
 fifth and an octave apart falling through a closing formant, into the long
