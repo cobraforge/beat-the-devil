@@ -306,8 +306,13 @@ would play differently on a slow phone.
   3 kHz on purpose: a phone speaker plays almost nothing below 200 Hz, where
   the drone, rumble and bass live, so without them a phone heard little
   music at all.
-- **All audio is synthesised.** No asset files; Web Audio only. Sound counts
-  are capped (thuds 3, fire voices 4) so the mix cannot clip.
+- **All audio is synthesised**, with one exception. No asset files; Web
+  Audio only. Sound counts are capped (thuds 3, fire voices 4) so the mix
+  cannot clip. The exception is the narrator (rule 13): his six story lines
+  are recordings of a neural voice, rendered offline from the game's own text
+  (`dev/voice.py`, `voice/`, a quarter of a megabyte), because no browser's
+  built-in voice was good enough to tell the story. They still play through
+  Web Audio, so mute and pause hold them.
 - **The palette lives in `style.css`.** JS reads the custom properties once
   (`COLORS`, `col()`); no hardcoded hex in draw calls.
 - **The pit stays dark where the play is.** The arena is the bowels of hell
@@ -566,17 +571,20 @@ you were not the first to play, and the ones he beat before you hang in his
 dungeon — seven stolen souls, and his Warden keeps the keys. It is told to
 *you*, the player, and names no one; rule 9's no-references rule holds.
 
-**The narrator.** Each story page is read aloud by the device's own speech
-synthesis (the Web Speech API: nothing recorded, nothing downloaded — rule 9's
-"all audio is synthesised" holds, though this voice is the browser's, outside
-Web Audio). It prefers a natural voice where the device has one (Edge's
-natural voices, Apple's enhanced ones, Google's), taken slightly slow, and
-otherwise takes a plain one down low and slow. The music steps back to a
-third under it. The page types itself out in step with the voice (to the word
-it has reached, where the browser says; else at about its pace, 14 letters a
-second). It is silent when the game is muted, and the briefing's *Voice*
-button turns it off on the device (`btd.voice`). Starting the level, Skip, or
-the title silences it.
+**The narrator.** Each story page is read aloud: a recording of a neural
+voice (Piper's "norman", an audiobook reader's voice, public domain), rendered
+offline from `BRIEF` itself by `dev/voice.py` — so the recordings always say
+what the pages show; re-run it after changing the story, and bump `VOICE_V`.
+Page 1 of each level begins with the level's spoken name (its `say`). The
+lines play through Web Audio at 0.97 speed, a little of the long reverb on
+them, the music stepping back to a third under them. `voice/timings.json`
+says when each paragraph is spoken and which letters it covers, and the page
+types out in step, paragraph by paragraph. They are fetched once, just after
+the page loads. The narrator is silent when the game is muted, and the
+briefing's *Voice* button turns him off on the device (`btd.voice`);
+starting the level, Skip, or the title stops him. (The first version used the
+browser's own speech synthesis; on Windows it was the old desktop voice, and
+it sounded cheap.)
 
 **Why.** A new player met the pit with no idea what it was for, and level 2
 began with a four-second card over live play that could not teach its new
@@ -588,8 +596,9 @@ is the game's frame; *Skip* is there for anyone who knows it.
 
 **In code.** `BRIEF`, `BRIEF_CONTROLS`, `openBrief()`, `briefRender()`,
 `briefTick()`, `briefNext()`, `briefSkip()`, `briefSpeak()`, `NARRATOR`,
-`pickVoice()`, `narrate()`, `hush()`, `AUDIO.duck()`, `G.mode = 'brief'`,
-`tryStart()`; `#scr-brief` and `#win-next` in `index.html`.
+`narratorLoad()`, `hush()`, `AUDIO.narrator` (`narrLoad/Play/Stop` in
+`audio.js`), `G.mode = 'brief'`, `tryStart()`; `#scr-brief` and `#win-next` in
+`index.html`; `dev/voice.py` and `voice/`.
 
 ---
 

@@ -905,6 +905,49 @@ function xbowTwang(x){ if (!running()) return; var bus = panBus(x); tone({freq:1
 // a quarrel into the rock
 function quarrelThunk(x){ if (!running()) return; var bus = panBus(x); tone({freq:170, slide:80, dur:0.1, vol:0.22, type:'sine', bus:bus}); noise({dur:0.05, vol:0.16, type:'lowpass', freq:900, bus:bus}); }
 
+// ----- the narrator -----
+// The briefings' stories, read by a neural voice (voice/*.mp3, rendered by
+// dev/voice.py: the game's only recorded sound). They play through Web Audio
+// like everything else, so mute and pause hold them; a little of the long
+// reverb puts him in the room, and the music steps back to a third under him.
+var narr = { bufs: {}, pending: {}, src: null };
+function narrLoad(key, url){
+  if (narr.bufs[key]) return Promise.resolve(narr.bufs[key]);
+  if (narr.pending[key]) return narr.pending[key];
+  var a = ctx(); if (!a || !window.fetch) return null;
+  narr.pending[key] = fetch(url).then(function(r){ if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(function(ab){ return new Promise(function(res, rej){ a.decodeAudioData(ab, res, rej); }); })   // the callback form, for older Safari
+    .then(function(b){ narr.bufs[key] = b; return b; })
+    .catch(function(){ delete narr.pending[key]; return null; });
+  return narr.pending[key];
+}
+function narrDuck(on){
+  if (!musicBus || !running()) return;
+  musicBus.gain.cancelScheduledValues(actx.currentTime);
+  musicBus.gain.setTargetAtTime(MUSIC_GAIN * (on ? 0.32 : 1), actx.currentTime, on ? 0.15 : 0.6);
+}
+// play a loaded line at `rate`; its length in seconds, or 0 if it could not
+function narrPlay(key, rate, onEnd){
+  narrStop();
+  var b = narr.bufs[key]; if (!b || !running()) return 0;
+  var a = actx, src = a.createBufferSource(), g = a.createGain(), send = a.createGain();
+  src.buffer = b; src.playbackRate.value = rate || 1;
+  g.gain.value = 1.2;
+  send.gain.value = 0.16;
+  src.connect(g); g.connect(master); g.connect(send); send.connect(reverbGet().input);
+  src.onended = function(){ if (narr.src !== src) return; narr.src = null; narrDuck(false); if (onEnd) onEnd(); };
+  narr.src = src;
+  narrDuck(true);
+  src.start();
+  return b.duration / (rate || 1);
+}
+function narrStop(){
+  var s = narr.src; if (!s) return;
+  narr.src = null;
+  try { s.onended = null; s.stop(); } catch(e){}
+  narrDuck(false);
+}
+
 // ----- the release -----
 // his death: three voices a fifth and an octave apart falling away through a
 // closing mouth, over a torn noise, into the long reverb
@@ -1046,12 +1089,8 @@ window.BTD_AUDIO = {
     master.gain.cancelScheduledValues(actx.currentTime);
     master.gain.setTargetAtTime(on || muted ? 0 : MASTER_GAIN, actx.currentTime, on ? 0.02 : 0.08);
   },
-  // the music steps back while the narrator speaks
-  duck: function(on){
-    if (!musicBus || !running()) return;
-    musicBus.gain.cancelScheduledValues(actx.currentTime);
-    musicBus.gain.setTargetAtTime(MUSIC_GAIN * (on ? 0.32 : 1), actx.currentTime, on ? 0.15 : 0.6);
-  }
+  // the narrator: his recorded lines, loaded, played, stopped
+  narrator: { load: narrLoad, play: narrPlay, stop: narrStop, ready: function(k){ return !!narr.bufs[k]; } }
 };
 
 })();

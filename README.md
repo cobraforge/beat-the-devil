@@ -241,9 +241,8 @@ Before each level, a **briefing**: the level's story typed out a page at a
 time, then what to do and the controls (DESIGN.md rule 13). From the title it
 opens level 1's; after level 1 is won, the win panel shows **NEXT · LEVEL II ·
 THE STOLEN** and space (or a tap on it) opens level 2's. A **narrator** reads
-each story page aloud (the device's own speech synthesis, a natural voice
-where it has one, the music stepping back under it); the page types out in
-step with him. *Skip* jumps to the rules, *Story* goes back, *Voice* turns the
+each story page aloud (recordings of a neural voice, the music stepping back
+under him); the page types out in step with him. *Skip* jumps to the rules, *Story* goes back, *Voice* turns the
 narrator off. The story plays every run: from a loss or level 2's win, space
 goes back to the main menu, and a new run starts there. The words are in
 `BRIEF` in `game.js`.
@@ -359,8 +358,28 @@ BTD_API_SIM.sql('SELECT * FROM runs')
 - `game.js`    — the game: heartbeat clock, fire renderer, input, hazards, devil AI, endings, rendering
 - `build.py`   — bundles everything into `dist/index.html`; `dist/` is the deployable site root
 - `dev/bot.js` — the imperfect playtest bot; `dev/perf.py` — frame-time measurement under throttling
+- `voice/`     — the narrator's six story lines (MP3) and `timings.json`; `dev/voice.py` renders them
 
-No build step, no assets. Plain HTML/CSS/JS; all audio is synthesised at runtime.
+No build step. Plain HTML/CSS/JS; all audio is synthesised at runtime except
+the narrator's lines (below).
+
+## The narrator's voice
+
+The story pages are read by a neural voice: [Piper](https://github.com/rhasspy/piper)
+(open-source text-to-speech, MIT) with its `en_US-norman-medium` voice (public
+domain, trained on LibriVox audiobook readings). `dev/voice.py` reads the
+story out of `BRIEF` in `game.js`, renders each page (the first with the
+level's spoken name) and writes `voice/l<level>-<page>.mp3` and
+`voice/timings.json` (when each paragraph is spoken, for the typing). After
+changing the story, re-render and bump `VOICE_V` in `game.js`:
+
+```
+pip install soundfile numpy
+python dev/voice.py --piper path/to/piper.exe --model path/to/en_US-norman-medium.onnx
+```
+
+Piper and the voice model are downloads kept outside the project (see the top
+of `dev/voice.py`). `build.py` copies `voice/` into `dist/`.
 
 ## Run
 

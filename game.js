@@ -97,55 +97,28 @@ var BRIEF = {
       ] }
 };
 // ---------- the narrator ----------
-// The briefings' stories are read aloud by the device's own speech synthesis
-// (the Web Speech API: nothing recorded, nothing downloaded) in a low, slow
-// voice, the music stepping back under it. Silent when the game is muted, or
-// with the briefing's Voice button (remembered on the device). Where the
-// browser says which word it has reached, the page types itself out in step
-// with the voice; where it does not, at about the voice's pace.
-var synth = window.speechSynthesis || null;
-var NARRATOR = { on: true, voice: null, u: null, rate: 0.84, pitch: 0.62, cps: 14 };
+// The briefings' stories are read aloud: recordings of a neural voice (an
+// audiobook reader's, public domain), rendered offline from BRIEF itself by
+// dev/voice.py into voice/*.mp3, with voice/timings.json saying when each
+// paragraph is spoken so the page types itself out in step. They are the
+// game's only recorded sound, and they play through Web Audio (AUDIO.narrator)
+// like the rest of it. Silent when the game is muted, or with the briefing's
+// Voice button (remembered on the device).
+var VOICE_V = 1;                      // bump when the recordings are re-rendered
+var NARRATOR = { on: true, timings: null, rate: 0.97, loading: false };
 try { NARRATOR.on = localStorage.getItem('btd.voice') !== '0'; } catch(e){}
-function pickVoice(){
-  if (!synth) return;
-  var vs = synth.getVoices().filter(function(v){ return /^en([-_]|$)/i.test(v.lang); });
-  if (!vs.length) return;
-  NARRATOR.voice = null;
-  // the best a device has: a natural (neural) man's voice first — Edge's
-  // natural voices, Apple's enhanced ones, Google's — then the plainer ones
-  var prefer = [/(Ryan|Guy|Christopher|Eric|Thomas|Andrew|Brian|Davis|Roger|Steffan|Oliver).*Natural/i, /Natural/i,
-                /(Daniel|Arthur|Oliver|Tom).*(Enhanced|Premium)/i, /(Enhanced|Premium)/i, /Google UK English Male/i,
-                /Daniel/i, /Arthur/i, /Google US English/i, /Microsoft (George|David|Mark)/i, /Alex\b/i, /\bMale\b/i];
-  for (var i = 0; i < prefer.length; i++){
-    var hit = vs.filter(function(v){ return prefer[i].test(v.name); });
-    if (hit.length){ NARRATOR.voice = hit[0]; break; }
-  }
-  if (!NARRATOR.voice) NARRATOR.voice = vs.filter(function(v){ return /en[-_]GB/i.test(v.lang); })[0] || vs[0];
-  // a natural voice is dark enough as it is; a plain one is taken down low
-  NARRATOR.natural = /Natural|Enhanced|Premium|Google/i.test(NARRATOR.voice.name);
+function voiceKey(level, page){ return 'l' + level + '-' + page; }
+function voiceUrl(key){ return 'voice/' + key + '.mp3?v=' + VOICE_V; }
+// fetch the lines (a quarter of a megabyte in all), once, after the page is up
+function narratorLoad(){
+  if (NARRATOR.loading || !window.fetch) return;
+  NARRATOR.loading = true;
+  fetch('voice/timings.json?v=' + VOICE_V).then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
+    NARRATOR.timings = j;
+    if (j) Object.keys(j).forEach(function(k){ AUDIO.narrator.load(k, voiceUrl(k)); });
+  }).catch(function(){});
 }
-if (synth){ pickVoice(); if (synth.addEventListener) synth.addEventListener('voiceschanged', pickVoice); else synth.onvoiceschanged = pickVoice; }
-// speak a text; onWord(index) as each word is reached, onEnd when it is done.
-// False if there is no narrator to speak it.
-function narrate(text, onWord, onEnd){
-  hush();
-  if (!synth || !NARRATOR.on || AUDIO.isMuted()) return false;
-  var u = new SpeechSynthesisUtterance(text.replace(/\n/g, ' '));
-  if (NARRATOR.voice){ u.voice = NARRATOR.voice; u.lang = NARRATOR.voice.lang; } else u.lang = 'en-GB';
-  u.rate = NARRATOR.natural ? 0.92 : NARRATOR.rate; u.pitch = NARRATOR.natural ? 0.9 : NARRATOR.pitch; u.volume = 1;
-  u.onboundary = function(e){ if (NARRATOR.u === u && onWord && e.name !== 'sentence') onWord(e.charIndex + (e.charLength || 0)); };
-  u.onend = u.onerror = function(){ if (NARRATOR.u !== u) return; NARRATOR.u = null; AUDIO.duck(false); if (onEnd) onEnd(); };
-  NARRATOR.u = u;
-  AUDIO.duck(true);
-  synth.speak(u);
-  return true;
-}
-function hush(){
-  if (!synth) return;
-  var was = NARRATOR.u; NARRATOR.u = null;
-  if (synth.speaking || synth.pending) synth.cancel();
-  if (was) AUDIO.duck(false);
-}
+function hush(){ AUDIO.narrator.stop(); }
 var BRIEF_CONTROLS = isTouch ? 'Left thumb on the circle to move\nRight thumb on the button to fire \u00b7 II to pause'
                              : 'Arrows / WASD to move \u00b7 Space to fire\nP to pause \u00b7 M to mute';
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
@@ -524,7 +497,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 43;
+  window.BTD_VERSION = 44;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
@@ -714,21 +687,31 @@ function openBrief(level){
   reset(level); G.mode = 'brief';
   scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true;
   closeNameForm();
-  brief = { level: level, page: 0, at: performance.now(), done: false, shown: -1, spoken: -1, voiced: false };
+  brief = { level: level, page: 0, at: performance.now(), done: false, shown: -1, voiced: false, segs: null };
   scrBrief.hidden = false;
   if (level === 2) music.play('stolen');           // his dungeon, under the story
-  document.getElementById('brief-voice').hidden = !synth;
+  document.getElementById('brief-voice').hidden = !window.fetch;
   briefRender();
   briefSpeak();
 }
-// the narrator reads the page just turned to (the first with the level's name)
+// the narrator reads the page just turned to (the first with the level's name).
+// If its line is still on its way, the page starts typing without him and he
+// picks it up from the start if the line arrives within a second and a half.
 function briefSpeak(){
-  var B = BRIEF[brief.level];
-  if (brief.page >= B.story.length){ hush(); brief.voiced = false; return; }
-  var lead = brief.page === 0 ? B.say + ' ' : '', b = brief;
-  brief.voiced = narrate(lead + B.story[brief.page],
-    function(i){ if (brief === b) b.spoken = i - lead.length; },
-    function(){ if (brief === b && b.page < B.story.length){ b.done = true; briefRender(); } });
+  var B = BRIEF[brief.level], b = brief, page = brief.page, key = voiceKey(brief.level, page);
+  hush(); b.voiced = false; b.segs = null;
+  if (page >= B.story.length || !NARRATOR.on || AUDIO.isMuted()) return;
+  function go(){
+    if (brief !== b || b.page !== page || !NARRATOR.timings || !NARRATOR.timings[key]) return;
+    var dur = AUDIO.narrator.play(key, NARRATOR.rate, function(){ if (brief === b && b.page === page){ b.done = true; briefRender(); } });
+    if (!dur) return;
+    b.voiced = true; b.segs = NARRATOR.timings[key].segs; b.at = performance.now(); b.done = false; b.shown = -1;
+  }
+  if (AUDIO.narrator.ready(key)) go();
+  else {
+    var pr = NARRATOR.timings && AUDIO.narrator.load(key, voiceUrl(key));
+    if (pr) pr.then(function(){ if (performance.now() - b.at < 1500) go(); });
+  }
 }
 function briefRender(){
   var B = BRIEF[brief.level], n = B.story.length, onRules = brief.page >= n, go = isTouch ? 'Tap' : 'Press space';
@@ -749,21 +732,26 @@ function briefRender(){
   document.getElementById('brief-skip').textContent = onRules ? 'Story' : 'Skip';
   document.getElementById('brief-voice').textContent = NARRATOR.on ? 'Voice on' : 'Voice off';
 }
-// the story types itself out: 38 letters a second by the clock (not the frame
-// rate), or in step with the narrator when there is one — to the word he has
-// reached if the browser says, else at about his pace
+// the story types itself out: in step with the narrator, each paragraph over
+// the time he speaks it; without him, 38 letters a second. By the clock, not
+// the frame rate.
 function briefTick(){
   if (!brief || brief.done) return;
   var B = BRIEF[brief.level];
   if (brief.page >= B.story.length){ brief.done = true; return; }
-  var full = B.story[brief.page].length, lead = brief.page === 0 && brief.voiced ? B.say.length + 1 : 0;
-  var cps = brief.voiced ? NARRATOR.cps : 38, n = Math.floor(((performance.now() - brief.at) / 1000 * cps) - lead);
-  if (brief.voiced && brief.spoken >= 0) n = brief.spoken;
+  var full = B.story[brief.page].length, s = (performance.now() - brief.at) / 1000, n = 0;
+  if (brief.voiced && brief.segs){
+    var e = s * NARRATOR.rate;                       // where he is in the recording
+    brief.segs.forEach(function(g){
+      if (e >= g[1]) n = Math.max(n, g[3]);
+      else if (e > g[0]) n = Math.max(n, g[2] + Math.floor((g[3] - g[2]) * (e - g[0]) / (g[1] - g[0])));
+    });
+  } else n = Math.floor(s * 38);
   n = Math.max(0, Math.min(full, n));
   if (n >= full) brief.done = true;
   if (n !== brief.shown || brief.done){ brief.shown = n; briefRender(); }
 }
-function briefPage(pg){ brief.page = pg; brief.at = performance.now(); brief.done = false; brief.shown = -1; brief.spoken = -1; briefRender(); briefSpeak(); }
+function briefPage(pg){ brief.page = pg; brief.at = performance.now(); brief.done = false; brief.shown = -1; briefRender(); briefSpeak(); }
 // on: a page still typing finishes; a finished one turns; the rules begin the level
 function briefNext(){
   if (!brief || performance.now() - brief.at < 200) return;
@@ -850,7 +838,7 @@ document.getElementById('brief-voice').addEventListener('click', function(e){
   NARRATOR.on = !NARRATOR.on;
   try { localStorage.setItem('btd.voice', NARRATOR.on ? '1' : '0'); } catch(err){}
   if (!brief) return;
-  if (NARRATOR.on && brief.page < BRIEF[brief.level].story.length){ brief.at = performance.now(); brief.done = false; brief.spoken = -1; briefSpeak(); }
+  if (NARRATOR.on && brief.page < BRIEF[brief.level].story.length){ brief.at = performance.now(); brief.done = false; brief.shown = -1; briefSpeak(); }
   else { hush(); brief.voiced = false; }
   briefRender();
 });
@@ -932,6 +920,7 @@ devPanel.addEventListener('click', function(e){
 showTitle();
 worldLoad();
 devRender();
+setTimeout(narratorLoad, 800);                     // his lines, once the page is up
 // the title's music is asked for at once: a browser that lets a page sound
 // before a tap plays it now; otherwise it comes in on the first touch or key
 // that isn't a start (the board, its tabs, Sound on)
