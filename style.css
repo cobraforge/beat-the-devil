@@ -321,6 +321,7 @@ body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px
 .brief-dots{display:flex;gap:calc(6px * var(--s))}
 .brief-dots span{width:calc(5px * var(--s));height:calc(5px * var(--s));border-radius:50%;border:1px solid var(--ash)}
 .brief-dots span.on{background:var(--title);border-color:var(--title)}
+.briefbtn[hidden]{display:none}
 /* the win panel's way on to level II: plain to see, and a tap on it goes */
 .nextlvl{display:flex;flex-direction:column;align-items:center;gap:calc(3px * var(--s));cursor:pointer;touch-action:manipulation;
   font-family:inherit;padding:calc(7px * var(--s)) calc(14px * var(--s));background:rgba(20,4,2,.75);

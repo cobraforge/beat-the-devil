@@ -69,11 +69,11 @@ resize();
 var GAME_VERSION = '1.0';
 document.getElementById('ver').textContent = 'v' + GAME_VERSION;
 // ---------- the briefings ----------
-// Before each level: its story, typed out a page at a time, then what to do.
-// The story shows the first time on a device; after that the briefing opens
-// on its rules (the story is a button away). Space, a click or a tap goes on.
+// Before each level: its story, typed out a page at a time (and read aloud),
+// then what to do. Every run starts from the main menu with it; Skip jumps to
+// the rules. Space, a click or a tap goes on.
 var BRIEF = {
-  1: { head: 'LEVEL I \u00b7 THE PIT', seen: 'btd.seen1', story: [
+  1: { head: 'LEVEL I \u00b7 THE PIT', say: 'Level one. The Pit.', story: [
         'The shop was not there last week.\nA narrow door, a dusty window,\nand one game on the shelf\nwith no price on it.',
         'You played it all night.\nThen the next night.\nYour friends stopped calling.\nYou stopped noticing.',
         'Tonight the screen is different.\nThe white heart on it beats\nwhen your own heart beats.\n\nIt is yours. And he wants it.'
@@ -83,7 +83,7 @@ var BRIEF = {
         'Then put a bolt through each of his eyes, only while it is open.',
         'You have five bolts for the whole run. Two are for his eyes.'
       ] },
-  2: { head: 'LEVEL II \u00b7 THE STOLEN', seen: 'btd.seen2', story: [
+  2: { head: 'LEVEL II \u00b7 THE STOLEN', say: 'Level two. The Stolen.', story: [
         'The light came down for your heart.\nIt would not take you alone.',
         'You were not the first to play.\nBelow the pit is his dungeon,\nand the ones he beat before you\nhang there in cages.',
         'Seven stolen souls.\nHis Warden keeps the keys.\n\nGo back down for them.'
@@ -96,6 +96,56 @@ var BRIEF = {
         'When the Warden comes, shoot his lantern while it is open. You have five bolts. Two are for his lantern.'
       ] }
 };
+// ---------- the narrator ----------
+// The briefings' stories are read aloud by the device's own speech synthesis
+// (the Web Speech API: nothing recorded, nothing downloaded) in a low, slow
+// voice, the music stepping back under it. Silent when the game is muted, or
+// with the briefing's Voice button (remembered on the device). Where the
+// browser says which word it has reached, the page types itself out in step
+// with the voice; where it does not, at about the voice's pace.
+var synth = window.speechSynthesis || null;
+var NARRATOR = { on: true, voice: null, u: null, rate: 0.84, pitch: 0.62, cps: 14 };
+try { NARRATOR.on = localStorage.getItem('btd.voice') !== '0'; } catch(e){}
+function pickVoice(){
+  if (!synth) return;
+  var vs = synth.getVoices().filter(function(v){ return /^en([-_]|$)/i.test(v.lang); });
+  if (!vs.length) return;
+  NARRATOR.voice = null;
+  // the best a device has: a natural (neural) man's voice first — Edge's
+  // natural voices, Apple's enhanced ones, Google's — then the plainer ones
+  var prefer = [/(Ryan|Guy|Christopher|Eric|Thomas|Andrew|Brian|Davis|Roger|Steffan|Oliver).*Natural/i, /Natural/i,
+                /(Daniel|Arthur|Oliver|Tom).*(Enhanced|Premium)/i, /(Enhanced|Premium)/i, /Google UK English Male/i,
+                /Daniel/i, /Arthur/i, /Google US English/i, /Microsoft (George|David|Mark)/i, /Alex\b/i, /\bMale\b/i];
+  for (var i = 0; i < prefer.length; i++){
+    var hit = vs.filter(function(v){ return prefer[i].test(v.name); });
+    if (hit.length){ NARRATOR.voice = hit[0]; break; }
+  }
+  if (!NARRATOR.voice) NARRATOR.voice = vs.filter(function(v){ return /en[-_]GB/i.test(v.lang); })[0] || vs[0];
+  // a natural voice is dark enough as it is; a plain one is taken down low
+  NARRATOR.natural = /Natural|Enhanced|Premium|Google/i.test(NARRATOR.voice.name);
+}
+if (synth){ pickVoice(); if (synth.addEventListener) synth.addEventListener('voiceschanged', pickVoice); else synth.onvoiceschanged = pickVoice; }
+// speak a text; onWord(index) as each word is reached, onEnd when it is done.
+// False if there is no narrator to speak it.
+function narrate(text, onWord, onEnd){
+  hush();
+  if (!synth || !NARRATOR.on || AUDIO.isMuted()) return false;
+  var u = new SpeechSynthesisUtterance(text.replace(/\n/g, ' '));
+  if (NARRATOR.voice){ u.voice = NARRATOR.voice; u.lang = NARRATOR.voice.lang; } else u.lang = 'en-GB';
+  u.rate = NARRATOR.natural ? 0.92 : NARRATOR.rate; u.pitch = NARRATOR.natural ? 0.9 : NARRATOR.pitch; u.volume = 1;
+  u.onboundary = function(e){ if (NARRATOR.u === u && onWord && e.name !== 'sentence') onWord(e.charIndex + (e.charLength || 0)); };
+  u.onend = u.onerror = function(){ if (NARRATOR.u !== u) return; NARRATOR.u = null; AUDIO.duck(false); if (onEnd) onEnd(); };
+  NARRATOR.u = u;
+  AUDIO.duck(true);
+  synth.speak(u);
+  return true;
+}
+function hush(){
+  if (!synth) return;
+  var was = NARRATOR.u; NARRATOR.u = null;
+  if (synth.speaking || synth.pending) synth.cancel();
+  if (was) AUDIO.duck(false);
+}
 var BRIEF_CONTROLS = isTouch ? 'Left thumb on the circle to move\nRight thumb on the button to fire \u00b7 II to pause'
                              : 'Arrows / WASD to move \u00b7 Space to fire\nP to pause \u00b7 M to mute';
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
@@ -474,8 +524,9 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 41;
+  window.BTD_VERSION = 43;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
+  window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
 
 // ---------- input ----------
@@ -577,7 +628,7 @@ function toLogical(e){
 // picture. A mouse still has to press on the picture itself.
 window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  if (e.target.closest && e.target.closest('.name, .board, .menubtn, .pausebtn, .briefbtn, .nextlvl, #pausebtn, #dev')) return;   // the name box, the board and the buttons take their own touches
+  if (e.target.closest && e.target.closest('.name, .board, .menubtn, .pausebtn, .briefbtn, .nextlvl, #pausebtn, #dev')) return;   // (the briefing's Skip and Voice too)   // the name box, the board and the buttons take their own touches
   var onPicture = stage.contains(e.target);
   if (!isTouch && !onPicture) return;
   var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
@@ -639,6 +690,7 @@ function toggleMute(){
   AUDIO.unlock();
   AUDIO.setMuted(!AUDIO.isMuted());
   muteBtn.textContent = AUDIO.isMuted() ? 'Sound off' : 'Sound on';
+  if (AUDIO.isMuted()) hush();                      // the narrator too
   if (G.mode === 'title') music.play('title');
 }
 muteBtn.addEventListener('click', function(e){ e.stopPropagation(); toggleMute(); });
@@ -648,6 +700,7 @@ function togglePause(){
   G.paused = !G.paused;
   keys = {}; fireQueued = false; stickRelease();
   document.getElementById('scr-pause').hidden = !G.paused;
+  AUDIO.hold(G.paused);                              // paused, the game is silent
   sfx.pause();
   if (G.paused) music.pause(); else music.resume();
 }
@@ -657,15 +710,25 @@ var scrOver  = document.getElementById('scr-over');
 var scrWin   = document.getElementById('scr-win');
 var scrBrief = document.getElementById('scr-brief'), brief = null;
 function openBrief(level){
-  var B = BRIEF[level], seen = false;
-  try { seen = localStorage.getItem(B.seen) === '1'; } catch(e){}
+  var B = BRIEF[level];
   reset(level); G.mode = 'brief';
   scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true;
   closeNameForm();
-  brief = { level: level, page: seen ? B.story.length : 0, at: performance.now(), done: false, shown: -1 };
+  brief = { level: level, page: 0, at: performance.now(), done: false, shown: -1, spoken: -1, voiced: false };
   scrBrief.hidden = false;
   if (level === 2) music.play('stolen');           // his dungeon, under the story
+  document.getElementById('brief-voice').hidden = !synth;
   briefRender();
+  briefSpeak();
+}
+// the narrator reads the page just turned to (the first with the level's name)
+function briefSpeak(){
+  var B = BRIEF[brief.level];
+  if (brief.page >= B.story.length){ hush(); brief.voiced = false; return; }
+  var lead = brief.page === 0 ? B.say + ' ' : '', b = brief;
+  brief.voiced = narrate(lead + B.story[brief.page],
+    function(i){ if (brief === b) b.spoken = i - lead.length; },
+    function(){ if (brief === b && b.page < B.story.length){ b.done = true; briefRender(); } });
 }
 function briefRender(){
   var B = BRIEF[brief.level], n = B.story.length, onRules = brief.page >= n, go = isTouch ? 'Tap' : 'Press space';
@@ -684,24 +747,29 @@ function briefRender(){
   for (var i = 0; i <= n; i++){ var d = document.createElement('span'); if (i === brief.page) d.className = 'on'; dots.appendChild(d); }
   document.getElementById('brief-hint').textContent = go + (onRules ? ' to begin' : ' to continue');
   document.getElementById('brief-skip').textContent = onRules ? 'Story' : 'Skip';
+  document.getElementById('brief-voice').textContent = NARRATOR.on ? 'Voice on' : 'Voice off';
 }
-// the story types itself out, 38 letters a second by the clock (not the frame rate)
+// the story types itself out: 38 letters a second by the clock (not the frame
+// rate), or in step with the narrator when there is one — to the word he has
+// reached if the browser says, else at about his pace
 function briefTick(){
   if (!brief || brief.done) return;
   var B = BRIEF[brief.level];
   if (brief.page >= B.story.length){ brief.done = true; return; }
-  var full = B.story[brief.page].length, n = Math.min(full, Math.floor((performance.now() - brief.at) / 1000 * 38));
+  var full = B.story[brief.page].length, lead = brief.page === 0 && brief.voiced ? B.say.length + 1 : 0;
+  var cps = brief.voiced ? NARRATOR.cps : 38, n = Math.floor(((performance.now() - brief.at) / 1000 * cps) - lead);
+  if (brief.voiced && brief.spoken >= 0) n = brief.spoken;
+  n = Math.max(0, Math.min(full, n));
   if (n >= full) brief.done = true;
   if (n !== brief.shown || brief.done){ brief.shown = n; briefRender(); }
 }
-function briefPage(pg){ brief.page = pg; brief.at = performance.now(); brief.done = false; brief.shown = -1; briefRender(); }
+function briefPage(pg){ brief.page = pg; brief.at = performance.now(); brief.done = false; brief.shown = -1; brief.spoken = -1; briefRender(); briefSpeak(); }
 // on: a page still typing finishes; a finished one turns; the rules begin the level
 function briefNext(){
   if (!brief || performance.now() - brief.at < 200) return;
   var B = BRIEF[brief.level], n = B.story.length;
   if (brief.page < n && !brief.done){ brief.done = true; briefRender(); return; }
   if (brief.page < n){ briefPage(brief.page + 1); return; }
-  try { localStorage.setItem(B.seen, '1'); } catch(e){}
   startGame(brief.level);
 }
 // the story skipped to the rules, or the rules back to the story
@@ -725,7 +793,7 @@ function tryStart(){
     if (G.mode !== 'title' && G.endT < 0.9) return;
     if (G.mode === 'title') openBrief(1);         // the story first, from the title
     else if (nextLevel() === 2) openBrief(2);     // and on the way down to the stolen
-    else startGame(1);                            // a retry goes straight back in
+    else toTitle();                               // anything else: back to the main menu
   }
 }
 function startGame(level){
@@ -734,7 +802,7 @@ function startGame(level){
   AUDIO.muffle(false);
   G.mode = 'play';
   G.runStart = performance.now();
-  scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true; scrBrief.hidden = true; brief = null;
+  scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true; scrBrief.hidden = true; brief = null; hush();
   closeNameForm();
   music.play(level === 2 ? 'stolen' : 'survive');
   worldStart();
@@ -748,7 +816,8 @@ function goTitle(){
 function toTitle(){
   G.paused = false;
   document.getElementById('scr-pause').hidden = true;
-  scrBrief.hidden = true; brief = null;
+  AUDIO.hold(false);
+  scrBrief.hidden = true; brief = null; hush();
   reset(1);
   AUDIO.muffle(false);
   scrOver.hidden = true; scrWin.hidden = true;
@@ -764,15 +833,27 @@ function showTitle(){
 // what space (or a tap) does from an end panel, said on it
 function endHints(){
   var go = isTouch ? 'Tap' : 'Press space', down = nextLevel() === 2;
-  document.getElementById('over-hint').textContent = go + (G.level === 2 ? ' to start again from the pit' : ' to try again');
-  document.getElementById('win-hint').textContent = go + (down ? ' to continue to Level II' : ' to play again');
+  document.getElementById('over-hint').textContent = go + ' for the main menu';
+  document.getElementById('win-hint').textContent = go + (down ? ' to continue to Level II' : ' for the main menu');
   document.getElementById('win-next').hidden = !down;
+  // a Main menu button only where space goes somewhere else
+  document.querySelector('#scr-over .menubtn').hidden = true;
+  document.querySelector('#scr-win .menubtn').hidden = !down;
 }
 [].forEach.call(document.querySelectorAll('.menubtn'), function(b){
   b.addEventListener('click', function(e){ e.stopPropagation(); b.blur(); goTitle(); });
 });
 // the briefing's Skip / Story, and the win panel's way on to level II
 document.getElementById('brief-skip').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); AUDIO.unlock(); briefSkip(); });
+document.getElementById('brief-voice').addEventListener('click', function(e){
+  e.stopPropagation(); this.blur();
+  NARRATOR.on = !NARRATOR.on;
+  try { localStorage.setItem('btd.voice', NARRATOR.on ? '1' : '0'); } catch(err){}
+  if (!brief) return;
+  if (NARRATOR.on && brief.page < BRIEF[brief.level].story.length){ brief.at = performance.now(); brief.done = false; brief.spoken = -1; briefSpeak(); }
+  else { hush(); brief.voiced = false; }
+  briefRender();
+});
 document.getElementById('win-next').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); tryStart(); });
 // pausing: the phone's pause button (a keyboard has P and Esc), and the pause screen's buttons
 var pauseBtn = document.getElementById('pausebtn'), pauseShown = false;
@@ -929,7 +1010,7 @@ function updateHeart(dt){
   else if (G.mode === 'play' || G.mode === 'ending'){
     var danger = 1 - clamp((nearestHazard() - 30) / 220, 0, 1);
     if (openPhase()) danger = Math.max(danger, G.prog * 0.55);
-    else danger = Math.max(danger, 0.45);
+    else danger = Math.max(danger, 0.72);            // a boss: the heart races (127 bpm and up), and the music with it
     if (G.lives === 1) danger = Math.max(danger, 0.55);
     h.danger = danger;
     target = 68 + 82 * danger;

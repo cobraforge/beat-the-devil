@@ -291,7 +291,11 @@ would play differently on a slow phone.
 
 - **The heartbeat is the master clock.** 68 bpm at rest to 150 at full
   danger; the floor glow, embers, aura and the music sequencer all pulse from
-  `G.heart`. The choir changes chord on the bar and the music box plays on
+  `G.heart`. **When a boss comes the heart races**: in the devil's fight and
+  the Warden's its danger never drops below 0.72 (127 bpm), against the survive
+  phase's slow build from 68, so the fight's music (`devil`, `warden`: a bass
+  pumping sixteenths, an arpeggio, a riff, snare with ghosts and rolls,
+  sixteenth hats) runs faster and harder than anything before it. The choir changes chord on the bar and the music box plays on
   the steps, so the eerie score speeds up with the heart too. Hits stop it
   for 200 ms, then arrhythmia. In the mix the heart must always be audible:
   `HEART_GAIN 1.3`, fire ducks under every lub, and the laugh ducks
@@ -548,10 +552,11 @@ page of what to do — the level's rules in a few lines and the controls for thi
 device. Space, a click or a tap finishes a page still typing, turns a finished
 one, and on the last page begins the level; *Skip* jumps to the rules, *Story*
 goes back to the start, and Esc does the first (and from the rules, goes to the
-title). The story shows the first time on a device (`btd.seen1`, `btd.seen2`);
-after that the briefing opens on its rules. **A retry skips the briefing**: from
-a loss (or level 2's win) the next run starts at once. Level 1's win panel says
-plainly what comes next — a boxed *NEXT · LEVEL II · THE STOLEN* with a line of
+title). **The story plays every run**, read aloud by the narrator (below).
+**Every run starts from the main menu**: from a loss, or level 2's win, space
+or a tap goes back to the title (its hint says so, and there is no Main menu
+button where space already goes there). Level 1's win panel says plainly what
+comes next — a boxed *NEXT · LEVEL II · THE STOLEN* with a line of
 the story, which a tap follows, and *continue to Level II* on its hint.
 
 **The story.** Level 1: a game in a shop that was not there last week; nights
@@ -561,17 +566,30 @@ you were not the first to play, and the ones he beat before you hang in his
 dungeon — seven stolen souls, and his Warden keeps the keys. It is told to
 *you*, the player, and names no one; rule 9's no-references rule holds.
 
+**The narrator.** Each story page is read aloud by the device's own speech
+synthesis (the Web Speech API: nothing recorded, nothing downloaded — rule 9's
+"all audio is synthesised" holds, though this voice is the browser's, outside
+Web Audio). It prefers a natural voice where the device has one (Edge's
+natural voices, Apple's enhanced ones, Google's), taken slightly slow, and
+otherwise takes a plain one down low and slow. The music steps back to a
+third under it. The page types itself out in step with the voice (to the word
+it has reached, where the browser says; else at about its pace, 14 letters a
+second). It is silent when the game is muted, and the briefing's *Voice*
+button turns it off on the device (`btd.voice`). Starting the level, Skip, or
+the title silences it.
+
 **Why.** A new player met the pit with no idea what it was for, and level 2
 began with a four-second card over live play that could not teach its new
 rules (cages, carrying, the light, the lantern). A briefing tells the story
 and the rules before anything can hurt you; the story is what gives the heart
 its weight (it is yours), and it gives level 2 its reason (you go back down for
-them). It shows once per device because a story read twice is a wall, and a
-retry skips it because a retry has to be instant.
+them). Every run goes back through the menu and the story because the story
+is the game's frame; *Skip* is there for anyone who knows it.
 
 **In code.** `BRIEF`, `BRIEF_CONTROLS`, `openBrief()`, `briefRender()`,
-`briefTick()`, `briefNext()`, `briefSkip()`, `G.mode = 'brief'`, `tryStart()`;
-`#scr-brief` and `#win-next` in `index.html`.
+`briefTick()`, `briefNext()`, `briefSkip()`, `briefSpeak()`, `NARRATOR`,
+`pickVoice()`, `narrate()`, `hush()`, `AUDIO.duck()`, `G.mode = 'brief'`,
+`tryStart()`; `#scr-brief` and `#win-next` in `index.html`.
 
 ---
 

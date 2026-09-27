@@ -52,7 +52,7 @@
     const delay = opts.delay == null ? 9 : opts.delay, skip = opts.skip == null ? 0.2 : opts.skip;
     const results = [], causes = [];
     for (let r = 0; r < runs; r++){
-      if (!opts.resume){ BTD_G.endT = 1; if (BTD_G.mode !== 'play') press(' ', 'Space'); step(); }
+      if (!opts.resume){ BTD_G.endT = 1; if (BTD_G.mode !== 'play') BTD_START(1); step(); }   // space from a panel goes to the menu now
       BTD_G.paused = false;
       const history = []; let frames = 0, hits = 0, lastLives = BTD_G.lives, goal = { x: 210, y: 500 };
       const stopAt = opts.stopAtLives == null ? -1 : opts.stopAtLives;

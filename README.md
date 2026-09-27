@@ -240,15 +240,19 @@ music box heard through the bars) and `warden` (a march in iron).
 Before each level, a **briefing**: the level's story typed out a page at a
 time, then what to do and the controls (DESIGN.md rule 13). From the title it
 opens level 1's; after level 1 is won, the win panel shows **NEXT · LEVEL II ·
-THE STOLEN** and space (or a tap on it) opens level 2's. The story shows the
-first time on a device and after that the briefing opens on its rules (with a
-*Story* button to read it again); *Skip* jumps to the rules. A retry after a
-loss goes straight in. The words are in `BRIEF` in `game.js`.
+THE STOLEN** and space (or a tap on it) opens level 2's. A **narrator** reads
+each story page aloud (the device's own speech synthesis, a natural voice
+where it has one, the music stepping back under it); the page types out in
+step with him. *Skip* jumps to the rules, *Story* goes back, *Voice* turns the
+narrator off. The story plays every run: from a loss or level 2's win, space
+goes back to the main menu, and a new run starts there. The words are in
+`BRIEF` in `game.js`.
 
 ## Pause, the menu, the version
 
 **P** or **Esc** pauses on a keyboard; on a phone, the **II** button beside
-*Sound* at the top (shown only in play). The pause screen has **Resume** and
+*Sound* at the top (shown only in play). Paused, the game is silent
+(`AUDIO.hold()`). The pause screen has **Resume** and
 **Main menu** (**Q** on a keyboard), which abandons the run and goes back to
 the title. The title shows the game's version in its bottom-left corner:
 `GAME_VERSION` in `game.js` (bump it for a release; `BTD_VERSION` counts
@@ -380,7 +384,8 @@ perfect play.
 ## Debugging
 
 Open `http://localhost:8080/#debug` and the console gets `BTD_G` (the state
-object), `BTD_STEP(dt)` (advance one frame by hand) and `BTD_VERSION`. Set
+object), `BTD_STEP(dt)` (advance one frame by hand), `BTD_START(level)`
+(straight into a level, no menu or briefing; the bot uses it) and `BTD_VERSION`. Set
 `window.BTD_FREEZE = true` to hold the state without the pause overlay, and
 `window.BTD_HEART_SCALE = 5` to magnify the heart for a look at its damage.
 Handy for jumping to the fight: `BTD_G.surv = 41.9`. `BTD_STICK` and

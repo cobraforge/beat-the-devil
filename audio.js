@@ -10,7 +10,7 @@
 
 var actx = null, master = null, sfxBus = null, musicBus = null, noiseBuf = null;
 var heartBus = null, heartFilter = null;   // the heartbeat has its own bus so it can be muffled
-var muted = false;
+var muted = false, held = false;   // held: silent while the game is paused
 var MASTER_GAIN = 0.28, MUSIC_GAIN = 0.5, HEART_GAIN = 1.3;
 
 function ctx(){
@@ -289,8 +289,12 @@ var TRACKS = {
     ])
   },
   // Devil fight: tritones, a sawtooth drone and the rumble underneath.
+  // The fight: it has to lift off from the waiting before it. The heart races
+  // in the fight (rule 9), so the tempo jumps; over it a bass pumping every
+  // sixteenth in octaves, the arpeggio, a sawtooth riff, snare with ghost
+  // notes and a roll into each fourth bar, sixteenth hats.
   devil: {
-    bars: 4, bed: true, breath: true, drone: 38, leadType: 'sawtooth', leadDur: 3.2,
+    bars: 4, bed: true, breath: true, drone: 38, leadType: 'sawtooth', leadDur: 1.4, bassDur: 0.9,
     // the tritone chord, a minor ninth, the tritone again, and a diminished
     // seventh that leans back onto D
     choir: chords(['D3 Ab3 D4 F4', 'D3 F3 A3 Eb4', 'D3 Ab3 D4 F4', 'C#3 G3 Bb3 E4']), choirOpen: true,
@@ -301,28 +305,28 @@ var TRACKS = {
       'Bb3 F4 Bb4 F4 A3 E4 A4 E4 Ab3 Eb4 Ab4 Eb4 G3 D4 G4 D4'
     ]),
     bass: parse([
-      'D2 D2 . D2 D2 D2 . Ab2 D2 D2 . D2 Ab2 . A2 .',
-      'D2 D2 . D2 D2 D2 . Ab2 F2 F2 . F2 Eb2 . D2 .',
-      'D2 D2 . D2 D2 D2 . Ab2 D2 D2 . D2 Ab2 . A2 .',
-      'Bb2 Bb2 . Bb2 A2 A2 . A2 Ab2 Ab2 . Ab2 G2 . F2 .'
+      'D2 D3 D2 D2 D3 D2 D2 D3 D2 D2 D3 D2 Eb2 Eb3 Eb2 Eb3',
+      'D2 D3 D2 D2 D3 D2 D2 D3 F2 F3 F2 F3 Eb2 Eb3 D2 D3',
+      'D2 D3 D2 D2 D3 D2 D2 D3 D2 D2 D3 D2 Ab2 Ab3 A2 A3',
+      'Bb1 Bb2 Bb1 Bb2 A1 A2 A1 A2 Ab1 Ab2 Ab1 Ab2 G1 G2 A1 A2'
     ]),
     lead: parse([
-      'D5 . . . Eb5 . . . D5 . . . Ab4 . . .',
-      'A4 . . . Ab4 . F4 . Eb4 . . . D4 . . .',
-      'D5 . . . Eb5 . . . F5 . . . Ab4 . A4 .',
-      'Bb4 . . . A4 . . . Ab4 . . . G4 . F4 .'
+      'D5 . D5 . F5 . D5 . Ab5 . G5 . F5 . Eb5 .',
+      'D5 . D5 . F5 . D5 . C5 . Bb4 . A4 . Ab4 .',
+      'D5 . D5 . F5 . D5 . Ab5 . A5 . Bb5 . A5 .',
+      'Bb5 . A5 . Ab5 . G5 . F5 . Eb5 . D5 . C#5 .'
     ]),
     snare: parse([
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . x x'
+      '. . . . x . . o . . o . x . . .',
+      '. . . . x . . o . . o . x . . o',
+      '. . . . x . . o . . o . x . . .',
+      '. . . . x . . o . . x . x x x x'
     ]),
     hat: parse([
-      'x . o . x . o . x . o . x . o .',
-      'x . o . x . o . x . o . x . o .',
-      'x . o . x . o . x . o . x . o .',
-      'x . o . x . o . x . o . x o x o'
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x x x x'
     ])
   },
   // Title: drone, the choir, a lullaby on the music box and a bell tolling
@@ -380,27 +384,42 @@ var TRACKS = {
       '. . . . . . o . . . o . . . o .'
     ])
   },
-  // The Warden: a march in iron. The choir open and dissonant, an anvil on two and four.
+  // The Warden: a march in iron, at a run. The heart races here as in the
+  // devil's fight; the bass pumps sixteenths through his tritone, an
+  // arpeggio climbs the diminished chord, the riff hammers, and a march snare
+  // rolls into every fourth bar.
   warden: {
-    bars: 4, bed: true, breath: true, drone: 38, choirOpen: true, leadType: 'sawtooth', leadDur: 3,
+    bars: 4, bed: true, breath: true, drone: 38, choirOpen: true, leadType: 'sawtooth', leadDur: 1.4, bassDur: 0.9,
     choir: chords(['D3 F3 Ab3 C4', 'Db3 F3 Ab3 C4', 'D3 F3 Ab3 C4', 'C#3 G3 Bb3 E4']),
+    arp: parse([
+      'D4 F4 Ab4 F4 D4 F4 Ab4 F4 Eb4 G4 Bb4 G4 D4 F4 Ab4 F4',
+      'Db4 F4 Ab4 F4 Db4 F4 Ab4 F4 D4 F4 Ab4 F4 C4 Eb4 Ab4 Eb4',
+      'D4 F4 Ab4 F4 D4 F4 Ab4 F4 Eb4 G4 Bb4 G4 F4 Ab4 C5 Ab4',
+      'C#4 E4 G4 E4 E4 G4 Bb4 G4 G4 Bb4 C#5 Bb4 A4 C#5 E5 C#5'
+    ]),
     bass: parse([
-      'D2 . . D2 . . D2 . Eb2 . . Eb2 . . D2 .',
-      'Db2 . . Db2 . . Db2 . D2 . . D2 . . C2 .',
-      'D2 . . D2 . . D2 . Eb2 . . Eb2 . . D2 .',
-      'C#2 . . C#2 . . E2 . G2 . . Bb2 . . A2 .'
+      'D2 D2 D3 D2 D2 D2 D3 D2 Eb2 Eb2 Eb3 Eb2 D2 D2 D3 D2',
+      'Db2 Db2 Db3 Db2 Db2 Db2 Db3 Db2 D2 D2 D3 D2 C2 C2 C3 C2',
+      'D2 D2 D3 D2 D2 D2 D3 D2 Eb2 Eb2 Eb3 Eb2 F2 F2 F3 F2',
+      'C#2 C#2 C#3 C#2 E2 E2 E3 E2 G2 G2 G3 G2 Bb2 Bb2 A2 A2'
     ]),
     lead: parse([
-      'D5 . . . . . . . Eb5 . . . . . . .',
-      'F5 . . . . . . . Ab4 . . . . . . .',
-      'D5 . . . . . . . Eb5 . . . F5 . . .',
-      'E5 . . . . . . . Bb4 . . . A4 . . .'
+      'D5 . . D5 Eb5 . D5 . F5 . Eb5 . D5 . Ab4 .',
+      'F5 . . F5 E5 . F5 . Eb5 . Db5 . C5 . Ab4 .',
+      'D5 . . D5 Eb5 . D5 . F5 . Ab5 . G5 . F5 .',
+      'E5 . . E5 F5 . E5 . Bb4 . C#5 . E5 . A4 .'
     ]),
     snare: parse([
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . x .'
+      'x . . x x . . o x . . x x . o .',
+      'x . . x x . . o x . . x x . o .',
+      'x . . x x . . o x . . x x . o .',
+      'x . . x x . . o x x x x x x x x'
+    ]),
+    hat: parse([
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x x x x'
     ])
   },
   // Victory: the light. The pit's D minor turns to D major: the choir open
@@ -1011,14 +1030,28 @@ window.BTD_AUDIO = {
   meter: meter,
   // debug: set the choir's level live, for balancing it against the heart
   choirLevel: function(v){ if (v != null){ CHOIR = v; if (choirV){ choirV.level = v; choirV.g.gain.setTargetAtTime(v, actx.currentTime, 0.05); } } return CHOIR; },
-  setMuted: function(m){ muted = !!m; if (master) master.gain.value = muted ? 0 : MASTER_GAIN; },
+  setMuted: function(m){ muted = !!m; if (master) master.gain.value = muted || held ? 0 : MASTER_GAIN; },
   // the beat heard from inside a closed fist
   muffle: function(on){
     if (!heartFilter || !running()) return;
     heartFilter.frequency.setTargetAtTime(on ? 220 : 20000, actx.currentTime, 0.15);
     heartBus.gain.setTargetAtTime(HEART_GAIN * (on ? 0.8 : 1), actx.currentTime, 0.15);
   },
-  isMuted: function(){ return muted; }
+  isMuted: function(){ return muted; },
+  // paused: everything silent (the fire's voices hold their last level
+  // otherwise); unpaused, back to the level the mute switch says
+  hold: function(on){
+    held = !!on;
+    if (!master || !actx) return;
+    master.gain.cancelScheduledValues(actx.currentTime);
+    master.gain.setTargetAtTime(on || muted ? 0 : MASTER_GAIN, actx.currentTime, on ? 0.02 : 0.08);
+  },
+  // the music steps back while the narrator speaks
+  duck: function(on){
+    if (!musicBus || !running()) return;
+    musicBus.gain.cancelScheduledValues(actx.currentTime);
+    musicBus.gain.setTargetAtTime(MUSIC_GAIN * (on ? 0.32 : 1), actx.currentTime, on ? 0.15 : 0.6);
+  }
 };
 
 })();
