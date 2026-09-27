@@ -415,7 +415,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 33;
+  window.BTD_VERSION = 34;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -479,7 +479,7 @@ if (/debug/.test(location.hash)){ window.BTD_STICK = stick; window.BTD_FIREBTN =
 resize();
 
 window.addEventListener('keydown', function(e){
-  if (e.target && e.target.closest && e.target.closest('.name')) return;   // typing a name
+  if (e.target && e.target.closest && e.target.closest('.name, .coffee')) return;   // typing a name, or on the link
   var k = e.key, space = k === ' ' || e.code === 'Space';
   if (k === '`' || e.code === 'Backquote'){ if (!e.repeat) perfShow = !perfShow; e.preventDefault(); return; }   // the overlay, and nothing else
   if (space || ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].indexOf(k) >= 0) e.preventDefault();
@@ -515,7 +515,7 @@ function toLogical(e){
 // picture. A mouse still has to press on the picture itself.
 window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  if (e.target.closest && e.target.closest('.name')) return;
+  if (e.target.closest && e.target.closest('.name, .coffee')) return;   // the link opens; it does not restart
   var onPicture = stage.contains(e.target);
   if (!isTouch && !onPicture) return;
   var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
@@ -610,6 +610,24 @@ function showTitle(){
 }
 showTitle();
 worldLoad();
+
+// ---------- a coffee ----------
+// A thank-you link to the author's tip page, on the title and the end panels,
+// never in play. It buys nothing — no badge, no bonus, no name in gold — and
+// it must stay that way (DESIGN rule 9). It is hidden when the page runs as an
+// installed store app: a Trusted Web Activity opens with an android-app://
+// referrer, remembered for the session.
+var COFFEE_URL = '';            // the tip page (Ko-fi, Buy Me a Coffee...); empty hides the link
+var inStoreApp = false;
+try {
+  if (/^android-app:\/\//.test(document.referrer)) sessionStorage.setItem('btd.app', '1');
+  inStoreApp = sessionStorage.getItem('btd.app') === '1';
+} catch(e){}
+[].forEach.call(document.querySelectorAll('.coffee'), function(a){
+  if (!COFFEE_URL || inStoreApp) return;
+  a.href = COFFEE_URL;
+  a.hidden = false;
+});
 
 // ---------- a name for the board ----------
 var nameForm = document.getElementById('name-form'), nameIn = document.getElementById('name-in');

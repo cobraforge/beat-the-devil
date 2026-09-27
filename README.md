@@ -228,6 +228,15 @@ BTD_API_SIM.skew(60e3)            // move the server's clock on, for a plausible
 BTD_API_SIM.sql('SELECT * FROM runs')
 ```
 
+## A coffee
+
+`COFFEE_URL` near the top of the name-box code in `game.js` is the author's
+tip page. While it is empty the link is hidden; set, a small "Enjoyed it? Buy
+me a coffee" link appears on the title and the end panels (never in play),
+opening the page in a new tab. It buys nothing (DESIGN rule 9) and is hidden
+when the game runs as an installed Play app (a Trusted Web Activity, detected
+by its `android-app://` referrer).
+
 ## On a phone
 
 - **Touch controls.** A joystick for the left thumb and the fire button for
