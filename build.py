@@ -1,7 +1,8 @@
 """Bundle index.html + style.css + audio.js + game.js into one self-contained
-dist/index.html. dist/ is the deployable site root: nothing else is needed
-(the only external reference is Google Fonts, fetched at runtime)."""
-import pathlib, re
+dist/index.html, and copy the narrator's recordings (voice/) beside it.
+dist/ is the deployable site root: nothing else is needed (the only external
+reference is Google Fonts, fetched at runtime)."""
+import pathlib, re, shutil
 
 root = pathlib.Path(__file__).parent
 html = (root / 'index.html').read_text(encoding='utf-8')
@@ -25,4 +26,7 @@ out.parent.mkdir(exist_ok=True)
 out.write_text(html, encoding='utf-8', newline='\n')
 # the old single-file name, so no stale copy lingers beside the real one
 (out.parent / 'beat-the-devil.html').unlink(missing_ok=True)
+# the narrator's lines, fetched by the page when it is up
+shutil.rmtree(out.parent / 'voice', ignore_errors=True)
+shutil.copytree(root / 'voice', out.parent / 'voice')
 print('wrote', out, len(html), 'bytes')

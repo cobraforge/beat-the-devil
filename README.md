@@ -9,7 +9,8 @@ whole run, and two of them are for his eyes.
 
 - **Five bolts, no refills.** A bolt that misses is gone. A bolt that kills a
   pitchfork is gone too. Nothing stops you spending all five; the title card's
-  "two are for his eyes" is the only warning you get.
+  "two are for his eyes" (repeated on the level's briefing) is the only
+  warning you get.
 - **One bolt per eye.** In the fight he opens one eye at a time, briefly, and
   sways: lead your shot. A bolt into a shut eye or the brow is wasted.
 - At zero bolts with an eye still open, he takes it. One bolt and two eyes is
@@ -199,24 +200,25 @@ starts again from the pit. The rules are DESIGN.md rule 11; in short:
   the chain runs out, catches with a jolt, and swings as a real pendulum,
   clanging off the walls, then is hauled back up. The chain is a rope of
   links (a Verlet rope pinned at the pulley and the ball) that bows and trails
-  as it swings. A ball that meets a hanging cage **smashes it**, spilling the
-  soul for you to pick up; it ends a shade too.
-- **Dark knights** rise out of the crust. Spearmen come up under the heart
-  and wade after it, a pale line over each pike showing its reach; they lock,
-  then drive their pikes straight up one after another. A crossbowman rises
-  to one side, aims up along a pale line, and looses a quarrel along it.
-- **Shades** gather at a wall while you carry souls and drift after the last
-  one; a bolt ends a shade, at the cost of the bolt.
+  as it swings. What hurts is on fire: the ball glows in its clamp as it
+  heats, and once let go it burns, flames streaming off it and along the
+  chain, until it is hauled back up. A ball that meets a hanging cage
+  **smashes it**, spilling the soul — grab it before it sinks back into the dark.
+- **Dark knights** march in from the sides and hunt the heart: spearmen keep
+  under it, spread either side, and crossbowmen hold the two walls with their
+  crossbows up at it; touching one is a hit. When they attack, spearmen lock a
+  pale line over each pike and drive them straight up one after another; a
+  crossbowman aims along a pale line to the heart and looses a quarrel along it.
 - **The Warden** arrives when the meter fills: a knight in black iron with a
   horned helm and a fire in its slit, his cloak in tatters. The cages are
   hoisted out of reach, and his lantern is the target: it hangs from his fist
   on a chain and swings as he moves, shuttered except in brief windows; two
   hits break it. He swings his flail at you (the same pendulum, from his
-  fist), sweeps the lantern's beam across the floor to burn a column where it
-  locks, and calls up his knights. Bolts on his armour are wasted; they pass
+  fist), fires a beam of energy from the lantern to the floor where the heart
+  was when it locked, and sends his knights at you (calling in more). Bolts on his armour are wasted; they pass
   through his cloak.
 - **Endings.** Break the lantern and every cage bursts; his armour falls apart
-  into the crust, and the souls join the heart as the light takes them all
+  into the crust, his knights burn away, and the souls join the heart as the light takes them all
   up. Run out of bolts first and he locks the heart in a cage with them.
 - **Score** adds 500 for each soul you brought out (delivered, plus those still
   with you when the lantern breaks), on a board of its own.
@@ -230,6 +232,30 @@ at the canvas's resolution (behind his arms and in front of them); his arms,
 eyes, lantern and flail are drawn live. The music is `stolen` (the souls'
 music box heard through the bars) and `warden` (a march in iron).
 
+## The briefings
+
+Before each level, a **briefing**: the level's story typed out a page at a
+time, then what to do and the controls (DESIGN.md rule 13). From the title it
+opens level 1's; after level 1 is won, the win panel shows **NEXT · LEVEL II ·
+THE STOLEN** and space (or a tap on it) opens level 2's. A **narrator** reads
+each story page aloud (recordings of a neural voice, the music stepping back
+under her); the page types out in step with her. *Skip* jumps to the rules, *Story* goes back; the sound button
+silences her with everything else. She speaks again when level 1 is won: you
+beat the devil, but it is not over — the others are still down there. The
+story plays every run: from a loss or level 2's win, space
+goes back to the main menu, and a new run starts there. The words are in
+`BRIEF` in `game.js`.
+
+## Pause, the menu, the version
+
+**P** or **Esc** pauses on a keyboard; on a phone, the **II** button beside
+*Sound* at the top (shown only in play). Paused, the game is silent
+(`AUDIO.hold()`). The pause screen has **Resume** and
+**Main menu** (**Q** on a keyboard), which abandons the run and goes back to
+the title. The title shows the game's version in its bottom-left corner:
+`GAME_VERSION` in `game.js` (bump it for a release; `BTD_VERSION` counts
+builds and busts caches).
+
 ## Dev mode
 
 Click the cabinet's rainbow **beat the devil** badge five times, then its
@@ -237,9 +263,10 @@ orange power lamp five times (no more than three seconds between clicks). A
 panel opens in the page's top-left corner: **Play I**, **Play II**, **Boss
 now**, **Kill the boss**, **No damage**, **Endless bolts**, **Slow motion**,
 **Frame times** and **Leave dev mode**. It stays on across reloads on that
-device until it is left (or knocked for again). A dev run never reaches the
-world board or its counters and never becomes a saved best; its panels say
-*Dev run · not recorded*. The cabinet is not drawn under 600 px, so the knock
+device until it is left (or knocked for again). A run that dev mode touches
+(on when it starts, or turned on during it) is a dev run: it never reaches
+the world board or its counters and never becomes a saved best; its panels
+say *Dev run · not recorded*. The cabinet is not drawn under 600 px, so the knock
 is for a computer or a tablet.
 
 ## The world board
@@ -311,7 +338,8 @@ BTD_API_SIM.sql('SELECT * FROM runs')
   drawn on their own layer, `#ctl`, a strip around the two controls redrawn
   only when it changes. A mouse still drags and clicks on the picture.
 - **Layout.** On screens under 600 px the bezel goes and the glass takes the
-  whole width; on touch the sound button sits at the top centre.
+  whole width; on touch the sound button sits at the top centre. Its speaker
+  shows the state: waves when on, a red line across it when off.
 - **Performance.** Touch devices cap the device pixel ratio at 1.5. Three
   quality tiers (`QUALITY` in `game.js`: full, medium, low) trade heat
   shimmer, smoke, glow sprites, particle share, flame edge detail, fire
@@ -330,8 +358,37 @@ BTD_API_SIM.sql('SELECT * FROM runs')
 - `game.js`    — the game: heartbeat clock, fire renderer, input, hazards, devil AI, endings, rendering
 - `build.py`   — bundles everything into `dist/index.html`; `dist/` is the deployable site root
 - `dev/bot.js` — the imperfect playtest bot; `dev/perf.py` — frame-time measurement under throttling
+- `voice/`     — the spoken lines (MP3: the narrator's and the Warden's) and `timings.json`; `dev/voice.py` renders them
 
-No build step, no assets. Plain HTML/CSS/JS; all audio is synthesised at runtime.
+No build step. Plain HTML/CSS/JS; all audio is synthesised at runtime except
+the narrator's lines (below).
+
+## The narrator's voice
+
+The spoken lines are neural voices made with [Piper](https://github.com/rhasspy/piper)
+(open-source text-to-speech, MIT). The narrator is its `en_GB-cori-high` voice
+(a British woman's, public domain, trained on LibriVox audiobook readings),
+read with a little more life than the default and a held pause before each
+page's last line; the game plays her with some reverb and a faint ghost
+behind her voice; she also whispers, afraid, as the devil comes, and speaks
+after each win. The Warden (and the devil, dying) is `en_US-norman-medium` (a man's, public
+domain), which the game slows, drops, doubles, distorts and drowns in reverb.
+`dev/voice.py` reads the lines out of `game.js` — the story pages from `BRIEF`
+(the first of each level with its spoken name) and the rest from `SPOKEN` —
+and writes `voice/<key>.mp3` and `voice/timings.json` (each line's length and,
+for story pages, when each paragraph is spoken, for the typing). After
+changing a line, re-render it and bump `VOICE_V` in `game.js`:
+
+```
+pip install soundfile numpy
+python dev/voice.py --piper path/to/piper.exe --model path/to/en_GB-cori-high.onnx --warden path/to/en_US-norman-medium.onnx --only win1
+```
+
+Piper reads a little differently each time, so `--only` re-renders just the
+lines named and keeps every other take as it is.
+
+Piper and the voice model are downloads kept outside the project (see the top
+of `dev/voice.py`). `build.py` copies `voice/` into `dist/`.
 
 ## Run
 
@@ -355,7 +412,8 @@ perfect play.
 ## Debugging
 
 Open `http://localhost:8080/#debug` and the console gets `BTD_G` (the state
-object), `BTD_STEP(dt)` (advance one frame by hand) and `BTD_VERSION`. Set
+object), `BTD_STEP(dt)` (advance one frame by hand), `BTD_START(level)`
+(straight into a level, no menu or briefing; the bot uses it) and `BTD_VERSION`. Set
 `window.BTD_FREEZE = true` to hold the state without the pause overlay, and
 `window.BTD_HEART_SCALE = 5` to magnify the heart for a look at its damage.
 Handy for jumping to the fight: `BTD_G.surv = 41.9`. `BTD_STICK` and

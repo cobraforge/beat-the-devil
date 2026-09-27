@@ -10,7 +10,7 @@
 
 var actx = null, master = null, sfxBus = null, musicBus = null, noiseBuf = null;
 var heartBus = null, heartFilter = null;   // the heartbeat has its own bus so it can be muffled
-var muted = false;
+var muted = false, held = false;   // held: silent while the game is paused
 var MASTER_GAIN = 0.28, MUSIC_GAIN = 0.5, HEART_GAIN = 1.3;
 
 function ctx(){
@@ -164,7 +164,6 @@ var sfx = {
   cageOpen: function(){ chimes([880, 1318.5, 1760], 0.07, 0.09); noise({dur:0.3, vol:0.12, type:'bandpass', freq:1400, q:2, slide:600}); },
   deliver: function(){ chimes([587.3, 740, 880, 1174.7, 1480], 0.08, 0.1); tone({freq:293.7, dur:1.6, vol:0.1, type:'sine', attack:0.2}); },
   snatch: function(){ wail(); },
-  shade: function(){ noise({dur:0.9, vol:0.12, type:'bandpass', freq:900, q:4, slide:300, attack:0.6}); },
   chainRattle: function(x){ chainRattle(x); },
   chainDrop: function(x){ chainDrop(x); },
   chainSnap: function(x){ chainSnap(x); },
@@ -173,7 +172,7 @@ var sfx = {
   ballClang: function(x){ ironRing(x, 230, 0.26, 1.1); },
   chainReel: function(x){ chainReel(x); },
   cageSmash: function(){ ironRing(210, 330, 0.2, 0.8); chimes([1318.5, 1760], 0.06, 0.08); noise({dur:0.3, vol:0.2, type:'bandpass', freq:2400, q:1.5, slide:900}); },
-  knightRise: function(x){ knightRise(x); },
+  knightMarch: function(x){ knightMarch(x); },
   spearThrust: function(x){ spearThrust(x); },
   xbowTwang: function(x){ xbowTwang(x); },
   quarrelThunk: function(x){ quarrelThunk(x); },
@@ -289,8 +288,12 @@ var TRACKS = {
     ])
   },
   // Devil fight: tritones, a sawtooth drone and the rumble underneath.
+  // The fight: it has to lift off from the waiting before it. The heart races
+  // in the fight (rule 9), so the tempo jumps; over it a bass pumping every
+  // sixteenth in octaves, the arpeggio, a sawtooth riff, snare with ghost
+  // notes and a roll into each fourth bar, sixteenth hats.
   devil: {
-    bars: 4, bed: true, breath: true, drone: 38, leadType: 'sawtooth', leadDur: 3.2,
+    bars: 4, bed: true, breath: true, drone: 38, leadType: 'sawtooth', leadDur: 1.4, bassDur: 0.9,
     // the tritone chord, a minor ninth, the tritone again, and a diminished
     // seventh that leans back onto D
     choir: chords(['D3 Ab3 D4 F4', 'D3 F3 A3 Eb4', 'D3 Ab3 D4 F4', 'C#3 G3 Bb3 E4']), choirOpen: true,
@@ -301,28 +304,28 @@ var TRACKS = {
       'Bb3 F4 Bb4 F4 A3 E4 A4 E4 Ab3 Eb4 Ab4 Eb4 G3 D4 G4 D4'
     ]),
     bass: parse([
-      'D2 D2 . D2 D2 D2 . Ab2 D2 D2 . D2 Ab2 . A2 .',
-      'D2 D2 . D2 D2 D2 . Ab2 F2 F2 . F2 Eb2 . D2 .',
-      'D2 D2 . D2 D2 D2 . Ab2 D2 D2 . D2 Ab2 . A2 .',
-      'Bb2 Bb2 . Bb2 A2 A2 . A2 Ab2 Ab2 . Ab2 G2 . F2 .'
+      'D2 D3 D2 D2 D3 D2 D2 D3 D2 D2 D3 D2 Eb2 Eb3 Eb2 Eb3',
+      'D2 D3 D2 D2 D3 D2 D2 D3 F2 F3 F2 F3 Eb2 Eb3 D2 D3',
+      'D2 D3 D2 D2 D3 D2 D2 D3 D2 D2 D3 D2 Ab2 Ab3 A2 A3',
+      'Bb1 Bb2 Bb1 Bb2 A1 A2 A1 A2 Ab1 Ab2 Ab1 Ab2 G1 G2 A1 A2'
     ]),
     lead: parse([
-      'D5 . . . Eb5 . . . D5 . . . Ab4 . . .',
-      'A4 . . . Ab4 . F4 . Eb4 . . . D4 . . .',
-      'D5 . . . Eb5 . . . F5 . . . Ab4 . A4 .',
-      'Bb4 . . . A4 . . . Ab4 . . . G4 . F4 .'
+      'D5 . D5 . F5 . D5 . Ab5 . G5 . F5 . Eb5 .',
+      'D5 . D5 . F5 . D5 . C5 . Bb4 . A4 . Ab4 .',
+      'D5 . D5 . F5 . D5 . Ab5 . A5 . Bb5 . A5 .',
+      'Bb5 . A5 . Ab5 . G5 . F5 . Eb5 . D5 . C#5 .'
     ]),
     snare: parse([
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . x x'
+      '. . . . x . . o . . o . x . . .',
+      '. . . . x . . o . . o . x . . o',
+      '. . . . x . . o . . o . x . . .',
+      '. . . . x . . o . . x . x x x x'
     ]),
     hat: parse([
-      'x . o . x . o . x . o . x . o .',
-      'x . o . x . o . x . o . x . o .',
-      'x . o . x . o . x . o . x . o .',
-      'x . o . x . o . x . o . x o x o'
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x x x x'
     ])
   },
   // Title: drone, the choir, a lullaby on the music box and a bell tolling
@@ -380,27 +383,42 @@ var TRACKS = {
       '. . . . . . o . . . o . . . o .'
     ])
   },
-  // The Warden: a march in iron. The choir open and dissonant, an anvil on two and four.
+  // The Warden: a march in iron, at a run. The heart races here as in the
+  // devil's fight; the bass pumps sixteenths through his tritone, an
+  // arpeggio climbs the diminished chord, the riff hammers, and a march snare
+  // rolls into every fourth bar.
   warden: {
-    bars: 4, bed: true, breath: true, drone: 38, choirOpen: true, leadType: 'sawtooth', leadDur: 3,
+    bars: 4, bed: true, breath: true, drone: 38, choirOpen: true, leadType: 'sawtooth', leadDur: 1.4, bassDur: 0.9,
     choir: chords(['D3 F3 Ab3 C4', 'Db3 F3 Ab3 C4', 'D3 F3 Ab3 C4', 'C#3 G3 Bb3 E4']),
+    arp: parse([
+      'D4 F4 Ab4 F4 D4 F4 Ab4 F4 Eb4 G4 Bb4 G4 D4 F4 Ab4 F4',
+      'Db4 F4 Ab4 F4 Db4 F4 Ab4 F4 D4 F4 Ab4 F4 C4 Eb4 Ab4 Eb4',
+      'D4 F4 Ab4 F4 D4 F4 Ab4 F4 Eb4 G4 Bb4 G4 F4 Ab4 C5 Ab4',
+      'C#4 E4 G4 E4 E4 G4 Bb4 G4 G4 Bb4 C#5 Bb4 A4 C#5 E5 C#5'
+    ]),
     bass: parse([
-      'D2 . . D2 . . D2 . Eb2 . . Eb2 . . D2 .',
-      'Db2 . . Db2 . . Db2 . D2 . . D2 . . C2 .',
-      'D2 . . D2 . . D2 . Eb2 . . Eb2 . . D2 .',
-      'C#2 . . C#2 . . E2 . G2 . . Bb2 . . A2 .'
+      'D2 D2 D3 D2 D2 D2 D3 D2 Eb2 Eb2 Eb3 Eb2 D2 D2 D3 D2',
+      'Db2 Db2 Db3 Db2 Db2 Db2 Db3 Db2 D2 D2 D3 D2 C2 C2 C3 C2',
+      'D2 D2 D3 D2 D2 D2 D3 D2 Eb2 Eb2 Eb3 Eb2 F2 F2 F3 F2',
+      'C#2 C#2 C#3 C#2 E2 E2 E3 E2 G2 G2 G3 G2 Bb2 Bb2 A2 A2'
     ]),
     lead: parse([
-      'D5 . . . . . . . Eb5 . . . . . . .',
-      'F5 . . . . . . . Ab4 . . . . . . .',
-      'D5 . . . . . . . Eb5 . . . F5 . . .',
-      'E5 . . . . . . . Bb4 . . . A4 . . .'
+      'D5 . . D5 Eb5 . D5 . F5 . Eb5 . D5 . Ab4 .',
+      'F5 . . F5 E5 . F5 . Eb5 . Db5 . C5 . Ab4 .',
+      'D5 . . D5 Eb5 . D5 . F5 . Ab5 . G5 . F5 .',
+      'E5 . . E5 F5 . E5 . Bb4 . C#5 . E5 . A4 .'
     ]),
     snare: parse([
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . . .',
-      '. . . . x . . . . . . . x . x .'
+      'x . . x x . . o x . . x x . o .',
+      'x . . x x . . o x . . x x . o .',
+      'x . . x x . . o x . . x x . o .',
+      'x . . x x . . o x x x x x x x x'
+    ]),
+    hat: parse([
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x o x o',
+      'x o x o x o x o x o x o x x x x'
     ])
   },
   // Victory: the light. The pit's D minor turns to D major: the choir open
@@ -868,13 +886,16 @@ function chainSnap(x){
 function chainWhoosh(x, v){ if (!running()) return; var k = Math.min(1, Math.max(0.25, v / 900)); noise({dur:0.42, vol:0.22 * k, type:'bandpass', freq:380, q:1.3, slide:1200 + 700 * k, attack:0.14, bus:panBus(x)}); }
 // hauled back up: the ratchet
 function chainReel(x){ if (!running()) return; var bus = panBus(x), t0 = actx.currentTime; for (var i = 0; i < 11; i++) noise({t: t0 + i * 0.042, dur: 0.018, vol: 0.1, type: 'bandpass', freq: 1900, q: 4, bus: bus}); }
-// a knight breaking up through the crust: a low seethe, pops, and iron
-function knightRise(x){
+// a knight marching in: heavy iron footfalls on the crust, and the clink of his plate
+function knightMarch(x){
   if (!running()) return;
   var bus = panBus(x), t0 = actx.currentTime;
-  noise({dur:0.55, vol:0.22, type:'lowpass', freq:380, slide:160, attack:0.05, bus:bus});
-  for (var i = 0; i < 6; i++) tone({t: t0 + Math.random() * 0.5, freq: 80 + Math.random() * 70, slide: 40, dur: 0.07, vol: 0.12, type: 'sine', bus: bus});
-  ironRing(x, 150, 0.05, 0.4);
+  for (var i = 0; i < 4; i++){
+    var t = t0 + i * 0.32;
+    tone({t: t, freq: 70, slide: 45, dur: 0.12, vol: 0.22, type: 'sine', bus: bus});
+    noise({t: t, dur: 0.05, vol: 0.12, type: 'lowpass', freq: 500, bus: bus});
+    noise({t: t + 0.02, dur: 0.03, vol: 0.05, type: 'bandpass', freq: 2600 + Math.random() * 1200, q: 6, bus: bus});
+  }
 }
 // a pike driven up: a rip of air and the ring of the blade
 function spearThrust(x){ if (!running()) return; var bus = panBus(x); noise({dur:0.16, vol:0.24, type:'highpass', freq:700, slide:4200, bus:bus}); tone({freq:2350, slide:2600, dur:0.35, vol:0.05, type:'sine', attack:0.01, bus:bus}); tone({freq:3520, dur:0.25, vol:0.025, type:'sine', bus:bus}); }
@@ -882,6 +903,94 @@ function spearThrust(x){ if (!running()) return; var bus = panBus(x); noise({dur
 function xbowTwang(x){ if (!running()) return; var bus = panBus(x); tone({freq:140, slide:62, dur:0.2, vol:0.28, type:'sawtooth', filter:1100, bus:bus}); noise({dur:0.05, vol:0.22, type:'bandpass', freq:1500, q:2, bus:bus}); noise({t: actx.currentTime + 0.04, dur:0.3, vol:0.07, type:'highpass', freq:2500, slide:6500, attack:0.03, bus:bus}); }
 // a quarrel into the rock
 function quarrelThunk(x){ if (!running()) return; var bus = panBus(x); tone({freq:170, slide:80, dur:0.1, vol:0.22, type:'sine', bus:bus}); noise({dur:0.05, vol:0.16, type:'lowpass', freq:900, bus:bus}); }
+
+// ----- the narrator -----
+// The briefings' stories, read by a neural voice (voice/*.mp3, rendered by
+// dev/voice.py: the game's only recorded sound). They play through Web Audio
+// like everything else, so mute and pause hold them; a little of the long
+// reverb puts him in the room, and the music steps back to a third under him.
+var narr = { bufs: {}, pending: {}, src: null };
+function narrLoad(key, url){
+  if (narr.bufs[key]) return Promise.resolve(narr.bufs[key]);
+  if (narr.pending[key]) return narr.pending[key];
+  var a = ctx(); if (!a || !window.fetch) return null;
+  narr.pending[key] = fetch(url).then(function(r){ if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(function(ab){ return new Promise(function(res, rej){ a.decodeAudioData(ab, res, rej); }); })   // the callback form, for older Safari
+    .then(function(b){ narr.bufs[key] = b; return b; })
+    .catch(function(){ delete narr.pending[key]; return null; });
+  return narr.pending[key];
+}
+function narrDuck(on){
+  if (!musicBus || !running()) return;
+  musicBus.gain.cancelScheduledValues(actx.currentTime);
+  musicBus.gain.setTargetAtTime(MUSIC_GAIN * (on ? 0.32 : 1), actx.currentTime, on ? 0.15 : 0.6);
+}
+// play a loaded line at `rate`; its length in seconds, or 0 if it could not
+// fx 'fear': she trembles (a 6.5 Hz shake in her level), a little thinner and
+// further off in the reverb
+function narrPlay(key, rate, onEnd, fx){
+  narrStop();
+  var b = narr.bufs[key]; if (!b || !running()) return 0;
+  var a = actx, src = a.createBufferSource(), g = a.createGain(), send = a.createGain();
+  src.buffer = b; src.playbackRate.value = rate || 1;
+  g.gain.value = 1.15;
+  send.gain.value = 0.26;                          // the dungeon around her
+  var head = src;
+  if (fx === 'fear'){
+    var hp = a.createBiquadFilter(), shake = a.createGain(), lfo = a.createOscillator(), depth = a.createGain();
+    hp.type = 'highpass'; hp.frequency.value = 260;
+    shake.gain.value = 0.72; lfo.frequency.value = 6.5; depth.gain.value = 0.28;
+    lfo.connect(depth); depth.connect(shake.gain); lfo.start(); lfo.stop(a.currentTime + b.duration / (rate || 1) + 0.5);
+    src.connect(hp); hp.connect(shake); head = shake;
+    send.gain.value = 0.45;
+  }
+  head.connect(g); g.connect(master); g.connect(send); send.connect(reverbGet().input);
+  // and a ghost just behind her: the same voice through a slowly wavering
+  // delay, darker and quieter, so she never quite speaks alone
+  var dl = a.createDelay(0.1), lfo = a.createOscillator(), depth = a.createGain(), lp = a.createBiquadFilter(), ghost = a.createGain();
+  dl.delayTime.value = 0.028; lfo.frequency.value = 0.35; depth.gain.value = 0.006;
+  lfo.connect(depth); depth.connect(dl.delayTime);
+  lp.type = 'lowpass'; lp.frequency.value = 1700; ghost.gain.value = 0.3;
+  g.connect(dl); dl.connect(lp); lp.connect(ghost); ghost.connect(master); ghost.connect(send);
+  lfo.start(); lfo.stop(a.currentTime + b.duration / (rate || 1) + 1);
+  src.onended = function(){ if (narr.src !== src) return; narr.src = null; narrDuck(false); if (onEnd) onEnd(); };
+  narr.src = src;
+  narrDuck(true);
+  src.start();
+  return b.duration / (rate || 1);
+}
+// The Warden's voice: a man's recorded line slowed and dropped (0.8), doubled
+// a shade lower still, torn by a soft clip, darkened, and thrown hard into the
+// long reverb. Its length in seconds, or 0 if it could not play.
+function softClip(k){
+  var n = 1024, c = new Float32Array(n), d = Math.tanh(k);
+  for (var i = 0; i < n; i++){ var x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / d; }
+  return c;
+}
+// deep: the devil's — dropped further (0.66), darker, torn harder
+function wardenSay(key, deep){
+  var b = narr.bufs[key]; if (!b || !running()) return 0;
+  var a = actx, shaper = a.createWaveShaper(), lp = a.createBiquadFilter(), out = a.createGain(), send = a.createGain();
+  shaper.curve = softClip(deep ? 3.4 : 2.6); lp.type = 'lowpass'; lp.frequency.value = deep ? 1500 : 2300;
+  out.gain.value = deep ? 1.25 : 1.05; send.gain.value = deep ? 0.7 : 0.55;
+  shaper.connect(lp); lp.connect(out); out.connect(master); out.connect(send); send.connect(reverbGet().input);
+  var slow = deep ? 0.64 : 0.775;
+  [[deep ? 0.66 : 0.8, 0.85], [slow, 0.55]].forEach(function(v){
+    var s = a.createBufferSource(), g = a.createGain();
+    s.buffer = b; s.playbackRate.value = v[0]; g.gain.value = v[1];
+    s.connect(g); g.connect(shaper); s.start();
+  });
+  var dur = b.duration / slow;
+  narrDuck(true);
+  setTimeout(function(){ if (!narr.src) narrDuck(false); }, dur * 1000 + 200);
+  return dur;
+}
+function narrStop(){
+  var s = narr.src; if (!s) return;
+  narr.src = null;
+  try { s.onended = null; s.stop(); } catch(e){}
+  narrDuck(false);
+}
 
 // ----- the release -----
 // his death: three voices a fifth and an octave apart falling away through a
@@ -1003,19 +1112,39 @@ window.BTD_AUDIO = {
   sfx: sfx,
   music: music,
   unlock: function(){ unlock(); return actx; },
+  // a promise that settles once the sound is let in (at once, if it already is):
+  // a browser starts it only on the first click, tap or key, a moment after it
+  whenRunning: function(){
+    return new Promise(function(res){
+      var a = ctx(); if (!a) return;
+      if (a.state === 'running') return res();
+      var on = function(){ if (a.state === 'running'){ a.removeEventListener('statechange', on); res(); } };
+      a.addEventListener('statechange', on);
+    });
+  },
   running: running,
   fire: { update: fireUpdate },
   meter: meter,
   // debug: set the choir's level live, for balancing it against the heart
   choirLevel: function(v){ if (v != null){ CHOIR = v; if (choirV){ choirV.level = v; choirV.g.gain.setTargetAtTime(v, actx.currentTime, 0.05); } } return CHOIR; },
-  setMuted: function(m){ muted = !!m; if (master) master.gain.value = muted ? 0 : MASTER_GAIN; },
+  setMuted: function(m){ muted = !!m; if (master) master.gain.value = muted || held ? 0 : MASTER_GAIN; },
   // the beat heard from inside a closed fist
   muffle: function(on){
     if (!heartFilter || !running()) return;
     heartFilter.frequency.setTargetAtTime(on ? 220 : 20000, actx.currentTime, 0.15);
     heartBus.gain.setTargetAtTime(HEART_GAIN * (on ? 0.8 : 1), actx.currentTime, 0.15);
   },
-  isMuted: function(){ return muted; }
+  isMuted: function(){ return muted; },
+  // paused: everything silent (the fire's voices hold their last level
+  // otherwise); unpaused, back to the level the mute switch says
+  hold: function(on){
+    held = !!on;
+    if (!master || !actx) return;
+    master.gain.cancelScheduledValues(actx.currentTime);
+    master.gain.setTargetAtTime(on || muted ? 0 : MASTER_GAIN, actx.currentTime, on ? 0.02 : 0.08);
+  },
+  // the narrator: his recorded lines, loaded, played, stopped
+  narrator: { load: narrLoad, play: narrPlay, stop: narrStop, warden: wardenSay, ready: function(k){ return !!narr.bufs[k]; }, speaking: function(){ return !!narr.src; } }
 };
 
 })();
