@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=34">
+<link rel="stylesheet" href="style.css?v=36">
 </head>
 <body>
 <div id="wrap">
@@ -22,10 +22,13 @@
         <div class="title">BEAT<br>THE DEVIL</div>
         <div class="sub" id="tip">Arrow keys or A / D to move<br>Hold space to fire<br><br>Survive the pitchforks and the fire.<br>Then put a bolt through<br>each of his eyes.</div>
         <div class="blink" id="start-hint">Press space to start</div>
+        <button type="button" class="levelbtn" id="lvl2-title" data-level="2">II &middot; The Stolen</button>
+        <div class="levelnote" id="lvl2-note"></div>
         <div class="stat" id="hi-title"></div>
         <div class="souls" id="souls" hidden></div>
         <div class="board" id="board" hidden>
           <div class="board-head">The world's best &middot; scroll for more</div>
+          <div class="board-tabs"><button type="button" data-view="1" class="on">I &middot; The Pit</button><button type="button" data-view="2">II &middot; The Stolen</button></div>
           <ol id="board-rows"></ol>
         </div>
       </div>
@@ -36,10 +39,11 @@
         <div class="stat" id="over-score"></div>
         <div class="stat" id="over-hi"></div>
         <div class="blink" id="over-hint">Press space to try again</div>
+        <button type="button" class="levelbtn" id="lvl-over" data-level="2" hidden></button>
       </div>
 
       <div class="screen" id="scr-win" hidden>
-        <div class="big">YOU BEAT<br>THE DEVIL</div>
+        <div class="big" id="win-big">YOU BEAT<br>THE DEVIL</div>
         <div class="sub why" id="win-why"></div>
         <div class="stat" id="win-score"></div>
         <div class="stat" id="win-hi"></div>
@@ -49,6 +53,7 @@
           <div class="name-btns"><button type="submit">Save</button><button type="button" id="name-skip">Skip</button></div>
         </form>
         <div class="blink" id="win-hint">Press space to play again</div>
+        <button type="button" class="levelbtn" id="lvl-win" data-level="2" hidden></button>
       </div>
 
       <button id="mute" type="button">Sound on</button>
@@ -70,7 +75,7 @@
 <!-- the touch controls: drawn here, outside the picture -->
 <canvas id="ctl" aria-hidden="true"></canvas>
 
-<script src="audio.js?v=34"></script>
-<script src="game.js?v=34"></script>
+<script src="audio.js?v=36"></script>
+<script src="game.js?v=36"></script>
 </body>
 </html>

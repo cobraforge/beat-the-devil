@@ -158,6 +158,23 @@ var sfx = {
   collapse: function(){ explosion(210, 1.5); noise({dur:1.8, vol:0.4, freq:180, slide:50, attack:0.05}); },
   crumble: function(){ crumble(); },
   heavenCrack: function(){ heavenCrack(); },
+  // level 2: cages, souls, shades, chains, lava and the Warden
+  cageLower: function(){ noise({dur:0.6, vol:0.07, type:'bandpass', freq:2000, q:3, slide:900, attack:0.05}); tone({freq:240, slide:180, dur:0.5, vol:0.04, type:'triangle'}); },
+  cageTurn: function(k){ tone({freq:700 + 600 * k, dur:0.05, vol:0.12, type:'square', filter:3000}); noise({dur:0.04, vol:0.08, type:'highpass', freq:3000}); },
+  cageOpen: function(){ chimes([880, 1318.5, 1760], 0.07, 0.09); noise({dur:0.3, vol:0.12, type:'bandpass', freq:1400, q:2, slide:600}); },
+  deliver: function(){ chimes([587.3, 740, 880, 1174.7, 1480], 0.08, 0.1); tone({freq:293.7, dur:1.6, vol:0.1, type:'sine', attack:0.2}); },
+  snatch: function(){ wail(); },
+  shade: function(){ noise({dur:0.9, vol:0.12, type:'bandpass', freq:900, q:4, slide:300, attack:0.6}); },
+  chainLash: function(x){ chainLash(x); },
+  lavaWarn: function(){ lavaBubbles(); },
+  lavaRise: function(x){ explosion(x < 0 ? 105 : 315, 0.7); noise({dur:1.2, vol:0.18, type:'highpass', freq:2500, slide:1200, attack:0.1}); },
+  shutter: function(){ noise({dur:0.16, vol:0.16, type:'bandpass', freq:3200, q:2, slide:1600}); tone({freq:520, slide:340, dur:0.12, vol:0.1, type:'triangle'}); },
+  wardenArrive: function(){ tone({freq:62, slide:40, dur:1.6, vol:0.55, type:'sawtooth', filter:300}); for (var i = 0; i < 8; i++) later(i * 110 + Math.random() * 60, function(){ noise({dur:0.07, vol:0.16, type:'bandpass', freq:2200 + Math.random() * 1200, q:2}); }); },
+  lanternBeam: function(){ tone({freq:440, dur:0.7, vol:0.12, type:'sine', attack:0.02}); tone({freq:660, dur:0.7, vol:0.08, type:'sine', attack:0.02}); noise({dur:0.7, vol:0.14, type:'highpass', freq:3500, attack:0.02}); },
+  lanternHit: function(){ noise({dur:0.12, vol:0.4, type:'highpass', freq:3000}); tone({freq:2400, slide:1900, dur:0.7, vol:0.12, type:'sine'}); tone({freq:3520, dur:0.5, vol:0.06, type:'sine'}); },
+  lanternShatter: function(){ explosion(210, 1.1); for (var i = 0; i < 12; i++) later(i * 35 + Math.random() * 40, function(){ noise({dur:0.05 + Math.random() * 0.08, vol:0.18, type:'highpass', freq:3000 + Math.random() * 4000}); }); chimes([1760, 2349.3, 2637, 3520], 0.05, 0.08); },
+  cagesBurst: function(){ for (var i = 0; i < 7; i++) later(i * 120, function(){ chimes([1174.7 + Math.random() * 600], 0, 0.07); noise({dur:0.08, vol:0.1, type:'bandpass', freq:1800, q:2}); }); },
+  cageSlam: function(){ tone({freq:80, slide:40, dur:0.6, vol:0.6, type:'sine'}); noise({dur:0.25, vol:0.4, type:'bandpass', freq:900, q:1.2, slide:300}); noise({dur:0.06, vol:0.3, type:'highpass', freq:4000}); },
   breathWarn: function(){ tone({freq:48, slide:110, dur:1.0, vol:0.35, type:'sawtooth', filter:300, attack:0.3}); },
   breath: function(){ noise({dur:0.9, vol:0.45, freq:2200, slide:300, attack:0.03}); },
   jet: function(){ noise({dur:0.85, vol:0.36, type:'bandpass', freq:1400, q:0.8, slide:500, attack:0.02}); tone({freq:160, slide:70, dur:0.5, vol:0.2, type:'sawtooth', filter:400}); },
@@ -327,6 +344,53 @@ var TRACKS = {
     bell: parse([
       'D5 . . . . . . . . . . . Ab4 . . .',
       '. . . . F4 . . . . . . . Eb4 . . .'
+    ])
+  },
+  // The Stolen, level 2: his dungeon. Lower and slower than the pit; the music
+  // box is the souls' lullaby heard through the bars, and the choir holds the dark.
+  stolen: {
+    bars: 4, bed: true, breath: true, bassDur: 3.5,
+    choir: chords(['D3 A3 C4 F4', 'D3 G3 Bb3 E4', 'C3 G3 C4 Eb4', 'C#3 G3 A3 E4']),
+    box: parse([
+      'A5 . . . D6 . . . E6 . F6 . . . . .',
+      '. . . . . . . . D6 . . . C6 . Bb5 .',
+      'G5 . . . . . . . Eb6 . . . D6 . . .',
+      'C#6 . . . . . . . A5 . . . . . . .'
+    ]),
+    bass: parse([
+      'D2 . . . . . . . D2 . . . . . . .',
+      'G1 . . . . . . . G1 . . . . . . .',
+      'C2 . . . . . . . C2 . . . . . . .',
+      'A1 . . . . . . . A1 . . . . . . .'
+    ]),
+    hat: parse([
+      '. . . . . . o . . . . . . . o .',
+      '. . . . . . o . . . . . . . o .',
+      '. . . . . . o . . . . . . . o .',
+      '. . . . . . o . . . o . . . o .'
+    ])
+  },
+  // The Warden: a march in iron. The choir open and dissonant, an anvil on two and four.
+  warden: {
+    bars: 4, bed: true, breath: true, drone: 38, choirOpen: true, leadType: 'sawtooth', leadDur: 3,
+    choir: chords(['D3 F3 Ab3 C4', 'Db3 F3 Ab3 C4', 'D3 F3 Ab3 C4', 'C#3 G3 Bb3 E4']),
+    bass: parse([
+      'D2 . . D2 . . D2 . Eb2 . . Eb2 . . D2 .',
+      'Db2 . . Db2 . . Db2 . D2 . . D2 . . C2 .',
+      'D2 . . D2 . . D2 . Eb2 . . Eb2 . . D2 .',
+      'C#2 . . C#2 . . E2 . G2 . . Bb2 . . A2 .'
+    ]),
+    lead: parse([
+      'D5 . . . . . . . Eb5 . . . . . . .',
+      'F5 . . . . . . . Ab4 . . . . . . .',
+      'D5 . . . . . . . Eb5 . . . F5 . . .',
+      'E5 . . . . . . . Bb4 . . . A4 . . .'
+    ]),
+    snare: parse([
+      '. . . . x . . . . . . . x . . .',
+      '. . . . x . . . . . . . x . . .',
+      '. . . . x . . . . . . . x . . .',
+      '. . . . x . . . . . . . x . x .'
     ])
   },
   // Victory: the light. The pit's D minor turns to D major: the choir open
@@ -737,6 +801,46 @@ function laughter(){
   if (fireBus){ fireBus.gain.setTargetAtTime(0.15, t0, 0.05); fireBus.gain.setTargetAtTime(0.7, t0 + 2.0, 0.4); }
   return 2.3;
 }
+// ----- level 2 -----
+// a few struck bells, a step apart, into the plate
+function chimes(freqs, step, vol){
+  if (!running()) return;
+  sends();
+  var t0 = actx.currentTime;
+  freqs.forEach(function(f, i){
+    tone({freq:f, t:t0 + i * step, dur:1.4, vol:vol, type:'sine', attack:0.004});
+    tone({freq:f * 2.76, t:t0 + i * step, dur:0.4, vol:vol * 0.2, type:'sine', attack:0.003});
+    tone({freq:f, t:t0 + i * step, dur:1.2, vol:vol * 0.6, type:'sine', attack:0.004, bus:plateSend});
+  });
+}
+// a soul dragged back into the dark: a thin voice falling away
+function wail(){
+  if (!running()) return;
+  var a = actx, t0 = a.currentTime;
+  var o = a.createOscillator(); o.type = 'sawtooth';
+  o.frequency.setValueAtTime(700, t0); o.frequency.exponentialRampToValueAtTime(170, t0 + 0.9);
+  var bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 6; bp.frequency.setValueAtTime(1400, t0); bp.frequency.exponentialRampToValueAtTime(500, t0 + 0.9);
+  var g = a.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.18, t0 + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.0);
+  o.connect(bp); bp.connect(g); g.connect(sfxBus); g.connect(reverbGet().input);
+  o.start(t0); o.stop(t0 + 1.05);
+  noise({dur:0.6, vol:0.1, type:'bandpass', freq:1200, q:2, slide:400});
+}
+// a chain lashing out: a rising whip of air and the clank of the links
+function chainLash(x){
+  if (!running()) return;
+  var pn = panner(x == null ? 210 : x), bus = sfxBus;
+  if (pn){ pn.connect(sfxBus); bus = pn; }
+  noise({dur:0.18, vol:0.26, type:'highpass', freq:800, slide:5000, bus:bus});
+  for (var i = 0; i < 4; i++) noise({t:actx.currentTime + 0.04 + i * 0.03, dur:0.03, vol:0.14, type:'bandpass', freq:2600 + i * 300, q:3, bus:bus});
+}
+// the crust going soft: low pops over a rumble
+function lavaBubbles(){
+  if (!running()) return;
+  var t0 = actx.currentTime;
+  noise({dur:1.5, vol:0.14, type:'lowpass', freq:220, attack:0.3});
+  for (var i = 0; i < 9; i++) tone({freq:90 + Math.random() * 80, slide:40, t:t0 + Math.random() * 1.4, dur:0.08, vol:0.14, type:'sine'});
+}
+
 // ----- the release -----
 // his death: three voices a fifth and an octave apart falling away through a
 // closing mouth, over a torn noise, into the long reverb

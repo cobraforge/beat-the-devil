@@ -180,6 +180,40 @@ roof splits and a shaft of light comes down; in it the heart heals and rises
 out of the pit. The timeline is `FREE` in `game.js`, the light is
 `drawHeaven()`, and the panel then sits low, under it.
 
+## Level 2: The Stolen
+
+Below the pit is his dungeon. It opens on the title (**II · The Stolen**, or
+the `2` key) once level 1 has been beaten on the device, and after a win the
+panel offers *Go back down for them*. The rules are DESIGN.md rule 11; in
+short:
+
+- **The rescue** (50 s; the meter reads *HE IS COMING*). Seven stolen souls
+  hang in cages from the roof, four at most at a time. Hold the heart by a
+  cage for a second to open it; the soul follows in a trail. Carry up to
+  three (each slows you 6 %) and fly them up into the shaft of light at the
+  top centre to set them free. **A hit drags every soul you carry back into a
+  cage.**
+- **Chains** lash from the roof on the fork contract: a pale line tracks the
+  heart, locks, and the chain snaps along that line to the floor, lies there a
+  second and retracts. **Lava** bubbles on one half of the floor, then rises
+  80 px, holds and falls. **Shades** gather at a wall while you carry souls
+  and drift after the last one; a bolt ends a shade, at the cost of the bolt.
+- **The Warden** arrives when the meter fills: the cages are hoisted out of
+  reach, and his lantern is the target. It is shuttered except in brief
+  windows; two hits break it. He throws chains, raises the lava, and sweeps
+  the lantern's beam across the floor to burn a column where it locks.
+- **Endings.** Break the lantern and every cage bursts; the souls join the
+  heart and the light takes them all up. Run out of bolts first and he locks
+  the heart in a cage with them.
+- **Score** adds 500 for each soul you brought out (delivered, plus those still
+  with you when the lantern breaks), on a board of its own.
+
+In `game.js` it is the `LEVEL 2` section (`STOLEN`, `updateStolen()`, the
+Warden, the `released` and `caged` endings) and its drawing; `G.level` picks
+the level and the shared systems (the heartbeat, bolts, penalties, hazard
+cap, the release into the light) serve both. The music is `stolen` (the
+souls' music box heard through the bars) and `warden` (a march in iron).
+
 ## The world board
 
 Only a completed run scores: **hearts left × 1,000, plus up to 2,500 for
@@ -190,20 +224,22 @@ answers (the device's own best otherwise). A run that places in the world's
 top fifty asks for a name on the win panel; the title shows all fifty, ten
 at a time in a list that scrolls (to the player's own place, if they have one),
 with score, hearts, time and date, and a counter of souls stolen (games lost
-worldwide) and freed (won).
+worldwide), freed (won) and returned (level 2's souls brought out, in any
+run). Each level has its own board, with a tab for each.
 
 It is a Cloudflare Pages Function, `functions/api/[[route]].js`, over a D1
 database:
 
 | | |
 |---|---|
-| `GET /api/board` | the top fifty and the counters |
-| `POST /api/start` | a run begins; returns its id |
-| `POST /api/end {run, outcome, hearts}` | `freed` or `stolen`; the server times it and scores it |
+| `GET /api/board?level=1\|2` | that level's top fifty and the counters |
+| `POST /api/start {level}` | a run begins; returns its id |
+| `POST /api/end {run, outcome, hearts, saved}` | `freed` or `stolen`; the server times it and scores it (`saved`, 0–7, level 2 only) |
 | `POST /api/name {run, name}` | a placing winner's name |
 
 The server's own clock times the run and it computes the score; the client
-sends only the outcome and the hearts left. Wins under 50 s are refused,
+sends only the outcome, the hearts left and (level 2) the souls saved. Wins
+under 50 s (55 s in level 2) are refused,
 starts are limited to 12 a minute per player (by a hash of the address), and
 names are cleaned to 12 upper-case characters.
 
@@ -215,7 +251,8 @@ names are cleaned to 12 upper-case characters.
    Production (and Preview, if you want the board on preview builds).
 3. Redeploy: **Deployments → the latest → Retry deployment**, or push a commit.
 
-The tables create themselves on the first request. Until the binding exists
+The tables create themselves on the first request, and columns added since
+(`level`, `saved`) are added to an existing database the same way. Until the binding exists
 `/api/*` answers 503 and the game hides the board and plays as before.
 
 **Testing it locally** without Cloudflare: `dev/api-sim.js` runs the real
@@ -260,7 +297,8 @@ BTD_API_SIM.sql('SELECT * FROM runs')
 - `index.html` — page shell: canvas, title / game-over / win overlays, mute button
 - `style.css`  — layout, CRT overlay, overlay screens (scales via `--s`)
 - `audio.js`   — Web Audio synth: sound effects and the music sequencer, which
-                 is slaved to the heartbeat (survive, devil, title, dirge, win)
+                 is slaved to the heartbeat (survive, devil, title, dirge, win,
+                 stolen, warden)
 - `game.js`    — the game: heartbeat clock, fire renderer, input, hazards, devil AI, endings, rendering
 - `build.py`   — bundles everything into `dist/index.html`; `dist/` is the deployable site root
 - `dev/bot.js` — the imperfect playtest bot; `dev/perf.py` — frame-time measurement under throttling
