@@ -459,6 +459,14 @@ vowel, `choirLevel` for its level) and `box` (a music-box pattern). A sanity che
 pattern's length doesn't match `bars * 16` or a choir isn't one four-note
 chord per bar.
 
+The title plays `title`. It is asked for as the page loads, so a browser
+that lets a page make sound before a tap plays it at once; otherwise it comes
+in with the first touch or key that doesn't start a game (scrolling the
+board, the level button, or *Sound on*, which before any sound has played
+lets it in rather than muting). Both end panels have **Main menu** (Esc on a
+keyboard) beside the other level, back to the title and its music with the
+board fetched fresh; there, space or a tap starts level I.
+
 ## Single-file build
 
 ```

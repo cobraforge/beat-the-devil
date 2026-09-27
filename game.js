@@ -75,6 +75,7 @@ if (isTouch){
   document.getElementById('over-hint').textContent = 'Tap to try again';
   document.getElementById('win-hint').textContent = 'Tap to play again';
 }
+if (!isTouch) [].forEach.call(document.querySelectorAll('.menubtn'), function(b){ b.textContent = 'Main menu (Esc)'; });
 
 // ---------- storage ----------
 // the best completed run on this device, in board points
@@ -439,7 +440,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 36;
+  window.BTD_VERSION = 37;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -512,6 +513,7 @@ window.addEventListener('keydown', function(e){
   keys[lk] = true;
   if (lk === 'm'){ toggleMute(); return; }
   if ((lk === '1' || lk === '2') && G.mode !== 'play'){ tryStart(+lk); return; }
+  if (lk === 'escape' && G.mode !== 'play'){ goTitle(); return; }
   if (lk === 'p' || lk === 'escape'){ togglePause(); return; }
   if (space || k === 'Enter'){
     if (G.mode === 'play'){ if (!G.paused) fireQueued = true; }
@@ -540,7 +542,7 @@ function toLogical(e){
 // picture. A mouse still has to press on the picture itself.
 window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  if (e.target.closest && e.target.closest('.name, .board, .levelbtn')) return;   // the name box, the board and the level buttons take their own touches
+  if (e.target.closest && e.target.closest('.name, .board, .levelbtn, .menubtn')) return;   // the name box, the board and the buttons take their own touches
   var onPicture = stage.contains(e.target);
   if (!isTouch && !onPicture) return;
   var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
@@ -592,6 +594,13 @@ window.addEventListener('pointercancel', endPointer);
 
 var muteBtn = document.getElementById('mute');
 function toggleMute(){
+  // before any sound has played, the button that says "Sound on" lets it in
+  // rather than turning it off
+  if (!AUDIO.running() && !AUDIO.isMuted()){
+    AUDIO.unlock();
+    if (G.mode === 'title') music.play('title');
+    return;
+  }
   AUDIO.unlock();
   AUDIO.setMuted(!AUDIO.isMuted());
   muteBtn.textContent = AUDIO.isMuted() ? 'Sound off' : 'Sound on';
@@ -618,7 +627,7 @@ function tryStart(level){
   if (G.mode === 'title' || G.mode === 'over' || G.mode === 'won'){
     if (G.mode !== 'title' && G.endT < 0.9) return;
     if (level === 2 && !level2Open()) return;
-    startGame(level || lastLevel);
+    startGame(level || (G.mode === 'title' ? 1 : lastLevel));   // the title's own start is level I
   }
 }
 function startGame(level){
@@ -631,6 +640,17 @@ function startGame(level){
   closeNameForm();
   music.play(lastLevel === 2 ? 'stolen' : 'survive');
   worldStart();
+}
+// from an end panel back to the title: the pit, the board fresh from the world, and its music
+function goTitle(){
+  if (WORLD.naming || (G.mode !== 'over' && G.mode !== 'won') || G.endT < 0.9) return;
+  reset(1);
+  AUDIO.muffle(false);
+  scrOver.hidden = true; scrWin.hidden = true;
+  closeNameForm();
+  showTitle();
+  worldLoad();
+  music.play('title');
 }
 function showTitle(){
   document.getElementById('hi-title').textContent = (bests[1] ? 'Your best ' + thousands(bests[1]) : '') + (bests[2] ? ' \u00b7 II ' + thousands(bests[2]) : '');
@@ -653,24 +673,31 @@ function levelButtons(){
 [].forEach.call(document.querySelectorAll('.levelbtn'), function(b){
   b.addEventListener('click', function(e){ e.stopPropagation(); if (!b.disabled) tryStart(+b.getAttribute('data-level')); });
 });
+[].forEach.call(document.querySelectorAll('.menubtn'), function(b){
+  b.addEventListener('click', function(e){ e.stopPropagation(); b.blur(); goTitle(); });
+});
 [].forEach.call(document.querySelectorAll('.board-tabs button'), function(b){
   b.addEventListener('click', function(e){ e.stopPropagation(); WORLD.view = +b.getAttribute('data-view'); renderWorld(); });
 });
 showTitle();
 worldLoad();
+// the title's music is asked for at once: a browser that lets a page sound
+// before a tap plays it now; otherwise it comes in on the first touch or key
+// that isn't a start (the board, the level button, Sound on)
+music.play('title');
 
 // ---------- a name for the board ----------
 var nameForm = document.getElementById('name-form'), nameIn = document.getElementById('name-in');
-var winHint = document.getElementById('win-hint'), winHi = document.getElementById('win-hi');
+var winHint = document.getElementById('win-hint'), winHi = document.getElementById('win-hi'), winBtns = document.getElementById('win-btns');
 function openNameForm(){
   WORLD.naming = true;
-  nameForm.hidden = false; winHint.hidden = true;
+  nameForm.hidden = false; winHint.hidden = true; winBtns.hidden = true;   // a name or Skip first
   try { nameIn.value = localStorage.getItem('btd.name') || ''; } catch(e){}
   if (!isTouch) setTimeout(function(){ nameIn.focus(); }, 60);   // a phone opens its keyboard on the tap
 }
 function closeNameForm(){
   WORLD.naming = false;
-  nameForm.hidden = true; winHint.hidden = false;
+  nameForm.hidden = true; winHint.hidden = false; winBtns.hidden = false;
   if (document.activeElement === nameIn) nameIn.blur();
 }
 nameForm.addEventListener('submit', function(e){

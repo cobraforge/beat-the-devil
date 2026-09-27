@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=37">
 </head>
 <body>
 <div id="wrap">
@@ -39,7 +39,7 @@
         <div class="stat" id="over-score"></div>
         <div class="stat" id="over-hi"></div>
         <div class="blink" id="over-hint">Press space to try again</div>
-        <button type="button" class="levelbtn" id="lvl-over" data-level="2" hidden></button>
+        <div class="endbtns"><button type="button" class="levelbtn" id="lvl-over" data-level="2" hidden></button><button type="button" class="menubtn">Main menu</button></div>
       </div>
 
       <div class="screen" id="scr-win" hidden>
@@ -53,7 +53,7 @@
           <div class="name-btns"><button type="submit">Save</button><button type="button" id="name-skip">Skip</button></div>
         </form>
         <div class="blink" id="win-hint">Press space to play again</div>
-        <button type="button" class="levelbtn" id="lvl-win" data-level="2" hidden></button>
+        <div class="endbtns" id="win-btns"><button type="button" class="levelbtn" id="lvl-win" data-level="2" hidden></button><button type="button" class="menubtn">Main menu</button></div>
       </div>
 
       <button id="mute" type="button">Sound on</button>
@@ -75,7 +75,7 @@
 <!-- the touch controls: drawn here, outside the picture -->
 <canvas id="ctl" aria-hidden="true"></canvas>
 
-<script src="audio.js?v=36"></script>
-<script src="game.js?v=36"></script>
+<script src="audio.js?v=37"></script>
+<script src="game.js?v=37"></script>
 </body>
 </html>

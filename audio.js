@@ -961,6 +961,7 @@ window.BTD_AUDIO = {
   sfx: sfx,
   music: music,
   unlock: function(){ unlock(); return actx; },
+  running: running,
   fire: { update: fireUpdate },
   meter: meter,
   // debug: set the choir's level live, for balancing it against the heart
