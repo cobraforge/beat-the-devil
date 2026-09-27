@@ -140,9 +140,10 @@ whole run, and two of them are for his eyes.
   the centre on each beat, an internal glow breathing on its own slower cycle,
   a light trail and a lean when it moves fast, and an involuntary double-beat
   if it sits still for three seconds.
-- Damage persists. Three lives: clean cyan, steady beat. Two: dimmer glow, an
-  occasional stumble. One: colour drained toward grey-blue, glow guttering, a
-  beat never regular again. Every hit stops the beat dead for 200 ms, restarts
+- Five hearts (`LIVES`). Damage persists, in three stages: untouched, clean
+  cyan and a steady beat; wounded, a dimmer glow and an occasional stumble;
+  the last heart, colour drained toward grey-blue, glow guttering, a beat
+  never regular again. His arms creep further in with every heart lost. Every hit stops the beat dead for 200 ms, restarts
   it with a hard irregular thump, and sheds light the heart never recovers.
 - **Penalties last exactly 2.0 s** — the invulnerability window — and end the
   instant the heart can be hit again. Nothing impairs it while it is
