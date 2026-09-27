@@ -104,7 +104,7 @@ var BRIEF = {
 // game's only recorded sound, and they play through Web Audio (AUDIO.narrator)
 // like the rest of it. Silent when the game is muted, or with the briefing's
 // Voice button (remembered on the device).
-var VOICE_V = 1;                      // bump when the recordings are re-rendered
+var VOICE_V = 2;                      // bump when the recordings are re-rendered
 var NARRATOR = { on: true, timings: null, rate: 0.97, loading: false };
 try { NARRATOR.on = localStorage.getItem('btd.voice') !== '0'; } catch(e){}
 function voiceKey(level, page){ return 'l' + level + '-' + page; }
@@ -497,7 +497,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 44;
+  window.BTD_VERSION = 45;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
@@ -2353,12 +2353,14 @@ function updateShades(dt){
     sh.t += dt;
     if (sh.state === 'gather'){ if (sh.t >= 0.8){ sh.state = 'drift'; sh.t = 0; } }
     else if (sh.state === 'drift'){
-      var tail = G.carried[G.carried.length - 1];
+      // the last soul carried; failing that, the nearest spilled one
+      var tail = G.carried[G.carried.length - 1], stray = null;
+      if (!tail && G.strays.length){ stray = G.strays.slice().sort(function(a, b){ return Math.hypot(a.x - sh.x, a.y - sh.y) - Math.hypot(b.x - sh.x, b.y - sh.y); })[0]; tail = stray; }
       if (!tail || sh.t > sh.life || G.mode !== 'play'){ sh.state = 'fade'; sh.t = 0; continue; }
       var dx = tail.x - sh.x, dy = tail.y - sh.y, d = Math.hypot(dx, dy) || 1;
       sh.x += dx / d * 85 * dt; sh.y += dy / d * 85 * dt;
       if (d < 14){
-        var s = G.carried.pop();
+        var s = stray ? G.strays.splice(G.strays.indexOf(stray), 1)[0] : G.carried.pop();
         G.rising.push({ x: s.x, y: s.y, t: 0, seed: s.seed, dark: true });
         G.pool++;
         sh.state = 'fade'; sh.t = 0;
@@ -2584,7 +2586,8 @@ function stepChain(fl, dt, live){
   }
   if (out){
     // it smashes a cage it meets (the soul spills out) and ends a shade
-    if (G.cages) G.cages.forEach(function(c){ if (c.state === 'hang' && c.soul && Math.hypot(c.x - fl.bx, c.y - fl.by) < fl.r + 18) smashCage(c, fl); });
+    var hard = fl.state === 'drop' ? fl.vy > 220 : Math.abs(fl.om * fl.len) > 220;     // only a ball moving hard breaks a cage
+    if (G.cages && hard) G.cages.forEach(function(c){ if (c.state === 'hang' && c.soul && Math.hypot(c.x - fl.bx, c.y - fl.by) < fl.r + 18) smashCage(c, fl); });
     if (G.shades) G.shades.forEach(function(sh){
       if (sh.state !== 'fade' && Math.hypot(sh.x - fl.bx, sh.y - fl.by) < fl.r + 14){ sh.state = 'fade'; sh.t = 0; burst(sh.x, sh.y, '#40303a', 10, 160, 0); sfx.pop(); }
     });
@@ -2608,14 +2611,24 @@ function smashCage(c, fl){
   addText(c.x, c.y - 34, 'SMASHED', COLORS.heart, 1.0, 7);
   sfx.cageSmash();
 }
-// souls spilled from a smashed cage wait where they fell, bobbing, to be picked up
+// Souls spilled from a smashed cage do not wait: they sink toward the crust,
+// fading, and after STRAY.LIFE seconds the pit takes them back (to be caged
+// again). Shades go for them too.
+var STRAY = { LIFE: 4.5, SINK: 22 };
 function updateStrays(dt){
   var p = G.player;
   for (var i = G.strays.length - 1; i >= 0; i--){
     var s = G.strays[i], damp = Math.max(0, 1 - 3 * dt);
     s.t += dt; s.vx *= damp; s.vy *= damp;
     s.x = clamp(s.x + s.vx * dt, 14, LW - 14);
-    s.y = clamp(s.y + s.vy * dt + Math.sin(s.t * 2.4 + s.seed * 6) * 8 * dt, LH * 0.25 + 8, FLOOR - 20);
+    s.y = clamp(s.y + (s.vy + STRAY.SINK) * dt + Math.sin(s.t * 2.4 + s.seed * 6) * 8 * dt, LH * 0.25 + 8, FLOOR - 20);
+    if (s.t >= STRAY.LIFE){
+      G.rising.push({ x: s.x, y: s.y, t: 0, seed: s.seed, dark: true });
+      G.pool++; G.strays.splice(i, 1);
+      addText(s.x, s.y - 16, 'LOST', COLORS.ember, 1.0, 7);
+      sfx.snatch();
+      continue;
+    }
     if (G.mode !== 'play' || Math.hypot(p.x - s.x, p.y - s.y) > 18){ s.warned = false; continue; }
     if (G.carried.length < STOLEN.CARRY){ G.carried.push({ x: s.x, y: s.y, t: 0, seed: s.seed }); G.strays.splice(i, 1); sfx.cageOpen(); }
     else if (!s.warned){ s.warned = true; addText(p.x, p.y - 30, 'CARRY THEM UP', COLORS.sulfur, 1.1, 7); }
@@ -2631,7 +2644,8 @@ function updateStrays(dt){
 // looses a quarrel along it. Neither leads the heart: it is where the heart
 // was at the lock.
 var KNIGHT = { SPEED: 30, TRACK: 75, AIM: 0.9, LOCK: 0.22, THRUST: 0.1, HOLD: 0.4, PULL: 0.3, RECOVER: 0.5, STAGGER: 0.18, GAP: 64,
-               REST: 120, REACH_MIN: 150, REACH_MAX: 360, XAIM: 0.7, RAISE: 0.3, QUARREL: 720, SHAFT: 13, SPEAR_DX: 10, H: 100, BODY: 14, MAX: 4 };
+               REST: 120, REACH_MIN: 150, REACH_MAX: 360, XAIM: 0.7, RAISE: 0.3, QUARREL: 720, SHAFT: 13, SPEAR_DX: 10, H: 100, BODY: 14, MAX: 5,
+               WARDEN_XBOWS: 2, WARDEN_SHOT: [3.2, 4.4], WARDEN_SHOT_HIT: 0.4 };
 // who marches in, and when (the meter's share): spearmen first, then a crossbowman
 var PATROL = [[0, 'spear'], [0.2, 'spear'], [0.4, 'xbow'], [0.7, 'spear']];
 function knightEnter(kind, side){
@@ -2761,7 +2775,8 @@ function updateKnights(dt, live){
     if (q.stuck){ q.t += dt; if (q.t > 1.2) G.quarrels.splice(i, 1); continue; }
     var ox = q.x, oy = q.y;
     q.x += q.vx * dt; q.y += q.vy * dt;
-    if (live && distToSeg(p.x, p.y, ox, oy, q.x, q.y) < 12){ hurt(null, q.x, q.y); G.quarrels.splice(i, 1); continue; }
+    // it strikes only a heart that can be hurt; through one that cannot (just hit) it flies on
+    if (live && G.invuln <= 0 && !(DEV.on && DEV.god) && distToSeg(p.x, p.y, ox, oy, q.x, q.y) < 12){ hurt(null, q.x, q.y); G.quarrels.splice(i, 1); continue; }
     if (q.y < 6 || q.x < 4 || q.x > LW - 4){
       q.stuck = true; q.t = 0; q.x = clamp(q.x, 4, LW - 4); q.y = Math.max(6, q.y);
       if (live) sfx.quarrelThunk(q.x);
@@ -2796,7 +2811,7 @@ function updateStolen(dt){
         G.xbowT -= dt;
         if (G.xbowT <= 0){ G.xbowT = rnd(8, 10.5) - prog * 2; if (mayspawn()) knightAttack('xbow', 1); }
       }
-      if (G.carried.length){
+      if (G.carried.length || G.strays.length){
         G.shadeT -= dt;
         if (G.shadeT <= 0){ G.shadeT = rnd(3.2, 4.2); if (!G.shades.length && mayspawn()) spawnShade(); }
       }
@@ -2804,6 +2819,12 @@ function updateStolen(dt){
     if (G.surv >= G.SURV) wardenComes();
   } else if (G.warden){
     updateWarden(dt);
+    // his crossbowmen keep shooting all through the fight, faster as he is hurt
+    var ww = G.warden;
+    if (!ww.dying && (ww.state === 'open' || ww.state === 'attack') && G.mode === 'play'){
+      G.xbowT -= dt;
+      if (G.xbowT <= 0){ G.xbowT = rnd(KNIGHT.WARDEN_SHOT[0], KNIGHT.WARDEN_SHOT[1]) - KNIGHT.WARDEN_SHOT_HIT * ww.hits; knightAttack('xbow', 1); }
+    }
   }
 }
 // the meter is full: silence, the cages are hoisted away, and he comes down
@@ -2814,6 +2835,8 @@ function wardenComes(){
   G.cages.forEach(function(c){ c.state = 'rise'; c.t = 0; });
   G.flames.forEach(function(fl){ if (fl.type === 'chain') windDown(fl); });
   knightsStand(false);
+  while (knightsOf('xbow') < KNIGHT.WARDEN_XBOWS && knightEnter('xbow'));   // his crossbowmen march in for the fight
+  G.xbowT = 3.5;
   G.strays.forEach(function(s){ G.rising.push({ x: s.x, y: s.y, t: 0, seed: s.seed, dark: true }); });   // taken back up
   G.pool += G.strays.length; G.strays = [];
   G.shades.forEach(function(s){ s.state = 'fade'; s.t = 0; });
@@ -2949,7 +2972,7 @@ function updateWarden(dt){
       var kind = w.knightsN % 2 ? 'spear' : 'xbow';
       knightAttack(kind, kind === 'spear' ? 3 : 2);
       if (knightsOf('spear') < 3) knightEnter('spear');
-      if (knightsOf('xbow') < 1) knightEnter('xbow');
+      if (knightsOf('xbow') < KNIGHT.WARDEN_XBOWS) knightEnter('xbow');
     }
     if (st > 2.4 && !knightsBusy()) wardenOpen(w);
   }
@@ -3182,7 +3205,10 @@ function drawSouls(){
   }
   G.carried.forEach(function(s, i){ drawGem(s.x, s.y, 5.4, { alpha: 0.95, pulse: G.heart.pulse * 0.7, breath: 0.8 + 0.2 * Math.sin(s.t * 2 + i) }); });
   G.comers.forEach(function(s){ drawGem(s.x, s.y, 5.4, { alpha: 0.9, pulse: 0.5 }); });
-  G.strays.forEach(function(s){ drawGem(s.x, s.y, 5.4, { alpha: 0.9, pulse: 0.6, breath: 0.8 + 0.2 * Math.sin(s.t * 3) }); });
+  G.strays.forEach(function(s){
+    var left = STRAY.LIFE - s.t, a = left < 1.6 ? 0.35 + 0.55 * Math.abs(Math.sin(s.t * (8 + 10 * (1.6 - left)))) : 0.9;   // it gutters as it goes
+    drawGem(s.x, s.y, 5.4, { alpha: a, pulse: 0.6, breath: 0.8 + 0.2 * Math.sin(s.t * 3) });
+  });
   G.rising.forEach(function(r){
     if (r.dark){
       ctx.save(); ctx.globalAlpha = Math.max(0, 1 - r.t * 1.2);

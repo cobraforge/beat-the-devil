@@ -932,9 +932,17 @@ function narrPlay(key, rate, onEnd){
   var b = narr.bufs[key]; if (!b || !running()) return 0;
   var a = actx, src = a.createBufferSource(), g = a.createGain(), send = a.createGain();
   src.buffer = b; src.playbackRate.value = rate || 1;
-  g.gain.value = 1.2;
-  send.gain.value = 0.16;
+  g.gain.value = 1.15;
+  send.gain.value = 0.26;                          // the dungeon around her
   src.connect(g); g.connect(master); g.connect(send); send.connect(reverbGet().input);
+  // and a ghost just behind her: the same voice through a slowly wavering
+  // delay, darker and quieter, so she never quite speaks alone
+  var dl = a.createDelay(0.1), lfo = a.createOscillator(), depth = a.createGain(), lp = a.createBiquadFilter(), ghost = a.createGain();
+  dl.delayTime.value = 0.028; lfo.frequency.value = 0.35; depth.gain.value = 0.006;
+  lfo.connect(depth); depth.connect(dl.delayTime);
+  lp.type = 'lowpass'; lp.frequency.value = 1700; ghost.gain.value = 0.3;
+  g.connect(dl); dl.connect(lp); lp.connect(ghost); ghost.connect(master); ghost.connect(send);
+  lfo.start(); lfo.stop(a.currentTime + b.duration / (rate || 1) + 1);
   src.onended = function(){ if (narr.src !== src) return; narr.src = null; narrDuck(false); if (onEnd) onEnd(); };
   narr.src = src;
   narrDuck(true);

@@ -242,7 +242,7 @@ time, then what to do and the controls (DESIGN.md rule 13). From the title it
 opens level 1's; after level 1 is won, the win panel shows **NEXT · LEVEL II ·
 THE STOLEN** and space (or a tap on it) opens level 2's. A **narrator** reads
 each story page aloud (recordings of a neural voice, the music stepping back
-under him); the page types out in step with him. *Skip* jumps to the rules, *Story* goes back, *Voice* turns the
+under her); the page types out in step with her. *Skip* jumps to the rules, *Story* goes back, *Voice* turns the
 narrator off. The story plays every run: from a loss or level 2's win, space
 goes back to the main menu, and a new run starts there. The words are in
 `BRIEF` in `game.js`.
@@ -366,8 +366,10 @@ the narrator's lines (below).
 ## The narrator's voice
 
 The story pages are read by a neural voice: [Piper](https://github.com/rhasspy/piper)
-(open-source text-to-speech, MIT) with its `en_US-norman-medium` voice (public
-domain, trained on LibriVox audiobook readings). `dev/voice.py` reads the
+(open-source text-to-speech, MIT) with its `en_GB-cori-high` voice (a British
+woman's, public domain, trained on LibriVox audiobook readings), read with a
+little more life than the default and a held pause before each page's last
+line; the game plays her with some reverb and a faint ghost behind her voice. `dev/voice.py` reads the
 story out of `BRIEF` in `game.js`, renders each page (the first with the
 level's spoken name) and writes `voice/l<level>-<page>.mp3` and
 `voice/timings.json` (when each paragraph is spoken, for the typing). After
@@ -375,7 +377,7 @@ changing the story, re-render and bump `VOICE_V` in `game.js`:
 
 ```
 pip install soundfile numpy
-python dev/voice.py --piper path/to/piper.exe --model path/to/en_US-norman-medium.onnx
+python dev/voice.py --piper path/to/piper.exe --model path/to/en_GB-cori-high.onnx
 ```
 
 Piper and the voice model are downloads kept outside the project (see the top

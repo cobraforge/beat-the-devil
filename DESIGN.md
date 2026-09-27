@@ -439,10 +439,13 @@ its quarrel in flight) another. Spear attacks come from 20 % of the phase (one
 spearman before 45 %, two before 75 %, then three), every 6.5 s easing to
 4.5 s; a crossbow attack from 40 %, every 8–10.5 s (a little sooner as the
 meter fills); a chain is tried every 3.4–4.4 s.
-**A ball that meets a hanging cage smashes it:** the soul spills out and waits
-where it fell, bobbing, for the heart to collect it (touching it is enough,
-if there is room to carry it). A ball through a shade ends the shade.
-**Shades** come only while you carry souls: a dark swirl gathers at a wall for
+**A ball that meets a hanging cage smashes it** — if it is moving hard (over
+220 px/s) — and the soul spills out. It does not wait: it sinks toward the
+crust at 22 px/s, guttering in its last 1.6 s, and after 4.5 s the pit takes
+it back to be caged again (*LOST*). The heart collects it by touching it, if
+there is room to carry it. A ball through a shade ends the shade.
+**Shades** come while you carry souls or while a spilled soul waits, and go
+for your last soul, or failing that the nearest spilled one: a dark swirl gathers at a wall for
 0.8 s, then drifts at 85 px/s (the heart moves at 265) toward your *last*
 soul. Touching the soul takes it back to a cage; touching the heart does
 nothing. A shade lasts 6 s, and a bolt ends one — a bolt spent there is a
@@ -469,7 +472,11 @@ the line locks and flashes for 0.22 s; then a beam of energy stands along it
 for 0.6 s, 10 px wide at the lantern and 40 px where it strikes — a burn); and
 **his knights** (he sends the patrol at the heart: its spearmen as a rank of up
 to three, then next time its crossbowmen, 0.35 s apart; and more march in
-until there are three spearmen and a crossbowman). A bolt on the shuttered lantern is *NOT YET*; on his armour (helm,
+until there are three spearmen and two crossbowmen). **His crossbowmen also
+shoot on their own** all through the fight: two march in as he comes, and one
+of them looses at the heart every 3.2–4.4 s (0.4 s sooner for each hit on the
+lantern), on top of his cycle. A quarrel through a heart that cannot be hurt
+(just hit) flies on. A bolt on the shuttered lantern is *NOT YET*; on his armour (helm,
 pauldrons, breastplate, faulds, arms), *WASTED*. Bolts pass through his cloak.
 
 **Endings.** Break the lantern and every cage bursts: all the souls, caged
@@ -572,19 +579,24 @@ dungeon — seven stolen souls, and his Warden keeps the keys. It is told to
 *you*, the player, and names no one; rule 9's no-references rule holds.
 
 **The narrator.** Each story page is read aloud: a recording of a neural
-voice (Piper's "norman", an audiobook reader's voice, public domain), rendered
-offline from `BRIEF` itself by `dev/voice.py` — so the recordings always say
-what the pages show; re-run it after changing the story, and bump `VOICE_V`.
-Page 1 of each level begins with the level's spoken name (its `say`). The
-lines play through Web Audio at 0.97 speed, a little of the long reverb on
-them, the music stepping back to a third under them. `voice/timings.json`
+voice (Piper's "cori", a British woman's voice from audiobook readings, public
+domain), rendered offline from `BRIEF` itself by `dev/voice.py` — so the
+recordings always say what the pages show; re-run it after changing the
+story, and bump `VOICE_V`. Page 1 of each level begins with the level's spoken
+name (its `say`). She reads with more life than the model's default (noise
+0.82 / 0.95), a little slow (1.1), letting each sentence land (0.5 s); the
+last line of a page with more than one paragraph is its sting — a held 0.9 s
+before it, and drawn out (1.3). The lines play through Web Audio at 0.97
+speed, with the long reverb around her and a ghost just behind her voice (the
+same voice through a slowly wavering 28 ms delay, darker, at 0.3), the music
+stepping back to a third under her. `voice/timings.json`
 says when each paragraph is spoken and which letters it covers, and the page
 types out in step, paragraph by paragraph. They are fetched once, just after
 the page loads. The narrator is silent when the game is muted, and the
-briefing's *Voice* button turns him off on the device (`btd.voice`);
-starting the level, Skip, or the title stops him. (The first version used the
+briefing's *Voice* button turns her off on the device (`btd.voice`);
+starting the level, Skip, or the title stops her. (The first version used the
 browser's own speech synthesis; on Windows it was the old desktop voice, and
-it sounded cheap.)
+it sounded cheap. The second was a man's voice, read flat.)
 
 **Why.** A new player met the pit with no idea what it was for, and level 2
 began with a four-second card over live play that could not teach its new
