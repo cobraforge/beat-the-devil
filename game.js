@@ -98,7 +98,9 @@ function runSeconds(){ return G.runSecs != null ? G.runSecs : (G.mode === 'play'
 // (functions/api/[[route]].js). The game never waits on it. Every call has a
 // short timeout, and if there is no server — a static host answering with a
 // page, or no database bound — the board is hidden and the game plays the same.
-var WORLD = { online: null, top: [], souls: null, run: null, runP: null, endP: null, result: null, naming: false, mine: null };
+var WORLD = { online: null, top: [], souls: null, places: 50, run: null, runP: null, endP: null, result: null, naming: false, mine: null };
+// the player's own entry, remembered on this device so the board can mark it
+try { WORLD.mine = JSON.parse(localStorage.getItem('btd.mine') || 'null'); } catch(e){}
 function api(path, body){
   if (WORLD.online === false) return Promise.reject(new Error('offline'));
   var ac = window.AbortController ? new AbortController() : null;
@@ -118,7 +120,7 @@ function api(path, body){
   }, function(e){ if (timer) clearTimeout(timer); throw e; });
 }
 function worldLoad(){
-  return api('board').then(function(j){ WORLD.top = j.top || []; WORLD.souls = j.souls || null; }).catch(function(){}).then(renderWorld);
+  return api('board').then(function(j){ WORLD.top = j.top || []; WORLD.souls = j.souls || null; WORLD.places = j.places || WORLD.places; }).catch(function(){}).then(renderWorld);
 }
 function worldStart(){
   WORLD.run = null; WORLD.result = null; WORLD.endP = null; WORLD.naming = false;
@@ -130,7 +132,7 @@ function worldEnd(outcome, hearts){
   WORLD.endP = WORLD.runP.then(function(){
     if (!WORLD.run) throw new Error('no run');
     return api('end', { run: WORLD.run, outcome: outcome, hearts: hearts });
-  }).then(function(j){ WORLD.result = j; if (j.souls) WORLD.souls = j.souls; renderWorld(); return j; });
+  }).then(function(j){ WORLD.result = j; if (j.souls) WORLD.souls = j.souls; if (j.places) WORLD.places = j.places; renderWorld(); return j; });
   WORLD.endP.catch(function(){});
 }
 function dateOf(ms){
@@ -155,14 +157,17 @@ function renderWorld(){
     if (!WORLD.top.length){
       var li0 = document.createElement('li'); li0.className = 'empty'; li0.textContent = 'No soul has been freed yet'; rows.appendChild(li0);
     }
-    WORLD.top.slice(0, 5).forEach(function(e, i){
+    var mineRow = null;
+    WORLD.top.forEach(function(e, i){
       var li = document.createElement('li');
       [String(i + 1), e.name, thousands(e.score), e.hearts + '\u2665', clock(e.seconds), dateOf(e.at)].forEach(function(t){
         var sp = document.createElement('span'); sp.textContent = t; li.appendChild(sp);
       });
-      if (WORLD.mine && WORLD.mine.name === e.name && WORLD.mine.score === e.score) li.className = 'me';
+      if (WORLD.mine && WORLD.mine.name === e.name && WORLD.mine.score === e.score){ li.className = 'me'; mineRow = mineRow || li; }
       rows.appendChild(li);
     });
+    // ten show at a time; the list scrolls to the player's own place if it is further down
+    rows.scrollTop = mineRow ? Math.max(0, mineRow.offsetTop - rows.clientHeight / 2) : 0;
   }
   if (G.mode === 'over' && s) document.getElementById('over-hi').textContent = soulsLine();
 }
@@ -415,7 +420,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 33;
+  window.BTD_VERSION = 34;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -515,7 +520,7 @@ function toLogical(e){
 // picture. A mouse still has to press on the picture itself.
 window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  if (e.target.closest && e.target.closest('.name')) return;
+  if (e.target.closest && e.target.closest('.name, .board')) return;   // the name box and the scrolling board take their own touches
   var onPicture = stage.contains(e.target);
   if (!isTouch && !onPicture) return;
   var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
@@ -633,6 +638,7 @@ nameForm.addEventListener('submit', function(e){
   winHi.textContent = 'Carving it in\u2026';
   api('name', { run: WORLD.run, name: n }).then(function(j){
     WORLD.top = j.top || WORLD.top; WORLD.mine = { name: j.name, score: WORLD.result && WORLD.result.score };
+    try { localStorage.setItem('btd.mine', JSON.stringify(WORLD.mine)); } catch(err){}
     winHi.textContent = j.name + ' \u00b7 #' + j.rank + ' in the world';
     renderWorld();
   }, function(){ winHi.textContent = 'The board would not take it'; }).then(closeNameForm);
@@ -1166,7 +1172,7 @@ function victory(){
     if (G.mode !== 'won' || r.score == null) return;
     showWinScore(G.lives, r.seconds, r.score);
     if (r.score > best){ best = r.score; saveBest(); }
-    winHi.textContent = '#' + r.rank + ' in the world' + (r.qualifies ? '' : ' \u00b7 the board holds ten');
+    winHi.textContent = '#' + r.rank + ' in the world' + (r.qualifies ? '' : ' \u00b7 the board holds ' + WORLD.places);
     if (r.qualifies) openNameForm();
   }, function(){ if (G.mode === 'won') winHi.textContent = 'Scoreboard offline \u00b7 your best ' + thousands(best); });
   sfx.win();

@@ -2,9 +2,9 @@
 // a D1 database bound to the project as DB. The tables create themselves on
 // first use.
 //
-//   GET  /api/board                          { top, souls }
+//   GET  /api/board                          { top, souls, places }
 //   POST /api/start                          { run }                a game begins
-//   POST /api/end   { run, outcome, hearts } { seconds, score, rank, qualifies, souls }
+//   POST /api/end   { run, outcome, hearts } { seconds, score, rank, qualifies, places, souls }
 //   POST /api/name  { run, name }            { rank, top }
 //
 // A run's time is the server's own clock, from /start to /end: the client
@@ -12,7 +12,7 @@
 // had left, and that is checked for range. Only completed runs (the devil
 // beaten) score. Pauses count; the clock never stops.
 
-const TOP = 10;                    // places on the board
+const TOP = 50;                    // places on the board
 const MIN_SECONDS = 50;            // no real run beats the devil faster (~55 s at best)
 const MAX_RUN_MS = 2 * 3600e3;     // a run older than this cannot finish
 const NAME_MS = 15 * 60e3;         // how long a winner has to give a name
@@ -99,7 +99,7 @@ async function end(db, body){
     .bind(now, outcome, hearts, seconds, score, body.run).run();
   if (!res.meta || res.meta.changes !== 1) return json({ error: 'already ended' }, 409);
   await db.prepare('UPDATE souls SET n = n + 1 WHERE k = ?').bind(outcome).run();
-  const out = { outcome, seconds, souls: await souls(db) };
+  const out = { outcome, seconds, places: TOP, souls: await souls(db) };
   if (score != null){ out.score = score; out.rank = await rankOf(db, score); out.qualifies = out.rank <= TOP; }
   return json(out);
 }
@@ -123,7 +123,7 @@ export async function onRequest(context){
   if (!env.DB) return json({ error: 'no database bound (DB)' }, 503);
   try {
     await schema(env.DB);
-    if (request.method === 'GET' && route === 'board') return json({ top: await top(env.DB), souls: await souls(env.DB) });
+    if (request.method === 'GET' && route === 'board') return json({ top: await top(env.DB), souls: await souls(env.DB), places: TOP });
     if (request.method !== 'POST') return json({ error: 'not found' }, 404);
     const body = await request.json().catch(() => ({}));
     if (route === 'start') return await start(env.DB, request);

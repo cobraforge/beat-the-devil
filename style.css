@@ -263,7 +263,11 @@ body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));trans
 .souls[hidden],.board[hidden]{display:none}
 .board{width:94%;font-size:calc(6px * var(--s));line-height:2;color:var(--bone)}
 .board-head{color:var(--ash);letter-spacing:calc(2px * var(--s));margin-bottom:calc(3px * var(--s))}
-.board ol{list-style:none;margin:0;padding:0}
+/* ten places show at a time (a row is 2em of 6px type); the rest scroll */
+.board ol{position:relative;list-style:none;margin:0;padding:0;max-height:calc(120px * var(--s));overflow-y:auto;overscroll-behavior:contain;
+  touch-action:pan-y;scrollbar-width:thin;scrollbar-color:rgba(255,195,33,.4) transparent}
+.board ol::-webkit-scrollbar{width:calc(3px * var(--s))}
+.board ol::-webkit-scrollbar-thumb{background:rgba(255,195,33,.4);border-radius:2px}
 .board li{display:grid;grid-template-columns:2em minmax(0,1fr) 5em 2.4em 4em 9em;column-gap:.6em;text-align:left;
   background:rgba(14,3,2,.55);padding:0 .5em}
 .board li span{white-space:nowrap;overflow:hidden}
