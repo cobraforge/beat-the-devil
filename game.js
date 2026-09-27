@@ -72,8 +72,6 @@ document.getElementById('tip').innerHTML = STORY + (isTouch
 if (isTouch){
   document.body.classList.add('touch');
   document.getElementById('start-hint').textContent = 'Tap to start';
-  document.getElementById('over-hint').textContent = 'Tap to try again';
-  document.getElementById('win-hint').textContent = 'Tap to play again';
 }
 if (!isTouch) [].forEach.call(document.querySelectorAll('.menubtn'), function(b){ b.textContent = 'Main menu (Esc)'; });
 
@@ -82,13 +80,14 @@ if (!isTouch) [].forEach.call(document.querySelectorAll('.menubtn'), function(b)
 var bests = { 1: 0, 2: 0 };
 try { bests[1] = parseInt(localStorage.getItem('btd.best'), 10) || 0; bests[2] = parseInt(localStorage.getItem('btd.best2'), 10) || 0; } catch(e){}
 function saveBest(level, v){
-  if (!(v > bests[level])) return;
+  if (DEV.on || !(v > bests[level])) return;          // a dev run is not a best
   bests[level] = v;
   try { localStorage.setItem(level === 2 ? 'btd.best2' : 'btd.best', String(v)); } catch(e){}
 }
-// level 2 opens once level 1 has been beaten on this device
-function level2Open(){ try { if (localStorage.getItem('btd.l2') === '1') return true; } catch(e){} return bests[1] > 0; }
-var lastLevel = 1;
+// Dev mode (see the dev section below): its switches, and whether it is on.
+// Set up here because the run's bookkeeping asks it before anything else.
+var DEV = { on: false, god: false, ammo: false, slow: false, badge: 0, lamp: 0, lastT: 0 };
+try { DEV.on = localStorage.getItem('btd.dev') === '1'; } catch(e){}
 
 // ---------- scoring ----------
 // Only a completed run scores: hearts left are worth a thousand each, and
@@ -133,7 +132,8 @@ function worldLoad(){
   })).catch(function(){}).then(renderWorld);
 }
 function worldStart(){
-  WORLD.run = null; WORLD.result = null; WORLD.endP = null; WORLD.naming = false;
+  WORLD.run = null; WORLD.result = null; WORLD.endP = null; WORLD.naming = false; WORLD.runP = null;
+  if (DEV.on) return;                                 // a dev run never reaches the world
   WORLD.runP = api('start', { level: G.level }).then(function(j){ WORLD.run = j.run; }).catch(function(){});
 }
 // outcome 'freed' or 'stolen', sent the moment it is decided; in level 2,
@@ -440,7 +440,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 37;
+  window.BTD_VERSION = 38;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -512,7 +512,6 @@ window.addEventListener('keydown', function(e){
   var lk = k.toLowerCase();
   keys[lk] = true;
   if (lk === 'm'){ toggleMute(); return; }
-  if ((lk === '1' || lk === '2') && G.mode !== 'play'){ tryStart(+lk); return; }
   if (lk === 'escape' && G.mode !== 'play'){ goTitle(); return; }
   if (lk === 'p' || lk === 'escape'){ togglePause(); return; }
   if (space || k === 'Enter'){
@@ -542,7 +541,7 @@ function toLogical(e){
 // picture. A mouse still has to press on the picture itself.
 window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  if (e.target.closest && e.target.closest('.name, .board, .levelbtn, .menubtn')) return;   // the name box, the board and the buttons take their own touches
+  if (e.target.closest && e.target.closest('.name, .board, .menubtn, #dev')) return;   // the name box, the board and the buttons take their own touches
   var onPicture = stage.contains(e.target);
   if (!isTouch && !onPicture) return;
   var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
@@ -621,24 +620,28 @@ var scrOver  = document.getElementById('scr-over');
 var scrWin   = document.getElementById('scr-win');
 
 // level: 1 or 2; nothing given means the level last played
-function tryStart(level){
+// There is no choosing a level: every run starts in the pit, and the only way
+// down to the stolen is to beat him first. From level I's win panel the next
+// step goes down for them; anywhere else (the title, a loss, level II's win)
+// it is the pit again.
+function nextLevel(){ return G.mode === 'won' && G.level === 1 ? 2 : 1; }
+function tryStart(){
   AUDIO.unlock();
   if (WORLD.naming) return;                       // a winner is giving a name
   if (G.mode === 'title' || G.mode === 'over' || G.mode === 'won'){
     if (G.mode !== 'title' && G.endT < 0.9) return;
-    if (level === 2 && !level2Open()) return;
-    startGame(level || (G.mode === 'title' ? 1 : lastLevel));   // the title's own start is level I
+    startGame(nextLevel());
   }
 }
 function startGame(level){
-  lastLevel = level === 2 ? 2 : 1;
-  reset(lastLevel);
+  level = level === 2 ? 2 : 1;
+  reset(level);
   AUDIO.muffle(false);
   G.mode = 'play';
   G.runStart = performance.now();
   scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true;
   closeNameForm();
-  music.play(lastLevel === 2 ? 'stolen' : 'survive');
+  music.play(level === 2 ? 'stolen' : 'survive');
   worldStart();
 }
 // from an end panel back to the title: the pit, the board fresh from the world, and its music
@@ -654,33 +657,79 @@ function goTitle(){
 }
 function showTitle(){
   document.getElementById('hi-title').textContent = (bests[1] ? 'Your best ' + thousands(bests[1]) : '') + (bests[2] ? ' \u00b7 II ' + thousands(bests[2]) : '');
-  levelButtons();
   scrTitle.hidden = false;
 }
-// the level buttons: level 2 on the title (locked until level 1 is beaten),
-// and on the end panels the other level ("Go back down for them" after a win)
-function levelButtons(){
-  var open2 = level2Open(), t = document.getElementById('lvl2-title'), note = document.getElementById('lvl2-note');
-  t.disabled = !open2; t.classList.toggle('locked', !open2);
-  note.textContent = open2 ? (isTouch ? '' : 'or press 2') : 'Beat him once to open it';
-  ['lvl-over', 'lvl-win'].forEach(function(id){
-    var b = document.getElementById(id), other = G.level === 2 ? 1 : 2;
-    b.hidden = other === 2 && !open2;
-    b.setAttribute('data-level', String(other));
-    b.textContent = other === 2 ? (id === 'lvl-win' ? 'Go back down for them' : 'II \u00b7 The Stolen') : 'I \u00b7 The Pit';
-  });
+// what space (or a tap) does from an end panel, said on it
+function endHints(){
+  var go = isTouch ? 'Tap' : 'Press space', down = nextLevel() === 2;
+  document.getElementById('over-hint').textContent = go + (G.level === 2 ? ' to start again from the pit' : ' to try again');
+  document.getElementById('win-hint').textContent = go + (down ? ' to go back down for them' : ' to play again');
 }
-[].forEach.call(document.querySelectorAll('.levelbtn'), function(b){
-  b.addEventListener('click', function(e){ e.stopPropagation(); if (!b.disabled) tryStart(+b.getAttribute('data-level')); });
-});
 [].forEach.call(document.querySelectorAll('.menubtn'), function(b){
   b.addEventListener('click', function(e){ e.stopPropagation(); b.blur(); goTitle(); });
+});
+// ---------- dev mode ----------
+// Five clicks on the cabinet's rainbow badge, then five on its orange power
+// lamp, turn it on; the same knock (or its own button) turns it off. It stays
+// on across reloads on this device. Its switches start either level at once,
+// jump to the boss, kill him, and turn on no damage, endless bolts, slow
+// motion and the frame-time overlay. A dev run never reaches the world board
+// and never becomes a saved best.
+var devPanel = document.getElementById('dev');
+function devRender(){
+  devPanel.hidden = !DEV.on;
+  [].forEach.call(devPanel.querySelectorAll('button'), function(b){
+    var k = b.getAttribute('data-dev');
+    b.classList.toggle('on', !!((k === 'god' && DEV.god) || (k === 'ammo' && DEV.ammo) || (k === 'slow' && DEV.slow) || (k === 'fps' && perfShow)));
+  });
+}
+function devToggle(){
+  DEV.on = !DEV.on;
+  if (!DEV.on){ DEV.god = DEV.ammo = DEV.slow = false; }
+  try { localStorage.setItem('btd.dev', DEV.on ? '1' : '0'); } catch(e){}
+  AUDIO.unlock(); sfx.cageOpen();
+  devRender();
+}
+function devKnock(which){
+  var now = performance.now();
+  if (now - DEV.lastT > 3000){ DEV.badge = 0; DEV.lamp = 0; }   // a pause breaks the knock
+  DEV.lastT = now;
+  if (which === 'badge'){ if (DEV.lamp){ DEV.lamp = 0; DEV.badge = 0; } DEV.badge++; return; }
+  if (DEV.badge < 5){ DEV.badge = 0; DEV.lamp = 0; return; }
+  DEV.lamp++;
+  if (DEV.lamp >= 5){ DEV.badge = 0; DEV.lamp = 0; devToggle(); }
+}
+document.getElementById('badge').addEventListener('click', function(){ devKnock('badge'); });
+document.getElementById('power').addEventListener('click', function(){ devKnock('lamp'); });
+function devStart(level){
+  AUDIO.unlock();
+  closeNameForm();
+  startGame(level);
+}
+devPanel.addEventListener('click', function(e){
+  var b = e.target.closest && e.target.closest('button'); if (!b) return;
+  e.stopPropagation(); b.blur();
+  var k = b.getAttribute('data-dev');
+  if (k === 'l1' || k === 'l2') devStart(k === 'l1' ? 1 : 2);
+  else if (k === 'boss'){ if (G.mode === 'play' && openPhase()) G.surv = Math.max(G.surv, G.SURV - 0.1); }
+  else if (k === 'win'){
+    if (G.mode !== 'play') return;
+    if (G.devil && !G.devil.dying && G.devil.state !== 'wait'){ G.devil.eyes.forEach(function(e2){ e2.dead = true; }); devilDies(); }
+    else if (G.warden && !G.warden.dying && G.warden.state !== 'wait' && G.warden.state !== 'enter'){ G.warden.hits = 2; wardenDies(); }
+  }
+  else if (k === 'god') DEV.god = !DEV.god;
+  else if (k === 'ammo'){ DEV.ammo = !DEV.ammo; if (DEV.ammo && G.mode === 'play') G.ammo = AMMO; }
+  else if (k === 'slow') DEV.slow = !DEV.slow;
+  else if (k === 'fps') perfShow = !perfShow;
+  else if (k === 'off') devToggle();
+  devRender();
 });
 [].forEach.call(document.querySelectorAll('.board-tabs button'), function(b){
   b.addEventListener('click', function(e){ e.stopPropagation(); WORLD.view = +b.getAttribute('data-view'); renderWorld(); });
 });
 showTitle();
 worldLoad();
+devRender();
 // the title's music is asked for at once: a browser that lets a page sound
 // before a tap plays it now; otherwise it comes in on the first touch or key
 // that isn't a start (the board, the level button, Sound on)
@@ -990,7 +1039,7 @@ function devilSpeed(d){ return Math.pow(1.2, d.rage); }
 function fire(){
   var p = G.player;
   if (G.fireCd > 0 || G.ammo <= 0) return;     // empty is just empty
-  G.ammo--;
+  if (!(DEV.on && DEV.ammo)) G.ammo--;               // dev: endless bolts
   G.bolts.push({ x: p.x, y: p.y - 14, vy: -BOLT_SPEED });
   G.fireCd = 0.28;
   G.recoil = 1;
@@ -1246,8 +1295,8 @@ function gameOver(why, quiet){
   document.getElementById('over-why').textContent = why;
   scrOver.classList.toggle('low', !!quiet);
   document.getElementById('over-score').textContent = (G.runSecs != null ? 'You lasted ' + clock(G.runSecs) : '') + (G.level === 2 && G.saved ? ' \u00b7 ' + G.saved + ' freed' : '');
-  document.getElementById('over-hi').textContent = soulsLine() || (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : '');
-  levelButtons();
+  document.getElementById('over-hi').textContent = DEV.on ? 'Dev run \u00b7 not recorded' : (soulsLine() || (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : ''));
+  endHints();
   scrOver.hidden = false;
   if (!quiet) sfx.over();
   setTimeout(function(){ if (G.mode === 'over'){ AUDIO.muffle(false); G.heart.override = -1; music.play('dirge'); } }, quiet ? 2500 : 1000);
@@ -1262,7 +1311,6 @@ function victory(){
   var spare = G.ammo, secs = G.runSecs || 0, saved = G.level === 2 ? G.soulsOut : 0;
   G.score = boardScore(G.lives, secs, saved);
   saveBest(G.level, G.score);
-  if (G.level === 1){ try { localStorage.setItem('btd.l2', '1'); } catch(e){} }   // the way down is open
   document.getElementById('win-big').innerHTML = G.level === 2 ? 'YOU BROUGHT<br>THEM BACK' : 'YOU BEAT<br>THE DEVIL';
   document.getElementById('win-why').innerHTML = G.level === 2
     ? 'They are free.<br>' + (saved ? 'You carried ' + saved + ' of them out yourself.' : 'The lantern freed them. Not your hands.')
@@ -1270,8 +1318,8 @@ function victory(){
       ? ('Two eyes. ' + spare + ' bolt' + (spare > 1 ? 's' : '') + ' to spare.')
       : 'Two eyes. Not a bolt to spare.');
   showWinScore(G.lives, secs, G.score, saved);
-  winHi.textContent = WORLD.endP ? 'Asking the world\u2026' : (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : '');
-  levelButtons();
+  winHi.textContent = DEV.on ? 'Dev run \u00b7 not recorded' : (WORLD.endP ? 'Asking the world\u2026' : (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : ''));
+  endHints();
   scrWin.hidden = false;
   // the server's clock is the one that counts: when it answers, its time and
   // score replace ours, and a place on the board asks for a name
@@ -1779,7 +1827,7 @@ function hits(p, x, y, r){
 // kind: 'fork' (a pitchfork embeds), 'burn' (fire clings), or nothing.
 // hx, hy: where it came from, for the struck side and the fork's angle.
 function hurt(kind, hx, hy, vx, vy){
-  if (G.invuln > 0 || G.mode !== 'play') return;
+  if (G.invuln > 0 || G.mode !== 'play' || (DEV.on && DEV.god)) return;
   var p = G.player;
   G.lives--;
   G.invuln = 2.0;
@@ -5121,6 +5169,7 @@ function draw(){
 
   if (G.mode !== 'title' && !skip('vignette')) drawVignette();
   if (G.mode === 'play' && !skip('hud')) drawHUD();
+  if (DEV.on){ ctx.font = "6px 'Press Start 2P', monospace"; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = col('title', 0.85); ctx.fillText('DEV', 6, LH - 6); }
   if (G.level === 2 && G.intro > 0 && G.mode === 'play') drawIntro2();
   if (G.herald > 0) drawHerald();
   if (G.flash > 0){
@@ -5194,7 +5243,7 @@ function frame(now){
   var frameMs = now - last, t0 = performance.now();
   last = now;
   try {
-    if (!G.paused && !window.BTD_FREEZE) update(dt);   // BTD_FREEZE: debug, holds the state for a screenshot
+    if (!G.paused && !window.BTD_FREEZE) update(DEV.on && DEV.slow ? dt * 0.35 : dt);   // BTD_FREEZE: debug, holds the state for a screenshot
     draw();
   } catch(err){
     PERF.errors++;
