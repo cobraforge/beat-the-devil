@@ -105,7 +105,7 @@ var BRIEF = {
 // like the rest of it. Silent when the game is muted, or with the briefing's
 // Voice button (remembered on the device).
 var VOICE_V = 3;                      // bump when the recordings are re-rendered
-var NARRATOR = { timings: null, rate: 0.97, loading: false };
+var NARRATOR = { timings: null, rate: 0.97, loadP: null };
 // lines spoken outside the briefings, rendered by dev/voice.py like the stories:
 // the narrator's when level I is won, and the Warden's as he comes
 var SPOKEN = {
@@ -121,12 +121,12 @@ function voiceKey(level, page){ return 'l' + level + '-' + page; }
 function voiceUrl(key){ return 'voice/' + key + '.mp3?v=' + VOICE_V; }
 // fetch the lines (a quarter of a megabyte in all), once, after the page is up
 function narratorLoad(){
-  if (NARRATOR.loading || !window.fetch) return;
-  NARRATOR.loading = true;
-  fetch('voice/timings.json?v=' + VOICE_V).then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
+  if (NARRATOR.loadP || !window.fetch) return NARRATOR.loadP;
+  return NARRATOR.loadP = fetch('voice/timings.json?v=' + VOICE_V).then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
     NARRATOR.timings = j;
     if (j) Object.keys(j).forEach(function(k){ AUDIO.narrator.load(k, voiceUrl(k)); });
-  }).catch(function(){});
+    return j;
+  }).catch(function(){ return null; });
 }
 function hush(){ AUDIO.narrator.stop(); }
 var BRIEF_CONTROLS = isTouch ? 'Left thumb on the circle to move\nRight thumb on the button to fire \u00b7 II to pause'
@@ -507,7 +507,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 46;
+  window.BTD_VERSION = 47;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
@@ -710,24 +710,28 @@ function openBrief(level){
   briefRender();
   briefSpeak();
 }
-// the narrator reads the page just turned to (the first with the level's name).
-// If its line is still on its way, the page starts typing without him and he
-// picks it up from the start if the line arrives within a second and a half.
+// The narrator reads the page just turned to (the first with the level's name).
+// She needs three things: the lines' timings, this line, and the sound let in
+// — and on a fresh page the sound only starts a moment after the very press
+// that opened the story. So she waits for all three, and starts the page from
+// its beginning when they are there (if it is still this page, and it has not
+// been waiting more than a few seconds); until then it types without her.
 function briefSpeak(){
-  var B = BRIEF[brief.level], b = brief, page = brief.page, key = voiceKey(brief.level, page);
+  var B = BRIEF[brief.level], b = brief, page = brief.page, key = voiceKey(brief.level, page), asked = performance.now();
   hush(); b.voiced = false; b.segs = null;
   if (page >= B.story.length || AUDIO.isMuted()) return;
   function go(){
-    if (brief !== b || b.page !== page || !NARRATOR.timings || !NARRATOR.timings[key]) return;
+    if (brief !== b || b.page !== page || b.done || AUDIO.isMuted() || performance.now() - asked > 4000) return;
+    if (!NARRATOR.timings || !NARRATOR.timings[key]) return;
     var dur = AUDIO.narrator.play(key, NARRATOR.rate, function(){ if (brief === b && b.page === page){ b.done = true; briefRender(); } });
     if (!dur) return;
     b.voiced = true; b.segs = NARRATOR.timings[key].segs; b.at = performance.now(); b.done = false; b.shown = -1;
   }
-  if (AUDIO.narrator.ready(key)) go();
-  else {
-    var pr = NARRATOR.timings && AUDIO.narrator.load(key, voiceUrl(key));
-    if (pr) pr.then(function(){ if (performance.now() - b.at < 1500) go(); });
-  }
+  if (AUDIO.running() && AUDIO.narrator.ready(key)){ go(); return; }
+  Promise.resolve(narratorLoad())
+    .then(function(){ return NARRATOR.timings ? AUDIO.narrator.load(key, voiceUrl(key)) : null; })
+    .then(function(){ return AUDIO.whenRunning(); })
+    .then(go);
 }
 function briefRender(){
   var B = BRIEF[brief.level], n = B.story.length, onRules = brief.page >= n, go = isTouch ? 'Tap' : 'Press space';
@@ -926,7 +930,7 @@ devPanel.addEventListener('click', function(e){
 showTitle();
 worldLoad();
 devRender();
-setTimeout(narratorLoad, 800);                     // his lines, once the page is up
+narratorLoad();                                    // her lines (a third of a megabyte), fetched at once
 // the title's music is asked for at once: a browser that lets a page sound
 // before a tap plays it now; otherwise it comes in on the first touch or key
 // that isn't a start (the board, its tabs, Sound on)

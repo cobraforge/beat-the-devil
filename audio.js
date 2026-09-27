@@ -1101,6 +1101,16 @@ window.BTD_AUDIO = {
   sfx: sfx,
   music: music,
   unlock: function(){ unlock(); return actx; },
+  // a promise that settles once the sound is let in (at once, if it already is):
+  // a browser starts it only on the first click, tap or key, a moment after it
+  whenRunning: function(){
+    return new Promise(function(res){
+      var a = ctx(); if (!a) return;
+      if (a.state === 'running') return res();
+      var on = function(){ if (a.state === 'running'){ a.removeEventListener('statechange', on); res(); } };
+      a.addEventListener('statechange', on);
+    });
+  },
   running: running,
   fire: { update: fireUpdate },
   meter: meter,
@@ -1123,7 +1133,7 @@ window.BTD_AUDIO = {
     master.gain.setTargetAtTime(on || muted ? 0 : MASTER_GAIN, actx.currentTime, on ? 0.02 : 0.08);
   },
   // the narrator: his recorded lines, loaded, played, stopped
-  narrator: { load: narrLoad, play: narrPlay, stop: narrStop, warden: wardenSay, ready: function(k){ return !!narr.bufs[k]; } }
+  narrator: { load: narrLoad, play: narrPlay, stop: narrStop, warden: wardenSay, ready: function(k){ return !!narr.bufs[k]; }, speaking: function(){ return !!narr.src; } }
 };
 
 })();

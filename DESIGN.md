@@ -599,8 +599,12 @@ speed, with the long reverb around her and a ghost just behind her voice (the
 same voice through a slowly wavering 28 ms delay, darker, at 0.3), the music
 stepping back to a third under her. `voice/timings.json`
 says when each paragraph is spoken and which letters it covers, and the page
-types out in step, paragraph by paragraph. They are fetched once, just after
-the page loads. The narrator is silent when the game is muted (the sound
+types out in step, paragraph by paragraph. They are fetched as the page loads.
+On a fresh page a browser lets sound in only a moment *after* the first
+press — the very press that opens the story — so she waits for the sound and
+her line (`AUDIO.whenRunning()`), then starts the page from its beginning;
+the first version checked once, found no sound yet, and stayed silent until
+the second run. The narrator is silent when the game is muted (the sound
 button is the only switch for her); starting the level, Skip, or the title
 stops her. **She speaks once more**: 1.4 s after level 1's win panel comes up,
 *"You beat the devil. — But it is not over yet. The others he took are still
