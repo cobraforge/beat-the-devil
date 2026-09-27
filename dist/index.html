@@ -372,6 +372,15 @@ body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px
   border-radius:2px;cursor:pointer;
 }
 #mute:hover,#mute:focus-visible{color:var(--heart);border-color:rgba(159,232,255,.7)}
+/* its speaker: waves when the sound is on, a red line across it when off */
+#mute{display:inline-flex;align-items:center;gap:.45em}
+#mute .spk{width:1.35em;height:1.35em;flex:none;overflow:visible}
+#mute .spk .cone{fill:currentColor}
+#mute .spk .wave{fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
+#mute .spk .slash{stroke:#ff3322;stroke-width:1.9;stroke-linecap:round;display:none}
+#mute.off .spk .slash{display:inline}
+#mute.off .spk .wave{display:none}
+#mute.off{color:rgba(199,154,143,.8)}
 :focus-visible{outline:2px solid var(--heart);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.blink{animation:none}}
 </style>
@@ -430,7 +439,7 @@ body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px
         <div class="brief-page" id="brief-page"></div>
         <div class="brief-dots" id="brief-dots"></div>
         <div class="blink" id="brief-hint">Press space to continue</div>
-        <div class="endbtns"><button type="button" class="briefbtn" id="brief-skip">Skip</button><button type="button" class="briefbtn" id="brief-voice" hidden>Voice on</button></div>
+        <div class="endbtns"><button type="button" class="briefbtn" id="brief-skip">Skip</button></div>
       </div>
 
       <div class="screen" id="scr-pause" hidden>
@@ -439,7 +448,7 @@ body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px
         <div class="endbtns"><button type="button" class="pausebtn" id="pause-resume">Resume</button><button type="button" class="pausebtn" id="pause-menu">Main menu</button></div>
       </div>
 
-      <button id="mute" type="button">Sound on</button>
+      <button id="mute" type="button" aria-label="Sound on"><svg class="spk" viewBox="0 0 16 16" aria-hidden="true"><path class="cone" d="M2 6h3l4-3.2v10.4L5 10H2z"/><path class="wave" d="M11 5.6a3.4 3.4 0 0 1 0 4.8"/><path class="wave" d="M12.9 3.7a6 6 0 0 1 0 8.6"/><line class="slash" x1="1.5" y1="14.5" x2="14.5" y2="1.5"/></svg><span class="lbl">Sound on</span></button>
       <button id="pausebtn" type="button" aria-label="Pause" hidden>II</button>
     </div>
     <div id="vents" aria-hidden="true"></div>
@@ -1425,6 +1434,31 @@ function narrPlay(key, rate, onEnd){
   src.start();
   return b.duration / (rate || 1);
 }
+// The Warden's voice: a man's recorded line slowed and dropped (0.8), doubled
+// a shade lower still, torn by a soft clip, darkened, and thrown hard into the
+// long reverb. Its length in seconds, or 0 if it could not play.
+function softClip(k){
+  var n = 1024, c = new Float32Array(n), d = Math.tanh(k);
+  for (var i = 0; i < n; i++){ var x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / d; }
+  return c;
+}
+function wardenSay(key){
+  var b = narr.bufs[key]; if (!b || !running()) return 0;
+  var a = actx, shaper = a.createWaveShaper(), lp = a.createBiquadFilter(), out = a.createGain(), send = a.createGain();
+  shaper.curve = softClip(2.6); lp.type = 'lowpass'; lp.frequency.value = 2300;
+  out.gain.value = 1.05; send.gain.value = 0.55;
+  shaper.connect(lp); lp.connect(out); out.connect(master); out.connect(send); send.connect(reverbGet().input);
+  var slow = 0.775;
+  [[0.8, 0.85], [slow, 0.55]].forEach(function(v){
+    var s = a.createBufferSource(), g = a.createGain();
+    s.buffer = b; s.playbackRate.value = v[0]; g.gain.value = v[1];
+    s.connect(g); g.connect(shaper); s.start();
+  });
+  var dur = b.duration / slow;
+  narrDuck(true);
+  setTimeout(function(){ if (!narr.src) narrDuck(false); }, dur * 1000 + 200);
+  return dur;
+}
 function narrStop(){
   var s = narr.src; if (!s) return;
   narr.src = null;
@@ -1574,7 +1608,7 @@ window.BTD_AUDIO = {
     master.gain.setTargetAtTime(on || muted ? 0 : MASTER_GAIN, actx.currentTime, on ? 0.02 : 0.08);
   },
   // the narrator: his recorded lines, loaded, played, stopped
-  narrator: { load: narrLoad, play: narrPlay, stop: narrStop, ready: function(k){ return !!narr.bufs[k]; } }
+  narrator: { load: narrLoad, play: narrPlay, stop: narrStop, warden: wardenSay, ready: function(k){ return !!narr.bufs[k]; } }
 };
 
 })();
@@ -1686,9 +1720,19 @@ var BRIEF = {
 // game's only recorded sound, and they play through Web Audio (AUDIO.narrator)
 // like the rest of it. Silent when the game is muted, or with the briefing's
 // Voice button (remembered on the device).
-var VOICE_V = 2;                      // bump when the recordings are re-rendered
-var NARRATOR = { on: true, timings: null, rate: 0.97, loading: false };
-try { NARRATOR.on = localStorage.getItem('btd.voice') !== '0'; } catch(e){}
+var VOICE_V = 3;                      // bump when the recordings are re-rendered
+var NARRATOR = { timings: null, rate: 0.97, loading: false };
+// lines spoken outside the briefings, rendered by dev/voice.py like the stories:
+// the narrator's when level I is won, and the Warden's as he comes
+var SPOKEN = {
+  win1: { who: 'narrator', text: 'You beat the devil.\n\nBut it is not over yet. The others he took are still down there.\n\nWe have to save them.' },
+  warden: { who: 'warden', text: 'You will never escape.' }
+};
+// the narrator says a line (not while the game is muted); its length, or 0
+function sayLine(key){
+  if (AUDIO.isMuted() || !AUDIO.narrator.ready(key)) return 0;
+  return AUDIO.narrator.play(key, NARRATOR.rate);
+}
 function voiceKey(level, page){ return 'l' + level + '-' + page; }
 function voiceUrl(key){ return 'voice/' + key + '.mp3?v=' + VOICE_V; }
 // fetch the lines (a quarter of a megabyte in all), once, after the page is up
@@ -2079,7 +2123,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 45;
+  window.BTD_VERSION = 46;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
@@ -2244,11 +2288,18 @@ function toggleMute(){
   }
   AUDIO.unlock();
   AUDIO.setMuted(!AUDIO.isMuted());
-  muteBtn.textContent = AUDIO.isMuted() ? 'Sound off' : 'Sound on';
+  muteLabel();
   if (AUDIO.isMuted()) hush();                      // the narrator too
   if (G.mode === 'title') music.play('title');
 }
 muteBtn.addEventListener('click', function(e){ e.stopPropagation(); toggleMute(); });
+// its label, and its speaker (waves when on, a red line across it when off)
+function muteLabel(){
+  var off = AUDIO.isMuted();
+  muteBtn.querySelector('.lbl').textContent = off ? 'Sound off' : 'Sound on';
+  muteBtn.setAttribute('aria-label', off ? 'Sound off' : 'Sound on');
+  muteBtn.classList.toggle('off', off);
+}
 
 function togglePause(){
   if (G.mode !== 'play') return;
@@ -2272,7 +2323,6 @@ function openBrief(level){
   brief = { level: level, page: 0, at: performance.now(), done: false, shown: -1, voiced: false, segs: null };
   scrBrief.hidden = false;
   if (level === 2) music.play('stolen');           // his dungeon, under the story
-  document.getElementById('brief-voice').hidden = !window.fetch;
   briefRender();
   briefSpeak();
 }
@@ -2282,7 +2332,7 @@ function openBrief(level){
 function briefSpeak(){
   var B = BRIEF[brief.level], b = brief, page = brief.page, key = voiceKey(brief.level, page);
   hush(); b.voiced = false; b.segs = null;
-  if (page >= B.story.length || !NARRATOR.on || AUDIO.isMuted()) return;
+  if (page >= B.story.length || AUDIO.isMuted()) return;
   function go(){
     if (brief !== b || b.page !== page || !NARRATOR.timings || !NARRATOR.timings[key]) return;
     var dur = AUDIO.narrator.play(key, NARRATOR.rate, function(){ if (brief === b && b.page === page){ b.done = true; briefRender(); } });
@@ -2312,7 +2362,6 @@ function briefRender(){
   for (var i = 0; i <= n; i++){ var d = document.createElement('span'); if (i === brief.page) d.className = 'on'; dots.appendChild(d); }
   document.getElementById('brief-hint').textContent = go + (onRules ? ' to begin' : ' to continue');
   document.getElementById('brief-skip').textContent = onRules ? 'Story' : 'Skip';
-  document.getElementById('brief-voice').textContent = NARRATOR.on ? 'Voice on' : 'Voice off';
 }
 // the story types itself out: in step with the narrator, each paragraph over
 // the time he speaks it; without him, 38 letters a second. By the clock, not
@@ -2415,15 +2464,6 @@ function endHints(){
 });
 // the briefing's Skip / Story, and the win panel's way on to level II
 document.getElementById('brief-skip').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); AUDIO.unlock(); briefSkip(); });
-document.getElementById('brief-voice').addEventListener('click', function(e){
-  e.stopPropagation(); this.blur();
-  NARRATOR.on = !NARRATOR.on;
-  try { localStorage.setItem('btd.voice', NARRATOR.on ? '1' : '0'); } catch(err){}
-  if (!brief) return;
-  if (NARRATOR.on && brief.page < BRIEF[brief.level].story.length){ brief.at = performance.now(); brief.done = false; brief.shown = -1; briefSpeak(); }
-  else { hush(); brief.voiced = false; }
-  briefRender();
-});
 document.getElementById('win-next').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); tryStart(); });
 // pausing: the phone's pause button (a keyboard has P and Esc), and the pause screen's buttons
 var pauseBtn = document.getElementById('pausebtn'), pauseShown = false;
@@ -3110,6 +3150,8 @@ function victory(){
   }, function(){ if (G.mode === 'won') winHi.textContent = 'Scoreboard offline \u00b7 your best ' + thousands(bests[G.level]); });
   sfx.win();
   setTimeout(function(){ if (G.mode === 'won') music.play('win'); }, 900);
+  // level I: she tells you it is not over
+  if (G.level === 1) setTimeout(function(){ if (G.mode === 'won' && G.level === 1) sayLine('win1'); }, 1400);
 }
 
 // ---------- update ----------
@@ -4512,11 +4554,18 @@ function updateWarden(dt){
     return;
   }
   if (w.state === 'arrive'){
-    // the fire lights in his helm's slit, then he roars
+    // the fire lights in his helm's slit; then he speaks — his line, in his
+    // voice — or, if it cannot be heard, he roars
     w.eyes = Math.min(1, w.st / 0.4);
     if (!w.lit && w.st > 0.12){ w.lit = true; w.flare = 1; sfx.wardenEyes(); }
-    if (!w.roared && w.st > 0.75){ w.roared = true; sfx.roar(); G.shake = 0.8; w.lamp.om += 3; }
-    if (w.st > 1.8){
+    if (!w.roared && w.st > 0.45){
+      w.roared = true; G.shake = 0.8; w.lamp.om += 3;
+      w.said = AUDIO.isMuted() ? 0 : AUDIO.narrator.warden('warden');
+      if (!w.said) sfx.roar();
+      addText(w.x, w.y + 150, SPOKEN.warden.text.toUpperCase(), COLORS.ember, Math.max(1.6, w.said || 0), 9);
+    }
+    if (w.said && w.st < 0.45 + w.said) w.flare = Math.max(w.flare, 0.8);   // his eyes burn as he speaks
+    if (w.st > Math.max(1.8, 0.45 + (w.said || 0) + 0.4)){
       if (G.ammo + G.bolts.length === 0) w.takeIn = 0.8;   // he can see you have nothing
       wardenAttack(w);
     }

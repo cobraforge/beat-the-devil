@@ -239,7 +239,8 @@ never steers, one that lands on the stick never fires, and a touch anywhere
 else — including on the picture — does nothing at all. Both thumbs work at
 once. The stick's vector is added to the keys' vector, so the speed and every
 movement penalty (rule 2) are the same multipliers on touch as on keys. The
-sound button sits at the top centre, and in play the pause button beside it
+sound button (a speaker with its waves when on, a red line across it when
+off) sits at the top centre, and in play the pause button beside it
 (a phone has no Esc or P); they are buttons, not controls, and a tap on either
 does nothing else. Paused, a tap anywhere but the pause screen's buttons
 resumes. A mouse keeps drag-to-move and click-to-fire, and only on the
@@ -308,11 +309,12 @@ would play differently on a slow phone.
   music at all.
 - **All audio is synthesised**, with one exception. No asset files; Web
   Audio only. Sound counts are capped (thuds 3, fire voices 4) so the mix
-  cannot clip. The exception is the narrator (rule 13): his six story lines
-  are recordings of a neural voice, rendered offline from the game's own text
-  (`dev/voice.py`, `voice/`, a quarter of a megabyte), because no browser's
-  built-in voice was good enough to tell the story. They still play through
-  Web Audio, so mute and pause hold them.
+  cannot clip. The exception is the spoken lines: the narrator's (rule 13)
+  and the Warden's one line (rule 11) are recordings of neural voices,
+  rendered offline from the game's own text (`dev/voice.py`, `voice/`, about
+  a third of a megabyte), because no browser's built-in voice was good enough
+  to tell the story. They still play through Web Audio, so mute and pause hold
+  them.
 - **The palette lives in `style.css`.** JS reads the custom properties once
   (`COLORS`, `col()`); no hardcoded hex in draw calls.
 - **The pit stays dark where the play is.** The arena is the bowels of hell
@@ -461,7 +463,13 @@ keys to every cage at his hip. **His lantern hangs from his left fist** on a
 chain and swings with his movement (a pendulum, like everything that hangs in
 this level), so a shot at it is led; it is the target, shuttered except in its
 open windows (1.9 s, 0.3 s shorter per hit), when he raises it. **Two hits
-break it.** *"You have five bolts. Two are for his lantern."* is said once, on
+break it.** As he arrives, the fire lights in his helm's slit and **he speaks**:
+*"You will never escape."* — a man's recorded line (Piper's "norman") that the
+game slows and drops to 0.8, doubles a shade lower (0.775), tears with a soft
+clip, darkens and throws hard into the long reverb, his eyes burning as he
+says it and the words written under him; he attacks 0.4 s after it ends (if
+the sound is off, or the line is not there, he roars instead, as before).
+*"You have five bolts. Two are for his lantern."* is said once, on
 the level's briefing (rule 13), and never again; once play starts, a grace of
 `STOLEN.INTRO = 1.5` s passes before its hazards. His attacks cycle: his **flail** (the
 chain from his right fist, wound back along its arc through the aim and lock
@@ -592,9 +600,11 @@ same voice through a slowly wavering 28 ms delay, darker, at 0.3), the music
 stepping back to a third under her. `voice/timings.json`
 says when each paragraph is spoken and which letters it covers, and the page
 types out in step, paragraph by paragraph. They are fetched once, just after
-the page loads. The narrator is silent when the game is muted, and the
-briefing's *Voice* button turns her off on the device (`btd.voice`);
-starting the level, Skip, or the title stops her. (The first version used the
+the page loads. The narrator is silent when the game is muted (the sound
+button is the only switch for her); starting the level, Skip, or the title
+stops her. **She speaks once more**: 1.4 s after level 1's win panel comes up,
+*"You beat the devil. — But it is not over yet. The others he took are still
+down there. — We have to save them."* (`SPOKEN.win1`), the NEXT box beside it. (The first version used the
 browser's own speech synthesis; on Windows it was the old desktop voice, and
 it sounded cheap. The second was a man's voice, read flat.)
 

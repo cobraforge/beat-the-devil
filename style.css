@@ -360,5 +360,14 @@ body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px
   border-radius:2px;cursor:pointer;
 }
 #mute:hover,#mute:focus-visible{color:var(--heart);border-color:rgba(159,232,255,.7)}
+/* its speaker: waves when the sound is on, a red line across it when off */
+#mute{display:inline-flex;align-items:center;gap:.45em}
+#mute .spk{width:1.35em;height:1.35em;flex:none;overflow:visible}
+#mute .spk .cone{fill:currentColor}
+#mute .spk .wave{fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
+#mute .spk .slash{stroke:#ff3322;stroke-width:1.9;stroke-linecap:round;display:none}
+#mute.off .spk .slash{display:inline}
+#mute.off .spk .wave{display:none}
+#mute.off{color:rgba(199,154,143,.8)}
 :focus-visible{outline:2px solid var(--heart);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.blink{animation:none}}

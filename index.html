@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=45">
+<link rel="stylesheet" href="style.css?v=46">
 </head>
 <body>
 <div id="wrap">
@@ -65,7 +65,7 @@
         <div class="brief-page" id="brief-page"></div>
         <div class="brief-dots" id="brief-dots"></div>
         <div class="blink" id="brief-hint">Press space to continue</div>
-        <div class="endbtns"><button type="button" class="briefbtn" id="brief-skip">Skip</button><button type="button" class="briefbtn" id="brief-voice" hidden>Voice on</button></div>
+        <div class="endbtns"><button type="button" class="briefbtn" id="brief-skip">Skip</button></div>
       </div>
 
       <div class="screen" id="scr-pause" hidden>
@@ -74,7 +74,7 @@
         <div class="endbtns"><button type="button" class="pausebtn" id="pause-resume">Resume</button><button type="button" class="pausebtn" id="pause-menu">Main menu</button></div>
       </div>
 
-      <button id="mute" type="button">Sound on</button>
+      <button id="mute" type="button" aria-label="Sound on"><svg class="spk" viewBox="0 0 16 16" aria-hidden="true"><path class="cone" d="M2 6h3l4-3.2v10.4L5 10H2z"/><path class="wave" d="M11 5.6a3.4 3.4 0 0 1 0 4.8"/><path class="wave" d="M12.9 3.7a6 6 0 0 1 0 8.6"/><line class="slash" x1="1.5" y1="14.5" x2="14.5" y2="1.5"/></svg><span class="lbl">Sound on</span></button>
       <button id="pausebtn" type="button" aria-label="Pause" hidden>II</button>
     </div>
     <div id="vents" aria-hidden="true"></div>
@@ -108,7 +108,7 @@
 <!-- the touch controls: drawn here, outside the picture -->
 <canvas id="ctl" aria-hidden="true"></canvas>
 
-<script src="audio.js?v=45"></script>
-<script src="game.js?v=45"></script>
+<script src="audio.js?v=46"></script>
+<script src="game.js?v=46"></script>
 </body>
 </html>

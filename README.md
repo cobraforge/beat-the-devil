@@ -242,8 +242,10 @@ time, then what to do and the controls (DESIGN.md rule 13). From the title it
 opens level 1's; after level 1 is won, the win panel shows **NEXT · LEVEL II ·
 THE STOLEN** and space (or a tap on it) opens level 2's. A **narrator** reads
 each story page aloud (recordings of a neural voice, the music stepping back
-under her); the page types out in step with her. *Skip* jumps to the rules, *Story* goes back, *Voice* turns the
-narrator off. The story plays every run: from a loss or level 2's win, space
+under her); the page types out in step with her. *Skip* jumps to the rules, *Story* goes back; the sound button
+silences her with everything else. She speaks again when level 1 is won: you
+beat the devil, but it is not over — the others are still down there. The
+story plays every run: from a loss or level 2's win, space
 goes back to the main menu, and a new run starts there. The words are in
 `BRIEF` in `game.js`.
 
@@ -339,7 +341,8 @@ BTD_API_SIM.sql('SELECT * FROM runs')
   drawn on their own layer, `#ctl`, a strip around the two controls redrawn
   only when it changes. A mouse still drags and clicks on the picture.
 - **Layout.** On screens under 600 px the bezel goes and the glass takes the
-  whole width; on touch the sound button sits at the top centre.
+  whole width; on touch the sound button sits at the top centre. Its speaker
+  shows the state: waves when on, a red line across it when off.
 - **Performance.** Touch devices cap the device pixel ratio at 1.5. Three
   quality tiers (`QUALITY` in `game.js`: full, medium, low) trade heat
   shimmer, smoke, glow sprites, particle share, flame edge detail, fire
@@ -358,27 +361,33 @@ BTD_API_SIM.sql('SELECT * FROM runs')
 - `game.js`    — the game: heartbeat clock, fire renderer, input, hazards, devil AI, endings, rendering
 - `build.py`   — bundles everything into `dist/index.html`; `dist/` is the deployable site root
 - `dev/bot.js` — the imperfect playtest bot; `dev/perf.py` — frame-time measurement under throttling
-- `voice/`     — the narrator's six story lines (MP3) and `timings.json`; `dev/voice.py` renders them
+- `voice/`     — the spoken lines (MP3: the narrator's and the Warden's) and `timings.json`; `dev/voice.py` renders them
 
 No build step. Plain HTML/CSS/JS; all audio is synthesised at runtime except
 the narrator's lines (below).
 
 ## The narrator's voice
 
-The story pages are read by a neural voice: [Piper](https://github.com/rhasspy/piper)
-(open-source text-to-speech, MIT) with its `en_GB-cori-high` voice (a British
-woman's, public domain, trained on LibriVox audiobook readings), read with a
-little more life than the default and a held pause before each page's last
-line; the game plays her with some reverb and a faint ghost behind her voice. `dev/voice.py` reads the
-story out of `BRIEF` in `game.js`, renders each page (the first with the
-level's spoken name) and writes `voice/l<level>-<page>.mp3` and
-`voice/timings.json` (when each paragraph is spoken, for the typing). After
-changing the story, re-render and bump `VOICE_V` in `game.js`:
+The spoken lines are neural voices made with [Piper](https://github.com/rhasspy/piper)
+(open-source text-to-speech, MIT). The narrator is its `en_GB-cori-high` voice
+(a British woman's, public domain, trained on LibriVox audiobook readings),
+read with a little more life than the default and a held pause before each
+page's last line; the game plays her with some reverb and a faint ghost
+behind her voice. The Warden is `en_US-norman-medium` (a man's, public
+domain), which the game slows, drops, doubles, distorts and drowns in reverb.
+`dev/voice.py` reads the lines out of `game.js` — the story pages from `BRIEF`
+(the first of each level with its spoken name) and the rest from `SPOKEN` —
+and writes `voice/<key>.mp3` and `voice/timings.json` (each line's length and,
+for story pages, when each paragraph is spoken, for the typing). After
+changing a line, re-render it and bump `VOICE_V` in `game.js`:
 
 ```
 pip install soundfile numpy
-python dev/voice.py --piper path/to/piper.exe --model path/to/en_GB-cori-high.onnx
+python dev/voice.py --piper path/to/piper.exe --model path/to/en_GB-cori-high.onnx --warden path/to/en_US-norman-medium.onnx --only win1
 ```
+
+Piper reads a little differently each time, so `--only` re-renders just the
+lines named and keeps every other take as it is.
 
 Piper and the voice model are downloads kept outside the project (see the top
 of `dev/voice.py`). `build.py` copies `voice/` into `dist/`.

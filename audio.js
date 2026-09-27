@@ -949,6 +949,31 @@ function narrPlay(key, rate, onEnd){
   src.start();
   return b.duration / (rate || 1);
 }
+// The Warden's voice: a man's recorded line slowed and dropped (0.8), doubled
+// a shade lower still, torn by a soft clip, darkened, and thrown hard into the
+// long reverb. Its length in seconds, or 0 if it could not play.
+function softClip(k){
+  var n = 1024, c = new Float32Array(n), d = Math.tanh(k);
+  for (var i = 0; i < n; i++){ var x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / d; }
+  return c;
+}
+function wardenSay(key){
+  var b = narr.bufs[key]; if (!b || !running()) return 0;
+  var a = actx, shaper = a.createWaveShaper(), lp = a.createBiquadFilter(), out = a.createGain(), send = a.createGain();
+  shaper.curve = softClip(2.6); lp.type = 'lowpass'; lp.frequency.value = 2300;
+  out.gain.value = 1.05; send.gain.value = 0.55;
+  shaper.connect(lp); lp.connect(out); out.connect(master); out.connect(send); send.connect(reverbGet().input);
+  var slow = 0.775;
+  [[0.8, 0.85], [slow, 0.55]].forEach(function(v){
+    var s = a.createBufferSource(), g = a.createGain();
+    s.buffer = b; s.playbackRate.value = v[0]; g.gain.value = v[1];
+    s.connect(g); g.connect(shaper); s.start();
+  });
+  var dur = b.duration / slow;
+  narrDuck(true);
+  setTimeout(function(){ if (!narr.src) narrDuck(false); }, dur * 1000 + 200);
+  return dur;
+}
 function narrStop(){
   var s = narr.src; if (!s) return;
   narr.src = null;
@@ -1098,7 +1123,7 @@ window.BTD_AUDIO = {
     master.gain.setTargetAtTime(on || muted ? 0 : MASTER_GAIN, actx.currentTime, on ? 0.02 : 0.08);
   },
   // the narrator: his recorded lines, loaded, played, stopped
-  narrator: { load: narrLoad, play: narrPlay, stop: narrStop, ready: function(k){ return !!narr.bufs[k]; } }
+  narrator: { load: narrLoad, play: narrPlay, stop: narrStop, warden: wardenSay, ready: function(k){ return !!narr.bufs[k]; } }
 };
 
 })();
