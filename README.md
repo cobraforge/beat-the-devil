@@ -9,7 +9,8 @@ whole run, and two of them are for his eyes.
 
 - **Five bolts, no refills.** A bolt that misses is gone. A bolt that kills a
   pitchfork is gone too. Nothing stops you spending all five; the title card's
-  "two are for his eyes" is the only warning you get.
+  "two are for his eyes" (repeated on the level's briefing) is the only
+  warning you get.
 - **One bolt per eye.** In the fight he opens one eye at a time, briefly, and
   sways: lead your shot. A bolt into a shut eye or the brow is wasted.
 - At zero bolts with an eye still open, he takes it. One bolt and two eyes is
@@ -233,6 +234,16 @@ into the light) serve both. The Warden's body is drawn once into two sprites
 at the canvas's resolution (behind his arms and in front of them); his arms,
 eyes, lantern and flail are drawn live. The music is `stolen` (the souls'
 music box heard through the bars) and `warden` (a march in iron).
+
+## The briefings
+
+Before each level, a **briefing**: the level's story typed out a page at a
+time, then what to do and the controls (DESIGN.md rule 13). From the title it
+opens level 1's; after level 1 is won, the win panel shows **NEXT · LEVEL II ·
+THE STOLEN** and space (or a tap on it) opens level 2's. The story shows the
+first time on a device and after that the briefing opens on its rules (with a
+*Story* button to read it again); *Skip* jumps to the rules. A retry after a
+loss goes straight in. The words are in `BRIEF` in `game.js`.
 
 ## Pause, the menu, the version
 

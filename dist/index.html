@@ -314,10 +314,34 @@ body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px
 /* the end panels: the way back to the title */
 .endbtns{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(8px * var(--s))}
 .endbtns[hidden]{display:none}
-.menubtn,.pausebtn{font-family:inherit;font-size:max(10px, calc(8px * var(--s)));letter-spacing:1px;cursor:pointer;
+.menubtn,.pausebtn,.briefbtn{font-family:inherit;font-size:max(10px, calc(8px * var(--s)));letter-spacing:1px;cursor:pointer;
   padding:calc(6px * var(--s)) calc(12px * var(--s));color:var(--ash);background:rgba(14,3,2,.65);
   border:1px solid rgba(199,154,143,.4);border-radius:2px;touch-action:manipulation}
-.menubtn:hover,.menubtn:focus-visible,.pausebtn:hover,.pausebtn:focus-visible{border-color:var(--bone);color:var(--bone)}
+.menubtn:hover,.menubtn:focus-visible,.pausebtn:hover,.pausebtn:focus-visible,.briefbtn:hover,.briefbtn:focus-visible{border-color:var(--bone);color:var(--bone)}
+/* the briefing before a level: its story, typed out a page at a time, then what to do */
+#scr-brief{gap:calc(12px * var(--s));background:rgba(8,2,3,.86)}
+.brief-level{font-size:calc(9px * var(--s));color:var(--title);letter-spacing:calc(2px * var(--s));
+  text-shadow:0 0 calc(8px * var(--s)) rgba(255,90,31,.6)}
+.brief-page{font-size:calc(8px * var(--s));color:var(--bone);line-height:2.1;white-space:pre-line;
+  min-height:calc(150px * var(--s));max-width:92%;display:flex;flex-direction:column;justify-content:center}
+.brief-page.rules{white-space:normal;text-align:left;line-height:1.75;font-size:calc(7px * var(--s))}
+.brief-how{text-align:center;color:var(--sulfur);margin-bottom:calc(8px * var(--s));letter-spacing:calc(2px * var(--s))}
+.brief-page ul{margin:0;padding-left:1.3em}
+.brief-page li{margin-bottom:calc(6px * var(--s))}
+.brief-page li::marker{color:var(--title)}
+.brief-controls{margin-top:calc(8px * var(--s));text-align:center;color:var(--ash);font-size:calc(6px * var(--s));line-height:1.8}
+.brief-dots{display:flex;gap:calc(6px * var(--s))}
+.brief-dots span{width:calc(5px * var(--s));height:calc(5px * var(--s));border-radius:50%;border:1px solid var(--ash)}
+.brief-dots span.on{background:var(--title);border-color:var(--title)}
+/* the win panel's way on to level II: plain to see, and a tap on it goes */
+.nextlvl{display:flex;flex-direction:column;align-items:center;gap:calc(3px * var(--s));cursor:pointer;touch-action:manipulation;
+  font-family:inherit;padding:calc(7px * var(--s)) calc(14px * var(--s));background:rgba(20,4,2,.75);
+  border:1px solid rgba(255,90,31,.7);border-radius:2px;box-shadow:0 0 calc(12px * var(--s)) rgba(255,90,31,.35)}
+.nextlvl[hidden]{display:none}
+.nextlvl:hover,.nextlvl:focus-visible{border-color:var(--title)}
+.nextlvl-head{font-size:calc(6px * var(--s));color:var(--ash);letter-spacing:calc(2px * var(--s))}
+.nextlvl-name{font-size:calc(11px * var(--s));color:var(--title);text-shadow:0 0 calc(8px * var(--s)) rgba(255,90,31,.7)}
+.nextlvl-sub{font-size:calc(6px * var(--s));color:var(--bone);opacity:.85;line-height:1.7}
 #pause-resume{color:var(--heart);border-color:rgba(159,232,255,.55)}
 /* the version, in the title's bottom-left corner */
 .ver{position:absolute;left:calc(8px * var(--s));bottom:calc(6px * var(--s));font-size:calc(5.5px * var(--s));color:var(--ash);opacity:.7;letter-spacing:1px}
@@ -391,8 +415,21 @@ body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px
           <input id="name-in" name="name" maxlength="12" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="done">
           <div class="name-btns"><button type="submit">Save</button><button type="button" id="name-skip">Skip</button></div>
         </form>
+        <button type="button" class="nextlvl" id="win-next" hidden>
+          <span class="nextlvl-head">NEXT &middot; LEVEL II</span>
+          <span class="nextlvl-name">THE STOLEN</span>
+          <span class="nextlvl-sub">You were not the first he beat.<br>The others are still down there.</span>
+        </button>
         <div class="blink" id="win-hint">Press space to play again</div>
         <div class="endbtns" id="win-btns"><button type="button" class="menubtn">Main menu</button></div>
+      </div>
+
+      <div class="screen" id="scr-brief" hidden>
+        <div class="brief-level" id="brief-level"></div>
+        <div class="brief-page" id="brief-page"></div>
+        <div class="brief-dots" id="brief-dots"></div>
+        <div class="blink" id="brief-hint">Press space to continue</div>
+        <div class="endbtns"><button type="button" class="briefbtn" id="brief-skip">Skip</button></div>
       </div>
 
       <div class="screen" id="scr-pause" hidden>
@@ -1532,6 +1569,36 @@ resize();
 // the version the title shows; bump it with each release (BTD_VERSION counts builds)
 var GAME_VERSION = '1.0';
 document.getElementById('ver').textContent = 'v' + GAME_VERSION;
+// ---------- the briefings ----------
+// Before each level: its story, typed out a page at a time, then what to do.
+// The story shows the first time on a device; after that the briefing opens
+// on its rules (the story is a button away). Space, a click or a tap goes on.
+var BRIEF = {
+  1: { head: 'LEVEL I \u00b7 THE PIT', seen: 'btd.seen1', story: [
+        'The shop was not there last week.\nA narrow door, a dusty window,\nand one game on the shelf\nwith no price on it.',
+        'You played it all night.\nThen the next night.\nYour friends stopped calling.\nYou stopped noticing.',
+        'Tonight the screen is different.\nThe white heart on it beats\nwhen your own heart beats.\n\nIt is yours. And he wants it.'
+      ],
+      how: 'HOW TO BEAT HIM', rules: [
+        'Survive the pitchforks and the hellfire until he comes.',
+        'Then put a bolt through each of his eyes, only while it is open.',
+        'You have five bolts for the whole run. Two are for his eyes.'
+      ] },
+  2: { head: 'LEVEL II \u00b7 THE STOLEN', seen: 'btd.seen2', story: [
+        'The light came down for your heart.\nIt would not take you alone.',
+        'You were not the first to play.\nBelow the pit is his dungeon,\nand the ones he beat before you\nhang there in cages.',
+        'Seven stolen souls.\nHis Warden keeps the keys.\n\nGo back down for them.'
+      ],
+      how: 'HOW TO FREE THEM', rules: [
+        'Hold still beside a cage to open it. The soul follows you.',
+        'Carry up to three up into the light at the top.',
+        'A hit drags every soul you carry back into a cage.',
+        'Dodge the burning chains and the knights on the floor. A chain can smash a cage open for you.',
+        'When the Warden comes, shoot his lantern while it is open. You have five bolts. Two are for his lantern.'
+      ] }
+};
+var BRIEF_CONTROLS = isTouch ? 'Left thumb on the circle to move\nRight thumb on the button to fire \u00b7 II to pause'
+                             : 'Arrows / WASD to move \u00b7 Space to fire\nP to pause \u00b7 M to mute';
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
 document.getElementById('tip').innerHTML = STORY + (isTouch
   ? 'Left thumb on the circle to move<br>Right thumb on the button to fire'
@@ -1908,7 +1975,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 40;
+  window.BTD_VERSION = 41;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
 }
 
@@ -1980,6 +2047,7 @@ window.addEventListener('keydown', function(e){
   var lk = k.toLowerCase();
   keys[lk] = true;
   if (lk === 'm'){ toggleMute(); return; }
+  if (lk === 'escape' && G.mode === 'brief'){ if (brief && brief.page < BRIEF[brief.level].story.length) briefSkip(); else toTitle(); return; }
   if (lk === 'escape' && G.mode !== 'play'){ goTitle(); return; }
   if (lk === 'q' && G.paused){ toTitle(); return; }            // from the pause screen, the main menu
   if (lk === 'p' || lk === 'escape'){ togglePause(); return; }
@@ -2010,7 +2078,7 @@ function toLogical(e){
 // picture. A mouse still has to press on the picture itself.
 window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  if (e.target.closest && e.target.closest('.name, .board, .menubtn, .pausebtn, #pausebtn, #dev')) return;   // the name box, the board and the buttons take their own touches
+  if (e.target.closest && e.target.closest('.name, .board, .menubtn, .pausebtn, .briefbtn, .nextlvl, #pausebtn, #dev')) return;   // the name box, the board and the buttons take their own touches
   var onPicture = stage.contains(e.target);
   if (!isTouch && !onPicture) return;
   var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
@@ -2088,6 +2156,61 @@ function togglePause(){
 var scrTitle = document.getElementById('scr-title');
 var scrOver  = document.getElementById('scr-over');
 var scrWin   = document.getElementById('scr-win');
+var scrBrief = document.getElementById('scr-brief'), brief = null;
+function openBrief(level){
+  var B = BRIEF[level], seen = false;
+  try { seen = localStorage.getItem(B.seen) === '1'; } catch(e){}
+  reset(level); G.mode = 'brief';
+  scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true;
+  closeNameForm();
+  brief = { level: level, page: seen ? B.story.length : 0, at: performance.now(), done: false, shown: -1 };
+  scrBrief.hidden = false;
+  if (level === 2) music.play('stolen');           // his dungeon, under the story
+  briefRender();
+}
+function briefRender(){
+  var B = BRIEF[brief.level], n = B.story.length, onRules = brief.page >= n, go = isTouch ? 'Tap' : 'Press space';
+  document.getElementById('brief-level').textContent = B.head;
+  var pg = document.getElementById('brief-page');
+  pg.classList.toggle('rules', onRules);
+  if (onRules){
+    pg.textContent = '';
+    var h = document.createElement('div'); h.className = 'brief-how'; h.textContent = B.how; pg.appendChild(h);
+    var ul = document.createElement('ul');
+    B.rules.forEach(function(r){ var li = document.createElement('li'); li.textContent = r; ul.appendChild(li); });
+    pg.appendChild(ul);
+    var c = document.createElement('div'); c.className = 'brief-controls'; c.style.whiteSpace = 'pre-line'; c.textContent = BRIEF_CONTROLS; pg.appendChild(c);
+  } else pg.textContent = brief.done ? B.story[brief.page] : B.story[brief.page].slice(0, Math.max(0, brief.shown));
+  var dots = document.getElementById('brief-dots'); dots.textContent = '';
+  for (var i = 0; i <= n; i++){ var d = document.createElement('span'); if (i === brief.page) d.className = 'on'; dots.appendChild(d); }
+  document.getElementById('brief-hint').textContent = go + (onRules ? ' to begin' : ' to continue');
+  document.getElementById('brief-skip').textContent = onRules ? 'Story' : 'Skip';
+}
+// the story types itself out, 38 letters a second by the clock (not the frame rate)
+function briefTick(){
+  if (!brief || brief.done) return;
+  var B = BRIEF[brief.level];
+  if (brief.page >= B.story.length){ brief.done = true; return; }
+  var full = B.story[brief.page].length, n = Math.min(full, Math.floor((performance.now() - brief.at) / 1000 * 38));
+  if (n >= full) brief.done = true;
+  if (n !== brief.shown || brief.done){ brief.shown = n; briefRender(); }
+}
+function briefPage(pg){ brief.page = pg; brief.at = performance.now(); brief.done = false; brief.shown = -1; briefRender(); }
+// on: a page still typing finishes; a finished one turns; the rules begin the level
+function briefNext(){
+  if (!brief || performance.now() - brief.at < 200) return;
+  var B = BRIEF[brief.level], n = B.story.length;
+  if (brief.page < n && !brief.done){ brief.done = true; briefRender(); return; }
+  if (brief.page < n){ briefPage(brief.page + 1); return; }
+  try { localStorage.setItem(B.seen, '1'); } catch(e){}
+  startGame(brief.level);
+}
+// the story skipped to the rules, or the rules back to the story
+function briefSkip(){
+  if (!brief) return;
+  var n = BRIEF[brief.level].story.length;
+  briefPage(brief.page < n ? n : 0);
+}
 
 // level: 1 or 2; nothing given means the level last played
 // There is no choosing a level: every run starts in the pit, and the only way
@@ -2098,9 +2221,12 @@ function nextLevel(){ return G.mode === 'won' && G.level === 1 ? 2 : 1; }
 function tryStart(){
   AUDIO.unlock();
   if (WORLD.naming) return;                       // a winner is giving a name
+  if (G.mode === 'brief'){ briefNext(); return; }
   if (G.mode === 'title' || G.mode === 'over' || G.mode === 'won'){
     if (G.mode !== 'title' && G.endT < 0.9) return;
-    startGame(nextLevel());
+    if (G.mode === 'title') openBrief(1);         // the story first, from the title
+    else if (nextLevel() === 2) openBrief(2);     // and on the way down to the stolen
+    else startGame(1);                            // a retry goes straight back in
   }
 }
 function startGame(level){
@@ -2109,7 +2235,7 @@ function startGame(level){
   AUDIO.muffle(false);
   G.mode = 'play';
   G.runStart = performance.now();
-  scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true;
+  scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true; scrBrief.hidden = true; brief = null;
   closeNameForm();
   music.play(level === 2 ? 'stolen' : 'survive');
   worldStart();
@@ -2123,6 +2249,7 @@ function goTitle(){
 function toTitle(){
   G.paused = false;
   document.getElementById('scr-pause').hidden = true;
+  scrBrief.hidden = true; brief = null;
   reset(1);
   AUDIO.muffle(false);
   scrOver.hidden = true; scrWin.hidden = true;
@@ -2139,11 +2266,15 @@ function showTitle(){
 function endHints(){
   var go = isTouch ? 'Tap' : 'Press space', down = nextLevel() === 2;
   document.getElementById('over-hint').textContent = go + (G.level === 2 ? ' to start again from the pit' : ' to try again');
-  document.getElementById('win-hint').textContent = go + (down ? ' to go back down for them' : ' to play again');
+  document.getElementById('win-hint').textContent = go + (down ? ' to continue to Level II' : ' to play again');
+  document.getElementById('win-next').hidden = !down;
 }
 [].forEach.call(document.querySelectorAll('.menubtn'), function(b){
   b.addEventListener('click', function(e){ e.stopPropagation(); b.blur(); goTitle(); });
 });
+// the briefing's Skip / Story, and the win panel's way on to level II
+document.getElementById('brief-skip').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); AUDIO.unlock(); briefSkip(); });
+document.getElementById('win-next').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); tryStart(); });
 // pausing: the phone's pause button (a keyboard has P and Esc), and the pause screen's buttons
 var pauseBtn = document.getElementById('pausebtn'), pauseShown = false;
 pauseBtn.addEventListener('click', function(e){ e.stopPropagation(); pauseBtn.blur(); AUDIO.unlock(); if (G.mode === 'play' && !G.paused) togglePause(); });
@@ -3538,7 +3669,7 @@ function makeLightning(){
 // lantern. Everything else — bolts, hearts, the penalty, the telegraphs,
 // the two-hazard cap — is level 1's.
 // =====================================================================
-var STOLEN = { SOULS: 7, HANG: 4, CARRY: 3, OPEN_T: 1.0, OPEN_R: 30, SLOW: 0.06, SHAFT_W: 88, SHAFT_REACH: 44, INTRO: 4.0 };
+var STOLEN = { SOULS: 7, HANG: 4, CARRY: 3, OPEN_T: 1.0, OPEN_R: 30, SLOW: 0.06, SHAFT_W: 88, SHAFT_REACH: 44, INTRO: 1.5 };
 function openPhase(){ return G.phase === 'survive' || G.phase === 'rescue'; }
 function stolenReset(){
   G.cages = []; G.carried = []; G.rising = []; G.shades = []; G.comers = [];
@@ -5349,21 +5480,6 @@ function drawWardenBeam(w){
 function drawCagedEnd(){
   var c = G.cagedEnd, p = G.player;
   drawCage({ x: p.x, y: c.y, soul: false, lock: 0, shake: c.slam ? 0.2 : 0, sway: 0 });
-}
-// the level's card, once, as it begins
-function drawIntro2(){
-  var t = STOLEN.INTRO - G.intro, a = Math.min(1, t / 0.5) * Math.min(1, G.intro / 0.8);
-  ctx.save();
-  ctx.globalAlpha = a;
-  ctx.fillStyle = 'rgba(8,2,2,.6)'; ctx.fillRect(0, LH * 0.33, LW, 118);
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = "16px 'Press Start 2P', monospace"; ctx.fillStyle = COLORS.title;
-  ctx.fillText('THE STOLEN', LW/2, LH * 0.33 + 22);
-  ctx.font = "7px 'Press Start 2P', monospace"; ctx.fillStyle = COLORS.bone;
-  ['The light will not take you alone.', 'Free them. Carry them up into it.', 'You have five bolts.', 'Two are for his lantern.'].forEach(function(line, i){
-    ctx.fillText(line, LW/2, LH * 0.33 + 48 + i * 15 + (i > 1 ? 6 : 0));
-  });
-  ctx.restore();
 }
 // seven small hearts under the lives: freed (bright), carried (with you), still caged (outline)
 function drawSoulTally(){
@@ -7737,7 +7853,6 @@ function draw(){
   if (G.mode !== 'title' && !skip('vignette')) drawVignette();
   if (G.mode === 'play' && !skip('hud')) drawHUD();
   if (DEV.on){ ctx.font = "6px 'Press Start 2P', monospace"; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = col('title', 0.85); ctx.fillText('DEV', 6, LH - 6); }
-  if (G.level === 2 && G.intro > 0 && G.mode === 'play') drawIntro2();
   if (G.herald > 0) drawHerald();
   if (G.flash > 0){
     ctx.fillStyle = 'rgba(255,42,0,' + (G.flash * 0.4) + ')';
@@ -7817,6 +7932,7 @@ function frame(now){
   }
   if (isTouch) drawControls();
   pauseUI();
+  if (brief) briefTick();
   perfPush(frameMs, performance.now() - t0);
   adapt(frameMs);
   if (perfShow) drawPerf();

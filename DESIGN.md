@@ -16,8 +16,9 @@ The arena is a logical 420×640 canvas (`LW`, `LH`), floor at `LH - 8`.
 **Rule.** `AMMO = 5`, no reserve, no lockout. All five can be spent in the
 survive phase. The devil needs a bolt through each eye, so a player who
 arrives with fewer than two cannot win — and nothing stops them. The only
-warning is the title card: *"You have five bolts. Two are for his eyes."*
-That line is never repeated during play: no pips changing colour, no "save
+warning is the title card, and the same line on the level's briefing (rule
+13): *"You have five bolts. Two are for his eyes."* It is never repeated
+during play: no pips changing colour, no "save
 two", no click when the fourth is fired.
 
 **Why.** An earlier version reserved two bolts (`RESERVE = 2`) and refused to
@@ -448,8 +449,9 @@ keys to every cage at his hip. **His lantern hangs from his left fist** on a
 chain and swings with his movement (a pendulum, like everything that hangs in
 this level), so a shot at it is led; it is the target, shuttered except in its
 open windows (1.9 s, 0.3 s shorter per hit), when he raises it. **Two hits
-break it.** *"You have five bolts. Two are for his lantern."* is said once, at
-the start of the level, and never again. His attacks cycle: his **flail** (the
+break it.** *"You have five bolts. Two are for his lantern."* is said once, on
+the level's briefing (rule 13), and never again; once play starts, a grace of
+`STOLEN.INTRO = 1.5` s passes before its hazards. His attacks cycle: his **flail** (the
 chain from his right fist, wound back along its arc through the aim and lock
 and let fly, 110–520 px long, swinging 2.6 s — he stands still while it is
 out); his **lantern beam** (the lantern gathers its light for 0.9 s while a
@@ -534,6 +536,42 @@ under 600 px, so it is a computer's or a tablet's.
 **In code.** `DEV`, `devKnock()`, `devToggle()`, `devRender()`, the `#dev`
 panel in `index.html`; `G.dev` is set in `reset()` and by `devToggle()`, and
 `worldStart()`, `runOver()` and `saveBest()` check it.
+
+---
+
+## 13. A briefing before each level
+
+**Rule.** Every run from the title opens on level 1's **briefing**, and the way
+down from level 1's win opens on level 2's: a panel with the level's name, its
+story typed out a page at a time (38 letters a second, by the clock), then a
+page of what to do — the level's rules in a few lines and the controls for this
+device. Space, a click or a tap finishes a page still typing, turns a finished
+one, and on the last page begins the level; *Skip* jumps to the rules, *Story*
+goes back to the start, and Esc does the first (and from the rules, goes to the
+title). The story shows the first time on a device (`btd.seen1`, `btd.seen2`);
+after that the briefing opens on its rules. **A retry skips the briefing**: from
+a loss (or level 2's win) the next run starts at once. Level 1's win panel says
+plainly what comes next — a boxed *NEXT · LEVEL II · THE STOLEN* with a line of
+the story, which a tap follows, and *continue to Level II* on its hint.
+
+**The story.** Level 1: a game in a shop that was not there last week; nights
+lost to it, friends drifting off; tonight the white heart on the screen beats
+with your own, and he wants it. Level 2: the light would not take you alone;
+you were not the first to play, and the ones he beat before you hang in his
+dungeon — seven stolen souls, and his Warden keeps the keys. It is told to
+*you*, the player, and names no one; rule 9's no-references rule holds.
+
+**Why.** A new player met the pit with no idea what it was for, and level 2
+began with a four-second card over live play that could not teach its new
+rules (cages, carrying, the light, the lantern). A briefing tells the story
+and the rules before anything can hurt you; the story is what gives the heart
+its weight (it is yours), and it gives level 2 its reason (you go back down for
+them). It shows once per device because a story read twice is a wall, and a
+retry skips it because a retry has to be instant.
+
+**In code.** `BRIEF`, `BRIEF_CONTROLS`, `openBrief()`, `briefRender()`,
+`briefTick()`, `briefNext()`, `briefSkip()`, `G.mode = 'brief'`, `tryStart()`;
+`#scr-brief` and `#win-next` in `index.html`.
 
 ---
 

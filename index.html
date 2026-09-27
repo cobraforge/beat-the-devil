@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=41">
 </head>
 <body>
 <div id="wrap">
@@ -51,8 +51,21 @@
           <input id="name-in" name="name" maxlength="12" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="done">
           <div class="name-btns"><button type="submit">Save</button><button type="button" id="name-skip">Skip</button></div>
         </form>
+        <button type="button" class="nextlvl" id="win-next" hidden>
+          <span class="nextlvl-head">NEXT &middot; LEVEL II</span>
+          <span class="nextlvl-name">THE STOLEN</span>
+          <span class="nextlvl-sub">You were not the first he beat.<br>The others are still down there.</span>
+        </button>
         <div class="blink" id="win-hint">Press space to play again</div>
         <div class="endbtns" id="win-btns"><button type="button" class="menubtn">Main menu</button></div>
+      </div>
+
+      <div class="screen" id="scr-brief" hidden>
+        <div class="brief-level" id="brief-level"></div>
+        <div class="brief-page" id="brief-page"></div>
+        <div class="brief-dots" id="brief-dots"></div>
+        <div class="blink" id="brief-hint">Press space to continue</div>
+        <div class="endbtns"><button type="button" class="briefbtn" id="brief-skip">Skip</button></div>
       </div>
 
       <div class="screen" id="scr-pause" hidden>
@@ -95,7 +108,7 @@
 <!-- the touch controls: drawn here, outside the picture -->
 <canvas id="ctl" aria-hidden="true"></canvas>
 
-<script src="audio.js?v=40"></script>
-<script src="game.js?v=40"></script>
+<script src="audio.js?v=41"></script>
+<script src="game.js?v=41"></script>
 </body>
 </html>
