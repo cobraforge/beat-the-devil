@@ -591,7 +591,7 @@ var sfx = {
   ballClang: function(x){ ironRing(x, 230, 0.26, 1.1); },
   chainReel: function(x){ chainReel(x); },
   cageSmash: function(){ ironRing(210, 330, 0.2, 0.8); chimes([1318.5, 1760], 0.06, 0.08); noise({dur:0.3, vol:0.2, type:'bandpass', freq:2400, q:1.5, slide:900}); },
-  knightRise: function(x){ knightRise(x); },
+  knightMarch: function(x){ knightMarch(x); },
   spearThrust: function(x){ spearThrust(x); },
   xbowTwang: function(x){ xbowTwang(x); },
   quarrelThunk: function(x){ quarrelThunk(x); },
@@ -1286,13 +1286,16 @@ function chainSnap(x){
 function chainWhoosh(x, v){ if (!running()) return; var k = Math.min(1, Math.max(0.25, v / 900)); noise({dur:0.42, vol:0.22 * k, type:'bandpass', freq:380, q:1.3, slide:1200 + 700 * k, attack:0.14, bus:panBus(x)}); }
 // hauled back up: the ratchet
 function chainReel(x){ if (!running()) return; var bus = panBus(x), t0 = actx.currentTime; for (var i = 0; i < 11; i++) noise({t: t0 + i * 0.042, dur: 0.018, vol: 0.1, type: 'bandpass', freq: 1900, q: 4, bus: bus}); }
-// a knight breaking up through the crust: a low seethe, pops, and iron
-function knightRise(x){
+// a knight marching in: heavy iron footfalls on the crust, and the clink of his plate
+function knightMarch(x){
   if (!running()) return;
   var bus = panBus(x), t0 = actx.currentTime;
-  noise({dur:0.55, vol:0.22, type:'lowpass', freq:380, slide:160, attack:0.05, bus:bus});
-  for (var i = 0; i < 6; i++) tone({t: t0 + Math.random() * 0.5, freq: 80 + Math.random() * 70, slide: 40, dur: 0.07, vol: 0.12, type: 'sine', bus: bus});
-  ironRing(x, 150, 0.05, 0.4);
+  for (var i = 0; i < 4; i++){
+    var t = t0 + i * 0.32;
+    tone({t: t, freq: 70, slide: 45, dur: 0.12, vol: 0.22, type: 'sine', bus: bus});
+    noise({t: t, dur: 0.05, vol: 0.12, type: 'lowpass', freq: 500, bus: bus});
+    noise({t: t + 0.02, dur: 0.03, vol: 0.05, type: 'bandpass', freq: 2600 + Math.random() * 1200, q: 6, bus: bus});
+  }
 }
 // a pike driven up: a rip of air and the ring of the blade
 function spearThrust(x){ if (!running()) return; var bus = panBus(x); noise({dur:0.16, vol:0.24, type:'highpass', freq:700, slide:4200, bus:bus}); tone({freq:2350, slide:2600, dur:0.35, vol:0.05, type:'sine', attack:0.01, bus:bus}); tone({freq:3520, dur:0.25, vol:0.025, type:'sine', bus:bus}); }
@@ -1521,7 +1524,7 @@ if (!isTouch) [].forEach.call(document.querySelectorAll('.menubtn'), function(b)
 var bests = { 1: 0, 2: 0 };
 try { bests[1] = parseInt(localStorage.getItem('btd.best'), 10) || 0; bests[2] = parseInt(localStorage.getItem('btd.best2'), 10) || 0; } catch(e){}
 function saveBest(level, v){
-  if (DEV.on || !(v > bests[level])) return;          // a dev run is not a best
+  if (G.dev || DEV.on || !(v > bests[level])) return;   // a dev run is not a best
   bests[level] = v;
   try { localStorage.setItem(level === 2 ? 'btd.best2' : 'btd.best', String(v)); } catch(e){}
 }
@@ -1837,6 +1840,7 @@ function reset(level){
   G.surv = 0;
   G.SURV = 42;
   G.level = level === 2 ? 2 : 1;
+  G.dev = DEV.on;             // a dev run: never sent to the world, never a best
   G.prog = 0;
   G.player = { x: LW/2, y: LH - 78, vx: 0, vy: 0, px: LW/2, py: LH - 78 };
   G.bolts = []; G.forks = []; G.flames = []; G.parts = []; G.embers = []; G.texts = []; G.splats = [];
@@ -1856,7 +1860,7 @@ function reset(level){
   for (var th=0; th<14; th++) G.titleHearts.push({ x: rnd(20, LW-20), y: rnd(0, LH), v: rnd(18, 42), s: rnd(5, 11), p: rnd(0, 6.28) });
   G.taken = null;                          // the losing sequence
   if (G.level === 2){ G.phase = 'rescue'; G.SURV = 50; stolenReset(); }
-  else { G.cages = G.carried = G.rising = G.shades = G.comers = G.strays = []; G.warden = null; G.cagedEnd = null; G.intro = 0; G.saved = 0; G.soulsOut = 0; G.shaft = 0; }
+  else { G.cages = G.carried = G.rising = G.shades = G.comers = G.strays = G.knights = G.quarrels = []; G.warden = null; G.cagedEnd = null; G.intro = 0; G.saved = 0; G.soulsOut = 0; G.shaft = 0; }
   G.freed = null;                          // the winning one: his last grasp, and the release
   G.heaven = null;                         // the light that comes down for it
   G.heartSilent = false;                   // after he takes it, the beat is never heard again
@@ -2127,6 +2131,7 @@ function devRender(){
 function devToggle(){
   DEV.on = !DEV.on;
   if (!DEV.on){ DEV.god = DEV.ammo = DEV.slow = false; }
+  else if (G.mode === 'play' || G.mode === 'ending') G.dev = true;   // turned on mid-run: this run is a dev run now
   try { localStorage.setItem('btd.dev', DEV.on ? '1' : '0'); } catch(e){}
   AUDIO.unlock(); sfx.cageOpen();
   devRender();
@@ -2228,8 +2233,6 @@ function nearestHazard(){
     } else if (fl.type === 'chain'){
       if (fl.state === 'aim' || fl.state === 'lock') d = Math.abs(Math.hypot(p.x - fl.ax, p.y - fl.ay) - fl.L) + 50;
       else d = Math.min(Math.hypot(p.x - fl.bx, p.y - fl.by) - fl.r, fl.state === 'swing' ? distToSeg(p.x, p.y, fl.ax, fl.ay, fl.bx, fl.by) - 4 : 1e9);
-    } else if (fl.type === 'spears' || fl.type === 'xbows'){
-      d = knightsNear(fl, p);
     } else if (fl.type === 'breath'){
       d = (p.x < LW/2 ? -1 : 1) === fl.side ? 40 : 1e9;
     } else if (fl.type === 'jet'){
@@ -2242,6 +2245,7 @@ function nearestHazard(){
   if (G.devil) G.devil.eyes.forEach(function(e){
     if (e.charge > 0 || e.beam > 0){ d = Math.abs(p.x - e.lockX) + 20; if (d < best) best = d; }
   });
+  if (G.knights && G.knights.length) best = Math.min(best, knightsNear(p));
   return best;
 }
 function updateHeart(dt){
@@ -2333,6 +2337,10 @@ function hazardCount(){
   G.forks.forEach(function(f){ if (!groups[f.group]){ groups[f.group] = true; n++; } });
   G.flames.forEach(function(f){ if (!(f.type === 'walker' && f.state === 'die')) n++; });
   if (G.shades && G.shades.some(function(s){ return s.state !== 'fade'; })) n++;   // shades are one group
+  if (G.knights){                                    // a spear attack is one group, a crossbow's another
+    if (G.knights.some(function(k){ return k.kind === 'spear' && knightArmed(k); })) n++;
+    if (G.knights.some(function(k){ return k.kind === 'xbow' && knightArmed(k); }) || G.quarrels.some(function(q){ return !q.stuck; })) n++;
+  }
   return n;
 }
 // survive phase: never more than two hazards of any kind at once. Skip, never queue.
@@ -2524,7 +2532,7 @@ function runOver(outcome){
   G.runSecs = runSeconds();
   // level 2: the souls brought out are those delivered, plus those carried when the lantern breaks
   if (G.level === 2) G.soulsOut = G.saved + (outcome === 'freed' ? G.carried.length : 0);
-  worldEnd(outcome, outcome === 'freed' ? G.lives : 0, G.level === 2 ? G.soulsOut : null);
+  if (!G.dev) worldEnd(outcome, outcome === 'freed' ? G.lives : 0, G.level === 2 ? G.soulsOut : null);
 }
 function loseHeart(){
   var d = G.devil;
@@ -2590,28 +2598,20 @@ function burnOutHazards(){
   G.forks.forEach(function(f){ burst(f.x, f.y, '#ff6a1f', 3, 90); });
   G.forks.length = 0;
   G.bolts.length = 0;
+  if (G.knights) knightsStand(false);
   G.flames.forEach(function(fl){
     if (fl.type === 'walker'){ fl.state = 'die'; fl.t = 0; }
     else if (fl.type === 'ember'){ fl.state = 'bloom'; fl.t = fl.fuse + 0.5; }
     else if (fl.type === 'jet'){ if (fl.len > 0){ fl.state = 'retract'; fl.t = 0; } else { fl.state = 'retract'; fl.t = 1; } }
-    else if (fl.type === 'chain' || fl.type === 'spears' || fl.type === 'xbows') windDown(fl);
+    else if (fl.type === 'chain') windDown(fl);
     else fl.t = fl.warn + fl.burn;
   });
 }
-// a chain is hauled up (one still in its clamp just goes); knights pull
-// their pikes back and sink into the crust
+// a chain is hauled up (one still in its clamp just goes)
 function windDown(fl){
-  if (fl.type === 'chain'){
-    if (fl.state === 'reel') return;
-    if ((fl.state === 'aim' || fl.state === 'lock') && fl.from === 'roof'){ fl.gone = true; return; }
-    fl.state = 'reel'; fl.t = 0; fl.len0 = fl.len;
-  } else if (fl.type === 'spears' || fl.type === 'xbows'){
-    fl.knights.forEach(function(k){
-      if (k.t < 0){ k.t = 0; k.rise = 0; k.rise0 = 0; k.st = 'sink'; return; }
-      if (k.st === 'thrust' || k.st === 'hold'){ k.st = 'pull'; k.t = 0; }
-      else if (k.st !== 'pull' && k.st !== 'sink'){ k.st = 'sink'; k.t = 0; k.rise0 = k.rise; }
-    });
-  }
+  if (fl.type !== 'chain' || fl.state === 'reel') return;
+  if ((fl.state === 'aim' || fl.state === 'lock') && fl.from === 'roof'){ fl.gone = true; return; }
+  fl.state = 'reel'; fl.t = 0; fl.len0 = fl.len;
 }
 // ---------- the release ----------
 // He dies, burning and sinking into the pit. With the last of him his hands
@@ -2732,7 +2732,7 @@ function updateEnding(dt){
   if (E.kind === 'devil') updateFreed(dt);
   else if (E.kind === 'released') updateReleased(dt);
   else if (E.kind === 'caged') updateCaged(dt);
-  else if (G.level === 2){ updateCages(dt); updateCarried(dt); updateStrays(dt); updateShades(dt); }
+  else if (G.level === 2){ updateCages(dt); updateCarried(dt); updateStrays(dt); updateShades(dt); updateKnights(dt, false); }
   if (E.t >= E.dur){
     G.ending = null;
     if (E.kind === 'devil' || E.kind === 'released') victory();
@@ -2746,7 +2746,7 @@ function gameOver(why, quiet){
   document.getElementById('over-why').textContent = why;
   scrOver.classList.toggle('low', !!quiet);
   document.getElementById('over-score').textContent = (G.runSecs != null ? 'You lasted ' + clock(G.runSecs) : '') + (G.level === 2 && G.saved ? ' \u00b7 ' + G.saved + ' freed' : '');
-  document.getElementById('over-hi').textContent = DEV.on ? 'Dev run \u00b7 not recorded' : (soulsLine() || (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : ''));
+  document.getElementById('over-hi').textContent = G.dev ? 'Dev run \u00b7 not recorded' : (soulsLine() || (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : ''));
   endHints();
   scrOver.hidden = false;
   if (!quiet) sfx.over();
@@ -2769,7 +2769,7 @@ function victory(){
       ? ('Two eyes. ' + spare + ' bolt' + (spare > 1 ? 's' : '') + ' to spare.')
       : 'Two eyes. Not a bolt to spare.');
   showWinScore(G.lives, secs, G.score, saved);
-  winHi.textContent = DEV.on ? 'Dev run \u00b7 not recorded' : (WORLD.endP ? 'Asking the world\u2026' : (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : ''));
+  winHi.textContent = G.dev ? 'Dev run \u00b7 not recorded' : (WORLD.endP ? 'Asking the world\u2026' : (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : ''));
   endHints();
   scrWin.hidden = false;
   // the server's clock is the one that counts: when it answers, its time and
@@ -3169,8 +3169,6 @@ function moveHazards(dt, live){
       }
     } else if (fl.type === 'chain'){
       if (stepChain(fl, dt, live)){ G.flames.splice(i, 1); continue; }
-    } else if (fl.type === 'spears' || fl.type === 'xbows'){
-      if (stepKnights(fl, dt, live)){ G.flames.splice(i, 1); continue; }
     } else if (fl.type === 'breath'){
       if (fl.t > fl.warn + fl.burn){ G.flames.splice(i,1); continue; }
       if (fl.t > fl.warn && !fl.roared){ fl.roared = true; sfx.breath(); G.shake = Math.max(G.shake, 0.6); }
@@ -3505,6 +3503,7 @@ function stolenReset(){
   G.intro = STOLEN.INTRO;
   G.warden = null;
   G.chainT = 1.0; G.spearT = 9; G.xbowT = 6; G.shadeT = 3.5; G.cageT = 0.3;
+  G.knights = []; G.quarrels = []; G.patrolN = 0;   // the patrol on the floor, and its quarrels in flight
   G.strays = [];              // souls spilled from smashed cages, waiting to be picked up
   G.shaft = 1;                // the light's strength: it goes while the Warden is here
   G.cagedEnd = null;
@@ -3858,71 +3857,104 @@ function updateStrays(dt){
   }
 }
 
-// ----- the knights: dark knights rising out of the crust (rules 4 and 11) -----
-// Spearmen come up through the floor under the heart and wade after it, a
-// pale line over each spear showing how high it will reach; they brace,
-// then drive their pikes straight up, one after another. Crossbowmen rise
-// off to one side and aim up at it along a pale line; locked, they loose a
-// quarrel along that line. Neither leads the heart: it is where the heart
+// ----- the knights: a patrol of dark knights marching the crust (rules 4 and 11) -----
+// They march in from the sides and pace back and forth along the floor, their
+// helms turned up to follow the heart; touching one is a hit. Now and then
+// one attacks: a spearman strides under the heart, a pale line over his pike
+// showing how high it will reach, braces, and drives it straight up; a
+// crossbowman stops, raises his crossbow along a pale line to the heart, and
+// looses a quarrel along it. Neither leads the heart: it is where the heart
 // was at the lock.
-var KNIGHT = { RISE: 0.5, AIM: 0.9, LOCK: 0.22, THRUST: 0.1, HOLD: 0.4, PULL: 0.3, SINK: 0.5, GAP: 64, TRACK: 70, STAGGER: 0.18,
-               REST: 112, REACH_MIN: 140, REACH_MAX: 360, XAIM: 0.6, QUARREL: 720, SHAFT: 13, SPEAR_DX: 9, SCALE: 1.25 };
-function spawnSpears(n){
-  var p = G.player, offs = n <= 1 ? [0] : (n === 2 ? [0, (Math.random() < 0.5 ? -1 : 1) * KNIGHT.GAP] : [-KNIGHT.GAP, 0, KNIGHT.GAP]);
-  var ks = offs.map(function(o){ return { off: o, x: clamp(p.x + o - KNIGHT.SPEAR_DX, 20, LW - 30), st: 'aim', t: 0, rise: 0, reach: 200, tip: KNIGHT.REST, delay: 0, seed: Math.random() }; });
-  ks.slice().sort(function(a, b){ return a.x - b.x; }).forEach(function(k, i){ k.delay = i * KNIGHT.STAGGER; });   // left to right, a beat apart
-  G.flames.push({ type: 'spears', knights: ks, t: 0 });
-  sfx.knightRise(p.x); sfx.aim();
+var KNIGHT = { SPEED: 30, TRACK: 75, AIM: 0.9, LOCK: 0.22, THRUST: 0.1, HOLD: 0.4, PULL: 0.3, RECOVER: 0.5, STAGGER: 0.18, GAP: 64,
+               REST: 120, REACH_MIN: 150, REACH_MAX: 360, XAIM: 0.7, RAISE: 0.3, QUARREL: 720, SHAFT: 13, SPEAR_DX: 10, H: 100, BODY: 14, MAX: 4 };
+// who marches in, and when (the meter's share): spearmen first, then a crossbowman
+var PATROL = [[0, 'spear'], [0.2, 'spear'], [0.4, 'xbow'], [0.7, 'spear']];
+function knightEnter(kind, side){
+  if (G.knights.length >= KNIGHT.MAX) return null;
+  side = side || (Math.random() < 0.5 ? -1 : 1);
+  var edge = function(sd){ return G.knights.some(function(o){ return o.st !== 'die' && Math.abs(o.x - (sd < 0 ? -26 : LW + 26)) < 70; }); };
+  if (edge(side) && !edge(-side)) side = -side;           // not in on top of another
+  var k = { kind: kind, x: side < 0 ? -26 : LW + 26, dir: -side, face: -side, st: 'walk', t: 0, step: Math.random() * 6, turnT: rnd(4, 7),
+            look: 0, raise: 0, reach: 200, tip: KNIGHT.REST, ang: 0, tx: 0, ty: 0, off: 0, delay: 0, fade: 1, seed: Math.random() };
+  G.knights.push(k);
+  sfx.knightMarch(k.x);
+  return k;
+}
+function spearX(k){ return k.x + KNIGHT.SPEAR_DX * k.face; }
+function knightArmed(k){ return k.st === 'aim' || k.st === 'lock' || k.st === 'thrust' || k.st === 'hold' || k.st === 'shot'; }
+// the crossbow's pivot at his shoulder, raised to aim
+function xbowAt(k){ return { x: k.x + 4 * k.face, y: FLOOR - 78 }; }
+// send up to n free knights of a kind at the heart; true if any went
+function knightAttack(kind, n){
+  var p = G.player, offs = [0, -KNIGHT.GAP, KNIGHT.GAP];
+  var free = G.knights.filter(function(k){ return k.kind === kind && k.st === 'walk' && k.x > 16 && k.x < LW - 16; })
+    .sort(function(a, b){ return Math.abs(a.x - p.x) - Math.abs(b.x - p.x); }).slice(0, n);
+  if (!free.length) return false;
+  free.forEach(function(k, i){ k.st = 'aim'; k.t = 0; k.delay = 0; k.off = kind === 'spear' ? offs[i] : 0; k.face = p.x + k.off >= k.x ? 1 : -1; });
+  if (kind === 'spear') free.slice().sort(function(a, b){ return a.off - b.off; }).forEach(function(k, i){ k.delay = i * KNIGHT.STAGGER; });   // left to right, a beat apart
+  else free.forEach(function(k, i){ k.t = -i * 0.35; });                                  // a pair looses one after the other
+  sfx.aim();
   return true;
 }
-function spawnXbows(n){
-  var p = G.player, ks = [];
-  for (var i = 0; i < n; i++){
-    var side = (i % 2 ? -1 : 1) * (p.x < LW / 2 ? 1 : -1);
-    ks.push({ x: clamp(p.x + side * rnd(90, 170), 24, LW - 24), st: 'aim', t: -i * 0.35, rise: 0, tx: p.x, ty: p.y, ang: -Math.PI / 2, seed: Math.random() });
-  }
-  G.flames.push({ type: 'xbows', knights: ks, quarrels: [], t: 0 });
-  sfx.knightRise(ks[0].x);
-  return true;
-}
-function spearX(k){ return k.x + KNIGHT.SPEAR_DX; }
-function xbowAt(k){ return { x: k.x + 3 * KNIGHT.SCALE, y: FLOOR - 40 * KNIGHT.SCALE + (1 - k.rise) * 72 }; }
-function knightsLive(type){ return G.flames.some(function(f){ return f.type === type; }); }
-// how near the heart is to a rank or a pair, for its beat
-function knightsNear(fl, p){
+function knightsBusy(){ return G.knights.some(knightArmed) || G.quarrels.some(function(q){ return !q.stuck; }); }
+function knightsOf(kind){ return G.knights.filter(function(k){ return k.kind === kind && k.st !== 'die'; }).length; }
+// how near the heart is to the patrol and its attacks, for its beat
+function knightsNear(p){
   var best = 1e9;
-  fl.knights.forEach(function(k){
-    if (k.t < 0 || k.st === 'sink') return;
-    var telegraph = k.st === 'aim' || k.st === 'lock';
-    if (fl.type === 'spears'){
-      var top = FLOOR - (telegraph ? k.reach : k.tip);
-      best = Math.min(best, Math.abs(p.x - spearX(k)) + Math.max(0, top - p.y) + (telegraph ? 40 : 0));
-    } else if (telegraph){
+  G.knights.forEach(function(k){
+    if (k.st === 'die') return;
+    best = Math.min(best, Math.max(0, Math.abs(p.x - k.x) - KNIGHT.BODY) + Math.max(0, (FLOOR - KNIGHT.H) - p.y) + 30);
+    if (k.kind === 'spear' && knightArmed(k)){
+      var tele = k.st === 'aim' || k.st === 'lock', top = FLOOR - (tele ? k.reach : k.tip);
+      best = Math.min(best, Math.abs(p.x - spearX(k)) + Math.max(0, top - p.y) + (tele ? 40 : 0));
+    } else if (k.kind === 'xbow' && (k.st === 'aim' || k.st === 'lock') && k.t >= 0){
       var X = xbowAt(k); best = Math.min(best, distToSeg(p.x, p.y, X.x, X.y, k.tx, k.ty) + 50);
     }
   });
-  if (fl.quarrels) fl.quarrels.forEach(function(q){ if (!q.stuck) best = Math.min(best, Math.hypot(p.x - q.x, p.y - q.y)); });
+  G.quarrels.forEach(function(q){ if (!q.stuck) best = Math.min(best, Math.hypot(p.x - q.x, p.y - q.y)); });
   return best;
 }
-function knightMagma(x){
-  for (var i = 0; i < 6; i++) addPart({ x: x + rnd(-14, 14), y: FLOOR - 2, vx: rnd(-40, 40), vy: rnd(-160, -60), life: rnd(0.3, 0.7), t: 0, c: Math.random() < 0.5 ? '#ffb060' : '#ff6a10', r: rnd(1, 2.2), g: 400 });
+// the patrol stands down (an ending); with their master gone, they burn away
+function knightsStand(dying){
+  G.knights.forEach(function(k){
+    if (dying){ if (k.st !== 'die'){ k.st = 'die'; k.t = 0; } return; }
+    if (k.st !== 'walk' && k.st !== 'die'){ k.st = 'walk'; k.t = 0; k.tip = KNIGHT.REST; k.raise = 0; }
+  });
+  G.quarrels = G.quarrels.filter(function(q){ return q.stuck; });
 }
-// one frame of a rank or a pair; true when they are gone
-function stepKnights(fl, dt, live){
-  var p = G.player, done = true;
-  fl.knights.forEach(function(k, idx){
+function updateKnights(dt, live){
+  var p = G.player, i;
+  for (i = G.knights.length - 1; i >= 0; i--){
+    var k = G.knights[i];
     k.t += dt;
-    if (k.t < 0){ done = false; return; }                     // waiting its turn under the crust
-    if (k.st === 'aim' && k.rise === 0) knightMagma(k.x);
-    if (fl.type === 'spears'){
+    // their helms turn up to follow the heart
+    var want = clamp(Math.atan2(p.x - k.x, Math.max(20, (FLOOR - KNIGHT.H) - p.y)) * 0.5, -0.4, 0.4);
+    k.look += (want - k.look) * Math.min(1, dt * 4);
+    if (k.st === 'die'){
+      k.fade = Math.max(0, 1 - k.t / 1.1);
+      if (Math.random() < 0.6) addPart({ x: k.x + rnd(-12, 12), y: FLOOR - rnd(0, KNIGHT.H), vx: rnd(-20, 20), vy: rnd(-90, -40), life: rnd(0.5, 1), t: 0, c: Math.random() < 0.5 ? '#ffb060' : '#4a3e3a', r: rnd(1, 2.2), g: -20 });
+      if (k.fade <= 0) G.knights.splice(i, 1);
+      continue;
+    }
+    if (k.st === 'walk'){
+      k.x += k.dir * KNIGHT.SPEED * dt; k.step += KNIGHT.SPEED * dt / 8; k.face = k.dir;
+      k.turnT -= dt;
+      var inside = k.x > 26 && k.x < LW - 26;
+      // keep their distance: turn from one just ahead, and of two on top of each other the later turns
+      var blocked = G.knights.some(function(o, j){ return o !== k && o.st !== 'die' && Math.abs(o.x - k.x) < 46 && ((o.x - k.x) * k.dir > 0 || (Math.abs(o.x - k.x) < 12 && j < i && o.dir === k.dir)); });
+      if ((k.x <= 26 && k.dir < 0) || (k.x >= LW - 26 && k.dir > 0) || (inside && (k.turnT <= 0 || blocked))){ k.dir = -k.dir; k.turnT = rnd(4, 7); }
+    } else if (k.st === 'recover'){
+      k.raise = Math.max(0, k.raise - dt / KNIGHT.RAISE);
+      if (k.t >= KNIGHT.RECOVER){ k.st = 'walk'; k.t = 0; k.dir = k.face; }
+    } else if (k.kind === 'spear'){
       if (k.st === 'aim'){
-        k.rise = Math.min(1, k.rise + dt / KNIGHT.RISE);
+        // he strides under the heart, his line showing how high he will reach
         if (live){
-          var tx = clamp(p.x + k.off - KNIGHT.SPEAR_DX, 20, LW - 30);
-          k.x += clamp(tx - k.x, -KNIGHT.TRACK * dt, KNIGHT.TRACK * dt);
+          var tx = clamp(p.x + k.off - KNIGHT.SPEAR_DX * k.face, 20, LW - 20), mv = clamp(tx - k.x, -KNIGHT.TRACK * dt, KNIGHT.TRACK * dt);
+          k.x += mv; k.step += Math.abs(mv) / 8;
           k.reach = clamp(FLOOR - p.y + 50, KNIGHT.REACH_MIN, KNIGHT.REACH_MAX);
         }
-        if (k.t >= KNIGHT.AIM){ k.st = 'lock'; k.t = 0; if (idx === 0) sfx.lock(); }
+        if (k.t >= KNIGHT.AIM){ k.st = 'lock'; k.t = 0; if (k.delay === 0) sfx.lock(); }
       } else if (k.st === 'lock'){
         if (k.t >= KNIGHT.LOCK + k.delay){ k.st = 'thrust'; k.t = 0; if (live) sfx.spearThrust(spearX(k)); }
       } else if (k.st === 'thrust'){
@@ -3933,50 +3965,43 @@ function stepKnights(fl, dt, live){
         if (k.t >= KNIGHT.HOLD){ k.st = 'pull'; k.t = 0; }
       } else if (k.st === 'pull'){
         k.tip = lerp(k.reach, KNIGHT.REST, smooth(k.t / KNIGHT.PULL));
-        if (k.t >= KNIGHT.PULL){ k.st = 'sink'; k.t = 0; k.rise0 = k.rise; }
-      } else {
-        k.rise = Math.max(0, (k.rise0 == null ? 1 : k.rise0) * (1 - k.t / KNIGHT.SINK));
+        if (k.t >= KNIGHT.PULL){ k.st = 'recover'; k.t = 0; k.tip = KNIGHT.REST; }
       }
-      // the pike, from its tip down into the crust, while it is driven and held
+      // the pike, from its tip down to the crust, while it is driven and held
       if (live && (k.st === 'thrust' || k.st === 'hold') && Math.abs(p.x - spearX(k)) < KNIGHT.SHAFT && p.y > FLOOR - k.tip - 6)
         hurt(null, spearX(k), p.y + 20);
     } else {
-      var X = xbowAt(k);
-      if (k.st === 'aim'){
-        k.rise = Math.min(1, k.t / KNIGHT.RISE);
+      if (k.st === 'aim' && k.t >= 0){
+        k.raise = Math.min(1, k.raise + dt / KNIGHT.RAISE);
         if (live){ k.tx = p.x; k.ty = p.y; }
-        k.ang = Math.atan2(k.ty - X.y, k.tx - X.x);
-        if (k.t >= KNIGHT.RISE + KNIGHT.XAIM){ k.st = 'lock'; k.t = 0; sfx.lock(); }
+        k.face = k.tx >= k.x ? 1 : -1;
+        var X = xbowAt(k); k.ang = Math.atan2(k.ty - X.y, k.tx - X.x);
+        if (k.t >= KNIGHT.XAIM){ k.st = 'lock'; k.t = 0; sfx.lock(); }
       } else if (k.st === 'lock'){
         if (k.t >= KNIGHT.LOCK){
           k.st = 'shot'; k.t = 0;
-          var c = Math.cos(k.ang), s = Math.sin(k.ang);
-          fl.quarrels.push({ x: X.x + c * 16, y: X.y + s * 16, vx: c * KNIGHT.QUARREL, vy: s * KNIGHT.QUARREL, ang: k.ang, stuck: false, t: 0 });
-          if (live) sfx.xbowTwang(X.x);
+          var X2 = xbowAt(k), c = Math.cos(k.ang), sn = Math.sin(k.ang);
+          G.quarrels.push({ x: X2.x + c * 16, y: X2.y + sn * 16, vx: c * KNIGHT.QUARREL, vy: sn * KNIGHT.QUARREL, ang: k.ang, stuck: false, t: 0 });
+          if (live) sfx.xbowTwang(X2.x);
         }
       } else if (k.st === 'shot'){
-        if (k.t >= 0.45){ k.st = 'sink'; k.t = 0; k.rise0 = k.rise; }
-      } else {
-        k.rise = Math.max(0, (k.rise0 == null ? 1 : k.rise0) * (1 - k.t / KNIGHT.SINK));
+        if (k.t >= 0.35){ k.st = 'recover'; k.t = 0; }
       }
     }
-    if (!(k.st === 'sink' && k.rise <= 0)) done = false;
-  });
-  if (fl.quarrels){
-    for (var i = fl.quarrels.length - 1; i >= 0; i--){
-      var q = fl.quarrels[i];
-      if (q.stuck){ q.t += dt; if (q.t > 1.2) fl.quarrels.splice(i, 1); continue; }
-      var ox = q.x, oy = q.y;
-      q.x += q.vx * dt; q.y += q.vy * dt;
-      if (live && distToSeg(p.x, p.y, ox, oy, q.x, q.y) < 12){ hurt(null, q.x, q.y); fl.quarrels.splice(i, 1); continue; }
-      if (q.y < 6 || q.x < 4 || q.x > LW - 4){
-        q.stuck = true; q.t = 0; q.x = clamp(q.x, 4, LW - 4); q.y = Math.max(6, q.y);
-        if (live) sfx.quarrelThunk(q.x);
-      } else if (q.y > LH + 20) fl.quarrels.splice(i, 1);
-    }
-    if (fl.quarrels.length) done = false;
+    // touching one is a hit
+    if (live && Math.abs(p.x - k.x) < KNIGHT.BODY + 6 && p.y > FLOOR - KNIGHT.H + 8) hurt(null, k.x, p.y);
   }
-  return done;
+  for (i = G.quarrels.length - 1; i >= 0; i--){
+    var q = G.quarrels[i];
+    if (q.stuck){ q.t += dt; if (q.t > 1.2) G.quarrels.splice(i, 1); continue; }
+    var ox = q.x, oy = q.y;
+    q.x += q.vx * dt; q.y += q.vy * dt;
+    if (live && distToSeg(p.x, p.y, ox, oy, q.x, q.y) < 12){ hurt(null, q.x, q.y); G.quarrels.splice(i, 1); continue; }
+    if (q.y < 6 || q.x < 4 || q.x > LW - 4){
+      q.stuck = true; q.t = 0; q.x = clamp(q.x, 4, LW - 4); q.y = Math.max(6, q.y);
+      if (live) sfx.quarrelThunk(q.x);
+    } else if (q.y > LH + 20) G.quarrels.splice(i, 1);
+  }
 }
 // ----- the rescue, then the Warden -----
 function updateStolen(dt){
@@ -3986,22 +4011,25 @@ function updateStolen(dt){
   updateCarried(dt);
   updateStrays(dt);
   updateShades(dt);
+  updateKnights(dt, G.mode === 'play');
   if (G.phase === 'rescue'){
     G.surv += dt;
     var prog = G.prog = Math.min(1, G.surv / G.SURV);
     G.cageT -= dt;
     if (G.pool > 0 && hangingCages() < STOLEN.HANG && G.cageT <= 0){ lowerCage(); G.cageT = 0.7; }
     if (G.intro <= 0){
-      // one swinging chain at a time; spearmen from 20 %, a crossbowman from 40 %
+      // the patrol marches in as the meter fills
+      while (G.patrolN < PATROL.length && prog >= PATROL[G.patrolN][0]){ knightEnter(PATROL[G.patrolN][1], G.patrolN % 2 ? 1 : -1); G.patrolN++; }
+      // one swinging chain at a time; spear attacks from 20 %, a crossbow from 40 %
       G.chainT -= dt;
       if (G.chainT <= 0){ G.chainT = rnd(3.4, 4.4) - prog * 1.0; if (mayspawn() && !chainLive('roof')) spawnChain(); }
       if (prog > 0.2){
         G.spearT -= dt;
-        if (G.spearT <= 0){ G.spearT = lerp(6.5, 4.5, prog); if (mayspawn() && !knightsLive('spears')) spawnSpears(prog < 0.45 ? 1 : (prog < 0.75 ? 2 : 3)); }
+        if (G.spearT <= 0){ G.spearT = lerp(6.5, 4.5, prog); if (mayspawn()) knightAttack('spear', prog < 0.45 ? 1 : (prog < 0.75 ? 2 : 3)); }
       }
       if (prog > 0.4){
         G.xbowT -= dt;
-        if (G.xbowT <= 0){ G.xbowT = rnd(8, 10.5) - prog * 2; if (mayspawn() && !knightsLive('xbows')) spawnXbows(1); }
+        if (G.xbowT <= 0){ G.xbowT = rnd(8, 10.5) - prog * 2; if (mayspawn()) knightAttack('xbow', 1); }
       }
       if (G.carried.length){
         G.shadeT -= dt;
@@ -4019,7 +4047,8 @@ function wardenComes(){
   G.warden = makeWarden();
   G.hold = 1.4;
   G.cages.forEach(function(c){ c.state = 'rise'; c.t = 0; });
-  G.flames.forEach(function(fl){ if (fl.type === 'chain' || fl.type === 'spears' || fl.type === 'xbows') windDown(fl); });
+  G.flames.forEach(function(fl){ if (fl.type === 'chain') windDown(fl); });
+  knightsStand(false);
   G.strays.forEach(function(s){ G.rising.push({ x: s.x, y: s.y, t: 0, seed: s.seed, dark: true }); });   // taken back up
   G.pool += G.strays.length; G.strays = [];
   G.shades.forEach(function(s){ s.state = 'fade'; s.t = 0; });
@@ -4142,14 +4171,22 @@ function updateWarden(dt){
     } else if (bm.state === 'lock'){
       if (bm.t >= 0.22){ bm.state = 'fire'; bm.t = 0; sfx.lanternBeam(); G.shake = Math.max(G.shake, 0.4); }
     } else if (bm.state === 'fire'){
-      if (Math.abs(p.x - bm.x) < 18 + 8 && p.y > L.y) hurt('burn', bm.x, p.y - 30);
+      if (beamTouches(w, p.x, p.y, 8)) hurt('burn', p.x, p.y - 20);
+      if (Math.random() < 0.8) addPart({ x: bm.x + rnd(-14, 14), y: FLOOR - 3, vx: rnd(-140, 140), vy: rnd(-240, -80), life: rnd(0.3, 0.6), t: 0, c: Math.random() < 0.5 ? '#fff0c0' : '#ffc860', r: rnd(1, 2.2), g: 520 });
       if (bm.t >= 0.6) bm.state = 'done';
     }
     if (bm.state === 'done' && st > 2.2) wardenOpen(w);
   } else {
-    // he calls up his knights: a rank of spears under the heart, or a pair of crossbows
-    if (!w.summoned){ w.summoned = true; w.knightsN++; w.flare = 0.7; if (w.knightsN % 2) spawnSpears(3); else spawnXbows(2); }
-    if (st > 2.4 && !G.flames.some(function(f){ return f.type === 'spears' || f.type === 'xbows'; })) wardenOpen(w);
+    // he sends his knights at the heart: the spearmen in a rank, or the crossbows;
+    // and more march in, for next time
+    if (!w.summoned){
+      w.summoned = true; w.knightsN++; w.flare = 0.7;
+      var kind = w.knightsN % 2 ? 'spear' : 'xbow';
+      knightAttack(kind, kind === 'spear' ? 3 : 2);
+      if (knightsOf('spear') < 3) knightEnter('spear');
+      if (knightsOf('xbow') < 1) knightEnter('xbow');
+    }
+    if (st > 2.4 && !knightsBusy()) wardenOpen(w);
   }
 }
 // when he dies his armour comes apart: the helm and pauldrons (and the flail,
@@ -4171,6 +4208,18 @@ function updateWreck(w, t, dt){
       if (pc.y > FLOOR - 12){ pc.landed = true; pc.y = FLOOR - 12; burst(pc.x, FLOOR - 4, '#ffb060', 12, 200); sfx.ballClang(pc.x); }
     } else { pc.y += 14 * dt; pc.a = Math.max(0, pc.a - dt * 0.7); }
   });
+}
+// the lantern's beam: from the lantern's foot straight to the locked point on
+// the floor, narrow where it leaves the lantern and wide where it strikes
+var BEAM = { W0: 5, W1: 20 };
+function beamLine(w){
+  var P = wardenPose(w), L = P.lantern;
+  return { x0: L.x + Math.sin(P.rot) * WARDEN.LAMP_T, y0: L.y + Math.cos(P.rot) * WARDEN.LAMP_T, x1: w.beam.x, y1: FLOOR };
+}
+function beamTouches(w, x, y, r){
+  var B = beamLine(w), dx = B.x1 - B.x0, dy = B.y1 - B.y0, ll = dx * dx + dy * dy || 1;
+  var u = clamp(((x - B.x0) * dx + (y - B.y0) * dy) / ll, 0, 1), cx = B.x0 + dx * u, cy = B.y0 + dy * u;
+  return Math.hypot(x - cx, y - cy) < lerp(BEAM.W0, BEAM.W1, u) + r;
 }
 // is this point on his armour? (bolts go through his cloak)
 function wardenArmour(w, x, y){
@@ -4223,6 +4272,7 @@ function wardenDies(){
   music.stop();
   sfx.lanternShatter(); sfx.roar();
   burnOutHazards();
+  knightsStand(true);                       // with their master gone, his knights burn away
   G.shades.forEach(function(s){ s.state = 'fade'; s.t = 0; });
   G.freed = { hand: { x: G.player.x, y: G.player.y, close: 0 }, grabbed: false, char: 0, released: true, heal: 0 };
   for (var i = 0; i < 26; i++)
@@ -4231,6 +4281,7 @@ function wardenDies(){
 function updateReleased(dt){
   var t = G.ending.t, w = G.warden, F = G.freed;
   if (w) updateWreck(w, t, dt);
+  updateKnights(dt, false);
   if (w && !w.dead){
     w.dieT = t;
     if (Math.random() < 0.5)
@@ -4266,7 +4317,7 @@ function updateCaged(dt){
   h.override = t < 3.6 ? lerp(70, 38, t / 3.6) : 0;
   if (t >= 3.6) G.heartSilent = true;
   if (t >= 4.2) G.black = 1;
-  updateCages(dt); updateCarried(dt); updateShades(dt);
+  updateCages(dt); updateCarried(dt); updateShades(dt); updateKnights(dt, false);
 }
 
 // ---------- level 2: drawing ----------
@@ -4538,39 +4589,37 @@ function drawChain(fl){
 }
 
 // ---- the knights ----
-function drawKnights(fl){
-  fl.knights.forEach(function(k){
-    if (k.t < 0 || k.rise <= 0) return;
-    if (fl.type === 'spears') drawSpearTelegraph(k); else drawXbowTelegraph(k);
-    drawKnight(k, fl.type === 'spears');
+function drawKnights(){
+  G.knights.forEach(function(k){
+    if (k.kind === 'spear') drawSpearTelegraph(k); else drawXbowTelegraph(k);
+    drawKnight(k);
   });
-  if (fl.quarrels) fl.quarrels.forEach(drawQuarrel);
+  G.quarrels.forEach(drawQuarrel);
 }
-function knightTipY(k){ return FLOOR - k.tip + (1 - k.rise) * 72; }
 function telegraphStyle(locked, t, aimT){
   var flick = locked && Math.floor(t * 30) % 2 === 0;
   ctx.globalAlpha = locked ? (flick ? 0.95 : 0.6) : 0.2 + 0.4 * Math.min(1, t / aimT);
   ctx.strokeStyle = locked ? COLORS.sulfur : COLORS.bone; ctx.lineWidth = locked ? 1.5 : 1;
   if (!locked) ctx.setLineDash([3, 9]);
 }
-// a pale line over the spear, as high as it will reach
+// a pale line over the pike, as high as it will reach
 function drawSpearTelegraph(k){
   if (k.st !== 'aim' && k.st !== 'lock') return;
   var x = spearX(k), top = FLOOR - k.reach;
   ctx.save();
   telegraphStyle(k.st === 'lock', k.t, KNIGHT.AIM);
-  ctx.beginPath(); ctx.moveTo(x, knightTipY(k) - 4); ctx.lineTo(x, top); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, FLOOR - k.tip - 4); ctx.lineTo(x, top); ctx.stroke();
   ctx.setLineDash([]);
   ctx.beginPath(); ctx.moveTo(x - 7, top); ctx.lineTo(x + 7, top); ctx.stroke();
   ctx.restore();
 }
 // a pale line from the crossbow up through the heart
 function drawXbowTelegraph(k){
-  if ((k.st !== 'aim' && k.st !== 'lock') || (k.st === 'aim' && k.t < KNIGHT.RISE * 0.6)) return;
+  if ((k.st !== 'aim' && k.st !== 'lock') || k.t < 0 || k.raise < 0.6) return;
   var X = xbowAt(k), c = Math.cos(k.ang), s = Math.sin(k.ang), d = Math.hypot(k.tx - X.x, k.ty - X.y) + 70;
   ctx.save();
-  telegraphStyle(k.st === 'lock', k.t, KNIGHT.RISE + KNIGHT.XAIM);
-  ctx.beginPath(); ctx.moveTo(X.x + c * 20, X.y + s * 20); ctx.lineTo(X.x + c * d, X.y + s * d); ctx.stroke();
+  telegraphStyle(k.st === 'lock', k.t, KNIGHT.XAIM);
+  ctx.beginPath(); ctx.moveTo(X.x + c * 22, X.y + s * 22); ctx.lineTo(X.x + c * d, X.y + s * d); ctx.stroke();
   ctx.restore();
 }
 function drawTrident(x, y, glint){
@@ -4590,61 +4639,85 @@ function drawTrident(x, y, glint){
   }
   ctx.restore();
 }
-// A dark knight up to his waist in the crust: a horned helm with the fire in
-// its slit, spiked shoulders, black plate lit orange from the magma he stands in.
-function drawKnight(k, spear){
-  var r = k.rise, x = k.x, base = FLOOR + (1 - r) * 72;
-  ctx.save();
-  ctx.beginPath(); ctx.rect(x - 70, -20, 140, FLOOR + 21); ctx.clip();
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  var sx = spearX(k) - x, K = KNIGHT.SCALE;      // he is drawn a quarter larger than his frame
-  if (spear){
-    var ty = knightTipY(k), live = k.st === 'thrust' || k.st === 'hold';
-    ctx.strokeStyle = '#1c1411'; ctx.lineWidth = 3.8; ctx.beginPath(); ctx.moveTo(x + sx, ty + 14); ctx.lineTo(x + sx, base + 80); ctx.stroke();
-    ctx.strokeStyle = 'rgba(205,185,172,.5)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(x + sx - 0.9, ty + 16); ctx.lineTo(x + sx - 0.9, base + 80); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,120,50,.45)'; ctx.beginPath(); ctx.moveTo(x + sx + 1.2, ty + 16); ctx.lineTo(x + sx + 1.2, base + 80); ctx.stroke();
-    if (live){
-      // the drive: a streak up the shaft that fades as it holds
-      var fk = k.st === 'thrust' ? 1 : Math.max(0, 1 - k.t / 0.25);
-      if (fk > 0){ ctx.strokeStyle = 'rgba(255,235,200,' + (0.55 * fk) + ')'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(x + sx, ty + 20); ctx.lineTo(x + sx, ty + 20 + 90 * fk); ctx.stroke(); }
-    }
-    drawTrident(x + sx, ty, k.st === 'lock' ? 0.5 + 0.5 * Math.sin(k.t * 60) : (live ? 0.6 : 0));
+function drawKnightLeg(L, far){
+  armPlate(L.hip, L.kn, 5.5, 4.6);
+  armPlate(L.kn, L.ft, 4.6, 3.8);
+  ctx.fillStyle = far ? '#1a1416' : '#2c2427';
+  ctx.beginPath(); ctx.arc(L.kn.x, L.kn.y, 3.8, 0, 6.2832); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,120,50,.5)'; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.fillStyle = '#161012';
+  ctx.beginPath(); ctx.moveTo(L.ft.x - 4.5, L.ft.y - 4); ctx.quadraticCurveTo(L.ft.x + 4, L.ft.y - 3.5, L.ft.x + 9, L.ft.y + 0.5); ctx.lineTo(L.ft.x - 4.5, L.ft.y + 1.2); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,130,60,.7)'; ctx.lineWidth = 0.9; ctx.stroke();
+}
+// A dark knight of the patrol, on his feet on the crust: a horned helm with
+// the fire in its slit, turned up to follow the heart; spiked shoulders;
+// black plate lit orange from the magma he walks on. Drawn facing the way he
+// walks (or the way he attacks), striding when he moves.
+function drawKnight(k){
+  var f = k.face, spear = k.kind === 'spear', legs = [], i;
+  for (i = 0; i < 2; i++){
+    var o = i ? Math.PI : 0, a = 0.42 * Math.sin(k.step + o), bend = Math.max(0, Math.sin(k.step + o + 1.3)) * 0.7;
+    var hip = { x: i ? -4 : 4, y: 4 }, kn = { x: hip.x + Math.sin(a) * 17, y: hip.y + Math.cos(a) * 17 };
+    legs.push({ hip: hip, kn: kn, ft: { x: kn.x + Math.sin(a - bend) * 17, y: kn.y + Math.cos(a - bend) * 17 } });
   }
-  ctx.translate(x, base);
-  ctx.scale(K, K);
-  sx /= K;
+  var wy = FLOOR - Math.max(legs[0].ft.y, legs[1].ft.y);          // his waist: the lower foot stands on the crust
+  ctx.save();
+  ctx.globalAlpha = k.fade;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // the magma's light where he walks
+  drawGlow(k.x, FLOOR, 24, [255, 110, 30], 0.5, 64, 18);
+  if (spear){
+    var sx = spearX(k), ty = FLOOR - k.tip, live = k.st === 'thrust' || k.st === 'hold';
+    ctx.strokeStyle = '#1c1411'; ctx.lineWidth = 3.8; ctx.beginPath(); ctx.moveTo(sx, ty + 14); ctx.lineTo(sx, Math.max(ty + 14, wy + 40)); ctx.stroke();
+    ctx.strokeStyle = 'rgba(205,185,172,.5)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(sx - 0.9 * f, ty + 16); ctx.lineTo(sx - 0.9 * f, Math.max(ty + 16, wy + 40)); ctx.stroke();
+    if (live){
+      var fk = k.st === 'thrust' ? 1 : Math.max(0, 1 - k.t / 0.25);
+      if (fk > 0){ ctx.strokeStyle = 'rgba(255,235,200,' + (0.55 * fk) + ')'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(sx, ty + 20); ctx.lineTo(sx, ty + 20 + 90 * fk); ctx.stroke(); }
+    }
+    drawTrident(sx, ty, k.st === 'lock' ? 0.5 + 0.5 * Math.sin(k.t * 60) : (live ? 0.6 : 0));
+  }
+  ctx.translate(k.x, wy); ctx.scale(f, 1);
+  drawKnightLeg(legs[1], true);
+  // faulds over the hips
+  ctx.fillStyle = '#1d1619'; ctx.beginPath(); ctx.moveTo(-12, 2); ctx.quadraticCurveTo(0, 5, 12, 2); ctx.lineTo(13, 10); ctx.quadraticCurveTo(0, 14, -13, 10); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,120,50,.55)'; ctx.lineWidth = 0.8; ctx.stroke();
+  drawKnightLeg(legs[0], false);
   // the body
-  ctx.beginPath(); ctx.moveTo(-14, -38); ctx.quadraticCurveTo(-18, -16, -12, 8); ctx.lineTo(12, 8); ctx.quadraticCurveTo(18, -16, 14, -38); ctx.quadraticCurveTo(0, -43, -14, -38); ctx.closePath();
-  var g = ctx.createLinearGradient(0, -42, 0, 8);
-  g.addColorStop(0, '#2c2427'); g.addColorStop(0.55, '#150f11'); g.addColorStop(1, '#5a1a08');
+  ctx.beginPath(); ctx.moveTo(-14, -38); ctx.quadraticCurveTo(-17, -16, -12, 4); ctx.lineTo(12, 4); ctx.quadraticCurveTo(17, -16, 14, -38); ctx.quadraticCurveTo(0, -43, -14, -38); ctx.closePath();
+  var g = ctx.createLinearGradient(0, -42, 0, 6);
+  g.addColorStop(0, '#2c2427'); g.addColorStop(0.6, '#150f11'); g.addColorStop(1, '#2a0e06');
   ctx.fillStyle = g; ctx.fill();
   ctx.strokeStyle = 'rgba(255,120,50,.65)'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.strokeStyle = 'rgba(170,150,145,.3)'; ctx.beginPath(); ctx.moveTo(0, -38); ctx.lineTo(0, 4); ctx.stroke();
+  ctx.strokeStyle = 'rgba(170,150,145,.3)'; ctx.beginPath(); ctx.moveTo(0, -38); ctx.lineTo(0, 2); ctx.stroke();
   ctx.strokeStyle = 'rgba(255,72,20,.3)'; ctx.lineWidth = 0.9;
-  for (var i = 0; i < 3; i++){ ctx.beginPath(); ctx.moveTo(-10, -24 + i * 8); ctx.quadraticCurveTo(0, -20 + i * 8, 10, -24 + i * 8); ctx.stroke(); }
-  // the arms: on the pike, or up on the crossbow
-  var hands;
-  if (spear) hands = [{ x: sx, y: -12 }, { x: sx, y: -28 }];
+  for (i = 0; i < 3; i++){ ctx.beginPath(); ctx.moveTo(-10, -24 + i * 8); ctx.quadraticCurveTo(0, -20 + i * 8, 10, -24 + i * 8); ctx.stroke(); }
+  // the arms: on the pike, or on the crossbow (low as he walks, at his shoulder to aim)
+  var hands, xp = null;
+  if (spear) hands = [{ x: KNIGHT.SPEAR_DX, y: -12 }, { x: KNIGHT.SPEAR_DX, y: -28 }];
   else {
-    var a = k.ang, ca = Math.cos(a), sa = Math.sin(a);
-    hands = [{ x: 3 - 7 * ca - 3 * -sa, y: -40 - 7 * sa - 3 * ca }, { x: 3 + 7 * ca, y: -40 + 7 * sa }];
+    var la = f > 0 ? k.ang : Math.PI - k.ang, r = k.raise;
+    xp = { x: 4, y: lerp(-16, -40, r), a: lerp(0.45, la, r) };
+    var ca = Math.cos(xp.a), sa = Math.sin(xp.a);
+    hands = [{ x: xp.x - 7 * ca + 3 * sa, y: xp.y - 7 * sa - 3 * ca }, { x: xp.x + 7 * ca, y: xp.y + 7 * sa }];
   }
   [-1, 1].forEach(function(s, i2){
     var h = hands[i2];
     ctx.strokeStyle = '#1b1416'; ctx.lineWidth = 5.5;
-    ctx.beginPath(); ctx.moveTo(s * 12, -34); ctx.quadraticCurveTo(s * 16, -18, h.x, h.y); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,110,40,.3)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 12, -34); ctx.quadraticCurveTo(s * 15, -18, h.x, h.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,110,40,.35)'; ctx.lineWidth = 1; ctx.stroke();
     ctx.fillStyle = '#231a1c'; ctx.beginPath(); ctx.arc(h.x, h.y, 3.4, 0, 6.2832); ctx.fill();
   });
-  if (!spear) drawCrossbow(k);
+  if (xp) drawCrossbow(xp, k.st === 'walk' || k.st === 'aim' || k.st === 'lock');
   // spiked shoulders
   [-1, 1].forEach(function(s){
     ctx.fillStyle = '#241c1f'; ctx.beginPath(); ctx.ellipse(s * 14, -37, 9.5, 6, s * 0.3, 0, 6.2832); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,110,40,.4)'; ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,120,50,.5)'; ctx.lineWidth = 0.9; ctx.stroke();
     ctx.fillStyle = '#161012'; ctx.beginPath(); ctx.moveTo(s * 15, -41); ctx.quadraticCurveTo(s * 21, -46, s * 26, -53); ctx.quadraticCurveTo(s * 20, -44, s * 21, -40); ctx.closePath(); ctx.fill();
   });
-  // the helm and its horns
-  ctx.strokeStyle = '#1a1314'; ctx.lineCap = 'round';
+  // the helm, turned up to the heart, and its horns
+  ctx.save();
+  ctx.translate(0, -42); ctx.rotate(k.look * f); ctx.translate(0, 42);
+  ctx.strokeStyle = '#1a1314';
   [-1, 1].forEach(function(s){
     ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(s * 5, -57); ctx.quadraticCurveTo(s * 13, -57, s * 14, -64); ctx.stroke();
     ctx.lineWidth = 1.7; ctx.beginPath(); ctx.moveTo(s * 14, -64); ctx.quadraticCurveTo(s * 14.8, -69, s * 12, -73); ctx.stroke();
@@ -4660,25 +4733,16 @@ function drawKnight(k, spear){
   ctx.strokeStyle = '#020001'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-6, -55.5); ctx.lineTo(0, -52.8); ctx.lineTo(6, -55.5); ctx.stroke();
   ctx.globalCompositeOperation = 'lighter';
   [-1, 1].forEach(function(s){
-    drawGlow(s * 3.2, -54.2, 10, [255, 80, 20], r, 22, 12);
-    ctx.fillStyle = 'rgba(255,200,130,' + r + ')'; ctx.beginPath(); ctx.ellipse(s * 3.2, -54.2, 1.6, 1.1, 0, 0, 6.2832); ctx.fill();
+    drawGlow(s * 3.2, -54.2, 10, [255, 80, 20], 1, 22, 12);
+    ctx.fillStyle = 'rgba(255,200,130,1)'; ctx.beginPath(); ctx.ellipse(s * 3.2, -54.2, 1.6, 1.1, 0, 0, 6.2832); ctx.fill();
   });
-  ctx.globalCompositeOperation = 'source-over';
-  // the magma he wades in, bright where it meets him
-  var lg = ctx.createLinearGradient(0, 8, 0, -22);
-  lg.addColorStop(0, 'rgba(255,120,30,.55)'); lg.addColorStop(1, 'rgba(255,120,30,0)');
-  ctx.fillStyle = lg; ctx.fillRect(-20, -22, 40, 30);
   ctx.restore();
-  // where he breaks the crust
-  drawGlow(x, FLOOR, 30, [255, 110, 30], 0.75 * r, 76, 22);
-  ctx.fillStyle = 'rgba(255,170,80,' + (0.55 * r) + ')';
-  ctx.beginPath(); ctx.ellipse(x, FLOOR, 8 + 12 * r, 2.4, 0, 0, 6.2832); ctx.fill();
+  ctx.restore();
 }
-// his crossbow, raised along its aim; drawn in the knight's own frame
-function drawCrossbow(k){
-  var loaded = k.st === 'aim' || k.st === 'lock';
+// his crossbow, in his own (facing) frame: p is its pivot and angle
+function drawCrossbow(p, loaded){
   ctx.save();
-  ctx.translate(3, -40); ctx.rotate(k.ang);
+  ctx.translate(p.x, p.y); ctx.rotate(p.a);
   ctx.lineCap = 'round';
   ctx.strokeStyle = '#2a1d16'; ctx.lineWidth = 3.6; ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(14, 0); ctx.stroke();
   ctx.strokeStyle = '#140d0b'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(10, -12); ctx.quadraticCurveTo(18, 0, 10, 12); ctx.stroke();
@@ -5109,25 +5173,54 @@ function drawLantern(P, w){
   }
   ctx.restore();
 }
-// his lantern's beam: the aim line tracks along the floor, locks, then a column of light stands there
+// his lantern's beam. Aiming, the lantern gathers its light (a glow swelling
+// round it, sparks crawling over it) while a pale line runs from its foot to
+// the floor under the heart; locked, the line flashes; then a beam of energy
+// stands along that line: narrow where it leaves the lantern, wide where it
+// strikes, a white core in gold with filaments crawling along it.
 function drawWardenBeam(w){
   var bm = w.beam; if (!bm || w.dead || w.dying) return;
-  var P = wardenPose(w), L = P.lantern, top = L.y + WARDEN.LAMP_T;
+  var B = beamLine(w), dx = B.x1 - B.x0, dy = B.y1 - B.y0, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L, i;
   ctx.save();
   if (bm.state === 'aim' || bm.state === 'lock'){
-    telegraphStyle(bm.state === 'lock', bm.t, 0.9);
-    ctx.beginPath(); ctx.moveTo(L.x, top); ctx.lineTo(bm.x, top + 20); ctx.lineTo(bm.x, LH); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath(); ctx.moveTo(bm.x - 18, FLOOR); ctx.lineTo(bm.x + 18, FLOOR); ctx.stroke();
-  } else if (bm.state === 'fire'){
-    var k = 1 - bm.t / 0.6;
+    var gk = bm.state === 'aim' ? bm.t / 0.9 : 1;
     ctx.globalCompositeOperation = 'lighter';
-    var g = ctx.createLinearGradient(bm.x - 18, 0, bm.x + 18, 0);
-    g.addColorStop(0, 'rgba(255,220,120,0)'); g.addColorStop(0.5, 'rgba(255,248,215,' + (0.95 * (0.4 + 0.6 * k)) + ')'); g.addColorStop(1, 'rgba(255,220,120,0)');
-    ctx.fillStyle = g; ctx.fillRect(bm.x - 18, top + 20, 36, LH - top - 20);
-    ctx.strokeStyle = 'rgba(255,240,200,' + (0.5 * k) + ')'; ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.moveTo(L.x, top); ctx.lineTo(bm.x, top + 20); ctx.stroke();
-    drawGlow(bm.x, FLOOR, 40, [255, 200, 90], k, 120, 40);
+    drawGlow(B.x0, B.y0 - 14, 30, [255, 225, 150], 0.35 + 0.65 * gk, 50 + 50 * gk, 60 + 50 * gk);
+    ctx.strokeStyle = 'rgba(255,240,200,' + (0.35 + 0.5 * gk) + ')'; ctx.lineWidth = 1;
+    for (i = 0; i < 3; i++){
+      var a = Math.random() * 6.2832, r0 = 14 + Math.random() * 6, r1 = r0 + 6 + 10 * gk;
+      ctx.beginPath(); ctx.moveTo(B.x0 + Math.cos(a) * r0, B.y0 - 14 + Math.sin(a) * r0 * 1.2);
+      ctx.lineTo(B.x0 + Math.cos(a + 0.2) * (r0 + r1) / 2 + rnd(-2, 2), B.y0 - 14 + Math.sin(a + 0.2) * (r0 + r1) / 2 * 1.2);
+      ctx.lineTo(B.x0 + Math.cos(a - 0.1) * r1, B.y0 - 14 + Math.sin(a - 0.1) * r1 * 1.2); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    telegraphStyle(bm.state === 'lock', bm.t, 0.9);
+    ctx.beginPath(); ctx.moveTo(B.x0, B.y0); ctx.lineTo(B.x1, B.y1); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(B.x1 - BEAM.W1, FLOOR); ctx.lineTo(B.x1 + BEAM.W1, FLOOR); ctx.stroke();   // how wide it will burn
+  } else if (bm.state === 'fire'){
+    var k = 1 - bm.t / 0.6, flick = 0.85 + 0.15 * Math.sin(G.t * 70);
+    ctx.globalCompositeOperation = 'lighter';
+    [[1.9, 'rgba(255,170,70,', 0.22], [1.2, 'rgba(255,215,130,', 0.45], [0.55, 'rgba(255,248,220,', 0.9]].forEach(function(layer){
+      var w0 = BEAM.W0 * layer[0], w1 = BEAM.W1 * layer[0];
+      ctx.beginPath();
+      ctx.moveTo(B.x0 + nx * w0, B.y0 + ny * w0); ctx.lineTo(B.x1 + nx * w1, B.y1 + ny * w1);
+      ctx.lineTo(B.x1 - nx * w1, B.y1 - ny * w1); ctx.lineTo(B.x0 - nx * w0, B.y0 - ny * w0); ctx.closePath();
+      ctx.fillStyle = layer[1] + (layer[2] * k * flick) + ')'; ctx.fill();
+    });
+    // energy crawling along it
+    ctx.strokeStyle = 'rgba(255,255,240,' + (0.75 * k) + ')'; ctx.lineWidth = 1.2;
+    for (var f2 = 0; f2 < 2; f2++){
+      ctx.beginPath();
+      for (var u = 0; u <= 1.001; u += 0.08){
+        var off = (Math.random() - 0.5) * 2 * lerp(BEAM.W0, BEAM.W1, u) * 0.7;
+        var px = B.x0 + dx * u + nx * off, py = B.y0 + dy * u + ny * off;
+        if (u === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    drawGlow(B.x0, B.y0, 30, [255, 240, 200], k, 70, 70);
+    drawGlow(B.x1, B.y1, 44, [255, 200, 90], k, 150, 56);
   }
   ctx.restore();
 }
@@ -5557,8 +5650,7 @@ function drawFlame(fl){
     drawJet(fl);
   } else if (fl.type === 'chain'){
     drawChain(fl);
-  } else if (fl.type === 'spears' || fl.type === 'xbows'){
-    drawKnights(fl);
+
   } else if (fl.type === 'breath' && fl.t > fl.warn){
     var d = G.devil, bt2 = (fl.t - fl.warn) / fl.burn;
     var top = d ? d.y + 62 : 0;
@@ -7506,7 +7598,7 @@ function draw(){
     else drawDevil(G.devil);
   }
   if (G.arms && !taken && !gripped && !skip('arms')) drawArms();
-  if (G.level === 2) G.cages.forEach(drawCage);
+  if (G.level === 2){ G.cages.forEach(drawCage); drawKnights(); }
   if (!skip('flames')) G.flames.forEach(drawFlame);
   G.forks.forEach(drawFork);
   G.loose.forEach(function(L){

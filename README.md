@@ -201,10 +201,12 @@ starts again from the pit. The rules are DESIGN.md rule 11; in short:
   links (a Verlet rope pinned at the pulley and the ball) that bows and trails
   as it swings. A ball that meets a hanging cage **smashes it**, spilling the
   soul for you to pick up; it ends a shade too.
-- **Dark knights** rise out of the crust. Spearmen come up under the heart
-  and wade after it, a pale line over each pike showing its reach; they lock,
-  then drive their pikes straight up one after another. A crossbowman rises
-  to one side, aims up along a pale line, and looses a quarrel along it.
+- **Dark knights** march in from the sides and patrol the floor, their helms
+  turned up to follow the heart; touching one is a hit. Now and then they
+  attack: spearmen stride under the heart, a pale line over each pike showing
+  its reach, lock, and drive their pikes straight up one after another; a
+  crossbowman stops, raises his crossbow along a pale line to the heart, and
+  looses a quarrel along it.
 - **Shades** gather at a wall while you carry souls and drift after the last
   one; a bolt ends a shade, at the cost of the bolt.
 - **The Warden** arrives when the meter fills: a knight in black iron with a
@@ -212,11 +214,11 @@ starts again from the pit. The rules are DESIGN.md rule 11; in short:
   hoisted out of reach, and his lantern is the target: it hangs from his fist
   on a chain and swings as he moves, shuttered except in brief windows; two
   hits break it. He swings his flail at you (the same pendulum, from his
-  fist), sweeps the lantern's beam across the floor to burn a column where it
-  locks, and calls up his knights. Bolts on his armour are wasted; they pass
+  fist), fires a beam of energy from the lantern to the floor where the heart
+  was when it locked, and sends his knights at you (calling in more). Bolts on his armour are wasted; they pass
   through his cloak.
 - **Endings.** Break the lantern and every cage bursts; his armour falls apart
-  into the crust, and the souls join the heart as the light takes them all
+  into the crust, his knights burn away, and the souls join the heart as the light takes them all
   up. Run out of bolts first and he locks the heart in a cage with them.
 - **Score** adds 500 for each soul you brought out (delivered, plus those still
   with you when the lantern breaks), on a board of its own.
@@ -237,9 +239,10 @@ orange power lamp five times (no more than three seconds between clicks). A
 panel opens in the page's top-left corner: **Play I**, **Play II**, **Boss
 now**, **Kill the boss**, **No damage**, **Endless bolts**, **Slow motion**,
 **Frame times** and **Leave dev mode**. It stays on across reloads on that
-device until it is left (or knocked for again). A dev run never reaches the
-world board or its counters and never becomes a saved best; its panels say
-*Dev run · not recorded*. The cabinet is not drawn under 600 px, so the knock
+device until it is left (or knocked for again). A run that dev mode touches
+(on when it starts, or turned on during it) is a dev run: it never reaches
+the world board or its counters and never becomes a saved best; its panels
+say *Dev run · not recorded*. The cabinet is not drawn under 600 px, so the knock
 is for a computer or a tablet.
 
 ## The world board

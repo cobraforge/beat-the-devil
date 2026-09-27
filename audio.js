@@ -173,7 +173,7 @@ var sfx = {
   ballClang: function(x){ ironRing(x, 230, 0.26, 1.1); },
   chainReel: function(x){ chainReel(x); },
   cageSmash: function(){ ironRing(210, 330, 0.2, 0.8); chimes([1318.5, 1760], 0.06, 0.08); noise({dur:0.3, vol:0.2, type:'bandpass', freq:2400, q:1.5, slide:900}); },
-  knightRise: function(x){ knightRise(x); },
+  knightMarch: function(x){ knightMarch(x); },
   spearThrust: function(x){ spearThrust(x); },
   xbowTwang: function(x){ xbowTwang(x); },
   quarrelThunk: function(x){ quarrelThunk(x); },
@@ -868,13 +868,16 @@ function chainSnap(x){
 function chainWhoosh(x, v){ if (!running()) return; var k = Math.min(1, Math.max(0.25, v / 900)); noise({dur:0.42, vol:0.22 * k, type:'bandpass', freq:380, q:1.3, slide:1200 + 700 * k, attack:0.14, bus:panBus(x)}); }
 // hauled back up: the ratchet
 function chainReel(x){ if (!running()) return; var bus = panBus(x), t0 = actx.currentTime; for (var i = 0; i < 11; i++) noise({t: t0 + i * 0.042, dur: 0.018, vol: 0.1, type: 'bandpass', freq: 1900, q: 4, bus: bus}); }
-// a knight breaking up through the crust: a low seethe, pops, and iron
-function knightRise(x){
+// a knight marching in: heavy iron footfalls on the crust, and the clink of his plate
+function knightMarch(x){
   if (!running()) return;
   var bus = panBus(x), t0 = actx.currentTime;
-  noise({dur:0.55, vol:0.22, type:'lowpass', freq:380, slide:160, attack:0.05, bus:bus});
-  for (var i = 0; i < 6; i++) tone({t: t0 + Math.random() * 0.5, freq: 80 + Math.random() * 70, slide: 40, dur: 0.07, vol: 0.12, type: 'sine', bus: bus});
-  ironRing(x, 150, 0.05, 0.4);
+  for (var i = 0; i < 4; i++){
+    var t = t0 + i * 0.32;
+    tone({t: t, freq: 70, slide: 45, dur: 0.12, vol: 0.22, type: 'sine', bus: bus});
+    noise({t: t, dur: 0.05, vol: 0.12, type: 'lowpass', freq: 500, bus: bus});
+    noise({t: t + 0.02, dur: 0.03, vol: 0.05, type: 'bandpass', freq: 2600 + Math.random() * 1200, q: 6, bus: bus});
+  }
 }
 // a pike driven up: a rip of air and the ring of the blade
 function spearThrust(x){ if (!running()) return; var bus = panBus(x); noise({dur:0.16, vol:0.24, type:'highpass', freq:700, slide:4200, bus:bus}); tone({freq:2350, slide:2600, dur:0.35, vol:0.05, type:'sine', attack:0.01, bus:bus}); tone({freq:3520, dur:0.25, vol:0.025, type:'sine', bus:bus}); }

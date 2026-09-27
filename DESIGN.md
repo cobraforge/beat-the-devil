@@ -402,17 +402,25 @@ the top centre. You free the souls and carry them up into it.
 | | aim | lock | fire |
 |---|---|---|---|
 | Chain | a spiked ball waits in a clamp under the roof girder (`CHAIN.ROOF = 97`, under the HUD), its chain run to a pulley; a pale path shows its drop and the arc it will swing, 0.9 s; the chain's length tracks the heart | path snaps solid, flashes, 0.22 s; the arc passes through the heart **at lock, not led** | the clamp opens; the ball falls (gravity 1300 px/s²) until the chain runs out, catches, and swings as a pendulum for 3.0 s, striking the walls and coming off them at half speed; then it is hauled up in 0.5 s, harmless |
-| Spearmen | 1–3 dark knights rise out of the crust under the heart and wade after it at 70 px/s, 64 px apart; a pale line over each pike shows its reach (the heart's height + 50, 140–360 px above the floor), 0.9 s | lines solid, flash, 0.22 s, then a further 0.18 s per knight, left to right | each drives its pike straight up in 0.1 s, holds 0.4 s, pulls it back 0.3 s and sinks; the pike is a plain hit within 13 px of its shaft |
-| Crossbowman | rises 90–170 px to one side of the heart, then aims up at it along a pale line, 0.5 + 0.6 s | line solid, flashes, 0.22 s; **at lock, not led** | a quarrel along that line at 720 px/s, into the roof or a wall; a plain hit |
+| Spear attack | 1–3 spearmen of the patrol (the nearest free) stride under the heart at 75 px/s, 64 px apart; a pale line over each pike shows its reach (the heart's height + 50, 150–360 px above the floor), 0.9 s | lines solid, flash, 0.22 s, then a further 0.18 s per knight, left to right | each drives his pike straight up in 0.1 s, holds 0.4 s, pulls it back 0.3 s, and after 0.5 s marches on; the pike is a plain hit within 13 px of its shaft |
+| Crossbow attack | a crossbowman of the patrol stops, raises his crossbow to his shoulder (0.3 s) and aims up at the heart along a pale line, 0.7 s | line solid, flashes, 0.22 s; **at lock, not led** | a quarrel along that line at 720 px/s, into the roof or a wall; a plain hit |
 
 The chain's ball hurts from the moment it is let go (within 19 px of the
 heart's centre); its chain hurts once it swings (within 11 px). **One swinging
 chain at a time.** It is let go on the far side of the heart when there is
 room (down through the bottom and up through the heart), or dropped beyond
-it on the heart's own side, whichever carries the swing past it. Spearmen
-come from 20 % of the phase (one before 45 %, two before 75 %, then three),
-every 6.5 s easing to 4.5 s; a crossbowman from 40 %, every 8–10.5 s (a
-little sooner as the meter fills); a chain is tried every 3.4–4.4 s.
+it on the heart's own side, whichever carries the swing past it.
+**The patrol.** Dark knights march in from the sides as the meter fills (a
+spearman as the level's card clears, another at 20 %, a crossbowman at 40 %,
+a spearman at 70 %; four at most) and pace the floor at 30 px/s, turning at
+the walls, every 4–7 s, and short of each other, their helms turned up to
+follow the heart. **Touching one is a hit** (within 20 px of his middle, below
+the top of his helm, 100 px up). The patrol itself is not a hazard for the cap
+of two; its attacks are — a spear attack is one group, a crossbow attack (and
+its quarrel in flight) another. Spear attacks come from 20 % of the phase (one
+spearman before 45 %, two before 75 %, then three), every 6.5 s easing to
+4.5 s; a crossbow attack from 40 %, every 8–10.5 s (a little sooner as the
+meter fills); a chain is tried every 3.4–4.4 s.
 **A ball that meets a hanging cage smashes it:** the soul spills out and waits
 where it fell, bobbing, for the heart to collect it (touching it is enough,
 if there is room to carry it). A ball through a shade ends the shade.
@@ -436,16 +444,18 @@ break it.** *"You have five bolts. Two are for his lantern."* is said once, at
 the start of the level, and never again. His attacks cycle: his **flail** (the
 chain from his right fist, wound back along its arc through the aim and lock
 and let fly, 110–520 px long, swinging 2.6 s — he stands still while it is
-out); his **lantern beam** (the light tracks the heart's x across the floor
-for 0.9 s, locks and flashes for 0.22 s, then a 36 px column of it stands at
-the locked x for 0.6 s, a burn); and **his knights** (a rank of three
-spearmen under the heart, then next time a pair of crossbowmen 0.35 s
-apart). A bolt on the shuttered lantern is *NOT YET*; on his armour (helm,
+out); his **lantern beam** (the lantern gathers its light for 0.9 s while a
+pale line runs from its foot to the floor under the heart, tracking its x;
+the line locks and flashes for 0.22 s; then a beam of energy stands along it
+for 0.6 s, 10 px wide at the lantern and 40 px where it strikes — a burn); and
+**his knights** (he sends the patrol at the heart: its spearmen as a rank of up
+to three, then next time its crossbowmen, 0.35 s apart; and more march in
+until there are three spearmen and a crossbowman). A bolt on the shuttered lantern is *NOT YET*; on his armour (helm,
 pauldrons, breastplate, faulds, arms), *WASTED*. Bolts pass through his cloak.
 
 **Endings.** Break the lantern and every cage bursts: all the souls, caged
 and carried, join the heart; his armour comes apart (the helm and pauldrons
-fall into the crust) as he burns away; the roof splits, and the light takes
+fall into the crust) as he burns away, and his knights burn away with him; the roof splits, and the light takes
 them up together, healing the heart as in rule 9. Run out of bolts with the
 lantern whole, and he locks the heart in a cage with them.
 
@@ -469,9 +479,14 @@ use as well as dodge — stand by a cage and step away at the last moment, and
 it opens the cage for you. The knights replaced a rising floor of lava that
 did nothing but take half the arena away: a pike thrust is the jet's
 vertical cousin (a column locked on the heart, dodged sideways), and a
-crossbow is the fork's, and both rise out of the magma the floor already
-glows with. The Warden reuses the fight's grammar (windows, two hits, one
-line said once) so a player who beat the devil can read him at a glance; a
+crossbow is the fork's. They first rose out of the crust wherever the heart
+was, with nothing to see before they came; as a patrol they are on the floor
+the whole time, looking up at the heart, so the player can see which of them
+will come and from where, and the floor is somewhere to keep away from rather
+than a trapdoor. The lantern's beam was first a column standing at the
+heart's x with a line bent to it from the lantern, and it seemed to come from
+nowhere (or from his keys); a beam is a straight line from what makes it.
+The Warden reuses the fight's grammar (windows, two hits, one line said once) so a player who beat the devil can read him at a glance; a
 swinging lantern is the devil's sway, lead your shot. Making the dungeon
 something you reach only by beating the pit keeps the story in order — you
 go back down for them — and makes level 2 the reward, not a menu item.
@@ -479,9 +494,10 @@ go back down for them — and makes level 2 the reward, not a menu item.
 **In code.** `G.level`, `nextLevel()`, `startGame(level)`, the `LEVEL 2`
 section of `game.js`: `STOLEN`, `stolenReset()`, `lowerCage()`,
 `updateStolen()`; `CHAIN`, `spawnChain()`, `chainPlan()`, `stepChain()`,
-`ropeStep()`, `smashCage()`, `updateStrays()`; `KNIGHT`, `spawnSpears()`,
-`spawnXbows()`, `stepKnights()`; `WARDEN`, `makeWarden()`, `wardenPose()`,
-`spawnFlail()`, `updateWarden()`, `wardenArmour()`, `wardenBolt()`,
+`ropeStep()`, `smashCage()`, `updateStrays()`; `KNIGHT`, `PATROL`,
+`knightEnter()`, `knightAttack()`, `updateKnights()`; `WARDEN`, `makeWarden()`,
+`wardenPose()`, `spawnFlail()`, `beamLine()`, `updateWarden()`, `wardenArmour()`,
+`wardenBolt()`,
 `updateWreck()`; the `released` and `caged` endings; and their drawing
 (`drawChain()`, `drawKnight()`, the Warden's sprites `wardenBack()` /
 `wardenFront()` and `drawWarden()`).
@@ -496,9 +512,11 @@ knock, or its own button, turns it off. It stays on across reloads on that
 device (`btd.dev`). Its panel, over the page's top-left corner, starts either
 level at once, jumps to the boss, kills him, and toggles no damage, endless
 bolts, slow motion (0.35×) and the frame-time overlay; a small *DEV* shows in
-the corner of the picture while it is on. **A dev run never reaches the world
-board or the counters, and never becomes a saved best** — the win and lose
-panels say *Dev run · not recorded*.
+the corner of the picture while it is on. A run is a **dev run** if dev mode
+is on when it starts or is turned on at any moment during it (`G.dev`): **a
+dev run never reaches the world board or the counters, and never becomes a
+saved best** — its end is never sent, no name is asked for, and the win and
+lose panels say *Dev run · not recorded*.
 
 **Why.** Testing level 2 used to mean beating level 1 every time, and a test
 run on the live site bumps the public counters. The knock is on the cabinet
@@ -506,7 +524,8 @@ because it is out of the way of play; the cabinet is not drawn on screens
 under 600 px, so it is a computer's or a tablet's.
 
 **In code.** `DEV`, `devKnock()`, `devToggle()`, `devRender()`, the `#dev`
-panel in `index.html`; `worldStart()` and `saveBest()` check `DEV.on`.
+panel in `index.html`; `G.dev` is set in `reset()` and by `devToggle()`, and
+`worldStart()`, `runOver()` and `saveBest()` check it.
 
 ---
 
