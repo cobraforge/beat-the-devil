@@ -340,7 +340,8 @@ with `/api/start` and is decided with `/api/end`, sent the moment the devil
 dies or the heart is lost; the seconds are the server's own clock between the
 two, and the server computes the score. The client sends only the outcome
 and the hearts left, checked for range; a win under 50 s is refused (the
-fastest real one is about 55). The fifty best *named* runs make the board; a
+fastest real one is about 55; in level 2, under 55 s, since its rescue alone
+is 50). The fifty best *named* runs make the board; a
 run that places gets fifteen minutes to take a name (twelve characters,
 upper case). Each is stored with its date. Every game counts toward the
 soul counters on the title: *stolen* (every loss — the heart gave out or he
@@ -365,6 +366,83 @@ the time floor keep that to deliberate effort, not a script.
 **In code.** `boardScore()`, `runSeconds()`, `runOver()`, `WORLD`, `api()`,
 `worldLoad/Start/End()`, `renderWorld()`, the name form; on the server
 `scoreFor()`, `MIN_SECONDS`, `TOP`, `NAME_MS`, `STARTS_PER_MINUTE`.
+
+---
+
+## 11. Level 2: The Stolen
+
+The second level. It opens once level 1 has been beaten on the device (or a
+best score is already saved there). Everything above holds in it — five
+bolts, five hearts, the 2.0 s penalty, the telegraph contract, two hazards at
+most — except where this section says otherwise.
+
+**The premise.** The light will not take you alone. Below the pit is his
+dungeon: cages hang from the roof, each holding a stolen soul (a small, dim
+heart), and the floor is a river of lava under a crust. A shaft of light
+comes down at the top centre. You free the souls and carry them up into it.
+
+**The rescue phase** lasts `G.SURV = 50` s; the meter reads *HE IS COMING*.
+- **Seven souls**, in cages at most four at a time (a new cage lowers when
+  one is emptied), 190–420 px down. **To open one**, hold the heart within
+  30 px of it for 1.0 s; leaving drains the lock back at twice the rate.
+- **Freed souls follow** in a short trail. You can carry **three**; each slows
+  you 6 % (a multiplier like the penalties, so rule 2 still holds).
+- **To deliver**, carry them into the light: 88 px wide at the top centre,
+  reached by flying to within 44 px of the ceiling there.
+- **A hit drags every soul you carry back into a cage.** Lives, invulnerability
+  and the penalty are the same as ever.
+
+**Its hazards**, two groups at most, skipped not queued:
+
+| | aim | lock | fire |
+|---|---|---|---|
+| Chain | anchored in the roof, a pale line tracks the heart, 0.45 s | snaps solid, flashes, 0.22 s; target = heart **at lock, not led** | lashes along that vector at 1400 px/s to the floor or a wall, lies there 1.0 s, retracts 0.3 s; a hit is a plain hit |
+| Lava | one half of the floor bubbles and glows, 1.5 s | — (the half is fixed from the first bubble) | rises 0.4 s to 80 px, holds 2.2 s, falls 0.6 s; a burn |
+
+Lava never rises on both halves, never on the same half twice running, and
+not before 20 % of the phase; 80 px leaves the rest of the arena to stand in.
+**Shades** come only while you carry souls: a dark swirl gathers at a wall for
+0.8 s, then drifts at 85 px/s (the heart moves at 265) toward your *last*
+soul. Touching the soul takes it back to a cage; touching the heart does
+nothing. A shade lasts 6 s, and a bolt ends one — a bolt spent there is a
+bolt not spent on the lantern.
+
+**The Warden** arrives when the meter fills: the cages are hoisted out of
+reach, the ceiling drops to `LH*0.42` as in the fight, and his lantern is the
+target. It is shuttered except in its open windows (1.9 s, 0.3 s shorter per
+hit); **two hits break it**. *"You have five bolts. Two are for his lantern."*
+is said once, at the start of the level, and never again. His attacks cycle:
+three chains (the same chain, from his hands, staggered 0.5 s); a lava rise;
+and his **lantern beam** — the light tracks the heart's x across the floor for
+0.9 s, locks and flashes for 0.22 s, then a 36 px column of it stands at the
+locked x for 0.6 s (a burn). A bolt on the shuttered lantern is *NOT YET*; on
+his body, *WASTED*.
+
+**Endings.** Break the lantern and every cage bursts: all the souls, caged
+and carried, join the heart, the roof splits, and the light takes them up
+together, healing the heart as in rule 9. Run out of bolts with the lantern
+whole, and he locks the heart in a cage with them.
+
+**Score.** `hearts × 1000 + time bonus + 500 × souls you brought out` — those
+delivered into the light during the rescue, plus those still with you when
+the lantern breaks. The board is its own (level 2's top fifty), and the
+title's counters add *souls returned*: every soul delivered, in any run, won
+or lost.
+
+**Why.** Level 1 is about not being hit; level 2 is about what you are willing
+to risk while carrying something. Holding still to open a cage, flying up to
+the light, choosing to carry one or three — each is a decision the hazards
+price. A hit costing the souls you carry (not just a heart) is what makes
+carrying three a gamble rather than a free speed-up. Shades hunting the souls
+instead of the heart give the player something to protect, not only
+something to dodge. The Warden reuses the fight's grammar (windows, two
+hits, one line said once) so a player who beat the devil can read him at a
+glance, and the chains reuse the jet's unled lock so the dodge is geometry.
+
+**In code.** `G.level`, `startGame(level)`, the `LEVEL 2` section of
+`game.js`: `STOLEN`, `stolenReset()`, `lowerCage()`, `updateStolen()`, `spawnChain()`,
+`spawnLava()`, `spawnShade()`, `makeWarden()`, `updateWarden()`,
+`wardenBolt()`, the `released` and `caged` endings, and their drawing.
 
 ---
 
