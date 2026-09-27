@@ -187,8 +187,9 @@ speed** (`(300 − seconds) × 10`), so a heart is worth a hundred seconds. The
 clock runs from the first step into the pit to the killing bolt and never
 stops. The HUD shows the clock and `HI`, the world's best when the server
 answers (the device's own best otherwise). A run that places in the world's
-top ten asks for a name on the win panel; the title shows the top five with
-score, hearts, time and date, and a counter of souls stolen (games lost
+top fifty asks for a name on the win panel; the title shows all fifty, ten
+at a time in a list that scrolls (to the player's own place, if they have one),
+with score, hearts, time and date, and a counter of souls stolen (games lost
 worldwide) and freed (won).
 
 It is a Cloudflare Pages Function, `functions/api/[[route]].js`, over a D1
@@ -196,7 +197,7 @@ database:
 
 | | |
 |---|---|
-| `GET /api/board` | the top ten and the counters |
+| `GET /api/board` | the top fifty and the counters |
 | `POST /api/start` | a run begins; returns its id |
 | `POST /api/end {run, outcome, hearts}` | `freed` or `stolen`; the server times it and scores it |
 | `POST /api/name {run, name}` | a placing winner's name |

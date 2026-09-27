@@ -340,7 +340,7 @@ with `/api/start` and is decided with `/api/end`, sent the moment the devil
 dies or the heart is lost; the seconds are the server's own clock between the
 two, and the server computes the score. The client sends only the outcome
 and the hearts left, checked for range; a win under 50 s is refused (the
-fastest real one is about 55). The ten best *named* runs make the board; a
+fastest real one is about 55). The fifty best *named* runs make the board; a
 run that places gets fifteen minutes to take a name (twelve characters,
 upper case). Each is stored with its date. Every game counts toward the
 soul counters on the title: *stolen* (every loss — the heart gave out or he
