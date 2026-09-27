@@ -278,7 +278,8 @@ stops. The HUD shows the clock and `HI`, the world's best when the server
 answers (the device's own best otherwise). A run that places in the world's
 top fifty asks for a name on the win panel; the title shows all fifty, ten
 at a time in a list that scrolls (to the player's own place, if they have one),
-with score, hearts, time and date, and a counter of souls stolen (games lost
+under headings — RANK, NAME, SCORE, HEARTS (left), TIME (to beat him), DATE
+(beaten) — on one grid with the rows, and a counter of souls stolen (games lost
 worldwide), freed (won) and returned (level 2's souls brought out, in any
 run). Each level has its own board, with a tab for each.
 

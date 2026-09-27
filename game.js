@@ -104,7 +104,7 @@ var BRIEF = {
 // game's only recorded sound, and they play through Web Audio (AUDIO.narrator)
 // like the rest of it. Silent when the game is muted, or with the briefing's
 // Voice button (remembered on the device).
-var VOICE_V = 4;                      // bump when the recordings are re-rendered
+var VOICE_V = 5;                      // bump when the recordings are re-rendered
 var NARRATOR = { timings: null, rate: 0.97, loadP: null };
 // lines spoken outside the briefings, rendered by dev/voice.py like the stories:
 // the narrator's when level I is won, and the Warden's as he comes
@@ -113,7 +113,7 @@ var SPOKEN = {
   devildie: { who: 'devil', text: 'No! No... NO!' },
   win1: { who: 'narrator', text: 'You beat the devil.\n\nBut it is not over yet. The others he took are still down there.\n\nWe have to save them.' },
   warden: { who: 'warden', text: 'You will never escape.' },
-  wardendie: { who: 'warden', text: 'No... They were mine.' },
+  wardendie: { who: 'warden', text: 'No~... They were mine.' },     // ~: that word drawn out into a cry
   win2: { who: 'narrator', text: 'You brought them back.\n\nYou saved them.\n\nThank you, hero.' }
 };
 // the narrator says a line (not while the game is muted); its length, or 0
@@ -515,7 +515,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 48;
+  window.BTD_VERSION = 49;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
@@ -3048,7 +3048,7 @@ function wardenDies(){
   G.white = 1; G.shake = 1.6;
   music.stop();
   sfx.lanternShatter(); sfx.roar();
-  growl('wardendie', false, 450);                  // his last words
+  growl('wardendie', false, 250);                  // his last words: a long cry, then the rest
   burnOutHazards();
   knightsStand(true);                       // with their master gone, his knights burn away
   G.freed = { hand: { x: G.player.x, y: G.player.y, close: 0 }, grabbed: false, char: 0, released: true, heal: 0 };

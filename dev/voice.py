@@ -52,6 +52,24 @@ DEVIL = dict(scale=1.35, noise=0.8, noise_w=1.0)
 # the narrator afraid: quicker, and less steady
 SCARED = dict(scale=0.88, noise=1.0, noise_w=1.1)
 MEN = {'warden': WARDEN, 'devil': DEVIL}
+# A word marked with a trailing ~ in a man's line ("No~... They were mine.") is
+# drawn out into a cry: said very slowly, then stretched further as its pitch
+# sags and wavers (like a voice breaking), before a pause and the rest.
+CRY_SCALE, CRY_RATE, CRY_VIBRATO, CRY_PAUSE = 3.2, (0.92, 0.5), (5.2, 0.04), 0.4
+
+def cry(x):
+    """stretch a word, its pitch falling as it goes, with a waver in it"""
+    n, out, pos, i = len(x), [], 0.0, 0
+    while pos < n - 1:
+        u = pos / n
+        rate = (CRY_RATE[0] + (CRY_RATE[1] - CRY_RATE[0]) * u) * (1 + CRY_VIBRATO[1] * np.sin(2 * np.pi * CRY_VIBRATO[0] * i / SR))
+        j = int(pos); f = pos - j
+        out.append(x[j] * (1 - f) + x[j + 1] * f)
+        pos += rate; i += 1
+    y = np.array(out, dtype='float32')
+    fade = int(0.12 * SR)
+    y[-fade:] *= np.linspace(1, 0, fade, dtype='float32')        # it trails off
+    return y
 
 def js_string(s):
     """a single-quoted JS string literal's body, unescaped"""
@@ -134,7 +152,16 @@ def main():
         if only and key not in only: continue
         if who in MEN or who == 'scared':
             v, model = (MEN[who], a.warden) if who in MEN else (SCARED, a.model)
-            data = speak(a.piper, model, ' '.join(text.split('\n')), v['scale'], v['noise'], v['noise_w'])
+            line = ' '.join(text.split('\n'))
+            if '~' in line:
+                word, rest = line.split('~', 1)
+                rest = rest.lstrip('. ').strip()
+                parts = [cry(speak(a.piper, model, word, CRY_SCALE, v['noise'], v['noise_w'])),
+                         np.zeros(int(CRY_PAUSE * SR), dtype='float32')]
+                if rest: parts.append(speak(a.piper, model, rest, v['scale'], v['noise'], v['noise_w']))
+                data = np.concatenate(parts)
+            else:
+                data = speak(a.piper, model, line, v['scale'], v['noise'], v['noise_w'])
             audio, segs = finish(np.concatenate([np.zeros(int(LEAD * SR), dtype='float32'), data, np.zeros(int(TAIL * SR), dtype='float32')])), []
         else:
             audio, segs = render(a.piper, a.model, say, text)

@@ -469,8 +469,11 @@ game slows and drops to 0.8, doubles a shade lower (0.775), tears with a soft
 clip, darkens and throws hard into the long reverb, his eyes burning as he
 says it and the words written under him; he attacks 0.4 s after it ends (if
 the sound is off, or the line is not there, he roars instead, as before).
-**When the lantern breaks he has last words** — *"No... They were mine."* — in
-the same voice, 0.45 s after it shatters.
+**When the lantern breaks he has last words** — *"Nooooo... they were mine."* —
+in the same voice, 0.25 s after it shatters: the *No* drawn out into a cry
+(said very slowly, then stretched further as its pitch sags and wavers —
+`cry()` in `dev/voice.py`, marked `No~` in `SPOKEN`), a pause, then the rest,
+his voice lingering as he burns away.
 *"You have five bolts. Two are for his lantern."* is said once, on
 the level's briefing (rule 13), and never again; once play starts, a grace of
 `STOLEN.INTRO = 1.5` s passes before its hazards. His attacks cycle: his **flail** (the
