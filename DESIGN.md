@@ -143,7 +143,8 @@ brackets interesting.
 
 **In code.** `throwFork()` (`aimT 0.45`, `lockT 0.22`), `spawnJet()`
 (`aimT 0.9`, `lockT 0.22`), the state machines in `moveHazards()`. Any new
-aimed attack must use the same three states and the same lock length.
+aimed attack must use the same three states and the same lock length; level
+2's chains, spearmen and crossbowmen do (rule 11).
 
 ---
 
@@ -371,15 +372,19 @@ the time floor keep that to deliberate effort, not a script.
 
 ## 11. Level 2: The Stolen
 
-The second level. It opens once level 1 has been beaten on the device (or a
-best score is already saved there). Everything above holds in it — five
-bolts, five hearts, the 2.0 s penalty, the telegraph contract, two hazards at
-most — except where this section says otherwise.
+The second level, and the only way into it is through the first: there is
+no choosing a level. Every run starts in the pit; beat the devil and the win
+panel's next step (space, or a tap) goes *back down for them*. From anywhere
+else — the title, any loss, level 2's own win — the next run is the pit
+again, so losing in the dungeon means starting over from the beginning.
+Level 2 starts with five hearts and five bolts of its own. Everything above
+holds in it — five bolts, five hearts, the 2.0 s penalty, the telegraph
+contract, two hazards at most — except where this section says otherwise.
 
 **The premise.** The light will not take you alone. Below the pit is his
 dungeon: cages hang from the roof, each holding a stolen soul (a small, dim
-heart), and the floor is a river of lava under a crust. A shaft of light
-comes down at the top centre. You free the souls and carry them up into it.
+heart), and the floor is a crust over magma. A shaft of light comes down at
+the top centre. You free the souls and carry them up into it.
 
 **The rescue phase** lasts `G.SURV = 50` s; the meter reads *HE IS COMING*.
 - **Seven souls**, in cages at most four at a time (a new cage lowers when
@@ -396,11 +401,21 @@ comes down at the top centre. You free the souls and carry them up into it.
 
 | | aim | lock | fire |
 |---|---|---|---|
-| Chain | anchored in the roof, a pale line tracks the heart, 0.45 s | snaps solid, flashes, 0.22 s; target = heart **at lock, not led** | lashes along that vector at 1400 px/s to the floor or a wall, lies there 1.0 s, retracts 0.3 s; a hit is a plain hit |
-| Lava | one half of the floor bubbles and glows, 1.5 s | — (the half is fixed from the first bubble) | rises 0.4 s to 80 px, holds 2.2 s, falls 0.6 s; a burn |
+| Chain | a spiked ball waits in a clamp under the roof girder (`CHAIN.ROOF = 97`, under the HUD), its chain run to a pulley; a pale path shows its drop and the arc it will swing, 0.9 s; the chain's length tracks the heart | path snaps solid, flashes, 0.22 s; the arc passes through the heart **at lock, not led** | the clamp opens; the ball falls (gravity 1300 px/s²) until the chain runs out, catches, and swings as a pendulum for 3.0 s, striking the walls and coming off them at half speed; then it is hauled up in 0.5 s, harmless |
+| Spearmen | 1–3 dark knights rise out of the crust under the heart and wade after it at 70 px/s, 64 px apart; a pale line over each pike shows its reach (the heart's height + 50, 140–360 px above the floor), 0.9 s | lines solid, flash, 0.22 s, then a further 0.18 s per knight, left to right | each drives its pike straight up in 0.1 s, holds 0.4 s, pulls it back 0.3 s and sinks; the pike is a plain hit within 13 px of its shaft |
+| Crossbowman | rises 90–170 px to one side of the heart, then aims up at it along a pale line, 0.5 + 0.6 s | line solid, flashes, 0.22 s; **at lock, not led** | a quarrel along that line at 720 px/s, into the roof or a wall; a plain hit |
 
-Lava never rises on both halves, never on the same half twice running, and
-not before 20 % of the phase; 80 px leaves the rest of the arena to stand in.
+The chain's ball hurts from the moment it is let go (within 19 px of the
+heart's centre); its chain hurts once it swings (within 11 px). **One swinging
+chain at a time.** It is let go on the far side of the heart when there is
+room (down through the bottom and up through the heart), or dropped beyond
+it on the heart's own side, whichever carries the swing past it. Spearmen
+come from 20 % of the phase (one before 45 %, two before 75 %, then three),
+every 6.5 s easing to 4.5 s; a crossbowman from 40 %, every 8–10.5 s (a
+little sooner as the meter fills); a chain is tried every 3.4–4.4 s.
+**A ball that meets a hanging cage smashes it:** the soul spills out and waits
+where it fell, bobbing, for the heart to collect it (touching it is enough,
+if there is room to carry it). A ball through a shade ends the shade.
 **Shades** come only while you carry souls: a dark swirl gathers at a wall for
 0.8 s, then drifts at 85 px/s (the heart moves at 265) toward your *last*
 soul. Touching the soul takes it back to a cage; touching the heart does
@@ -408,20 +423,31 @@ nothing. A shade lasts 6 s, and a bolt ends one — a bolt spent there is a
 bolt not spent on the lantern.
 
 **The Warden** arrives when the meter fills: the cages are hoisted out of
-reach, the ceiling drops to `LH*0.42` as in the fight, and his lantern is the
-target. It is shuttered except in its open windows (1.9 s, 0.3 s shorter per
-hit); **two hits break it**. *"You have five bolts. Two are for his lantern."*
-is said once, at the start of the level, and never again. His attacks cycle:
-three chains (the same chain, from his hands, staggered 0.5 s); a lava rise;
-and his **lantern beam** — the light tracks the heart's x across the floor for
-0.9 s, locks and flashes for 0.22 s, then a 36 px column of it stands at the
-locked x for 0.6 s (a burn). A bolt on the shuttered lantern is *NOT YET*; on
-his body, *WASTED*.
+reach (spilled souls are taken back up with them), the ceiling drops to
+`LH*0.42` as in the fight, and he comes down out of the dark. He is a knight
+in black iron, his legs lost in a tattered cloak: a horned great helm with a
+fire in its slit (it lights as he arrives, then he roars), peaked and spiked
+pauldrons, ribs worked into his breastplate with a fire in the grooves, the
+keys to every cage at his hip. **His lantern hangs from his left fist** on a
+chain and swings with his movement (a pendulum, like everything that hangs in
+this level), so a shot at it is led; it is the target, shuttered except in its
+open windows (1.9 s, 0.3 s shorter per hit), when he raises it. **Two hits
+break it.** *"You have five bolts. Two are for his lantern."* is said once, at
+the start of the level, and never again. His attacks cycle: his **flail** (the
+chain from his right fist, wound back along its arc through the aim and lock
+and let fly, 110–520 px long, swinging 2.6 s — he stands still while it is
+out); his **lantern beam** (the light tracks the heart's x across the floor
+for 0.9 s, locks and flashes for 0.22 s, then a 36 px column of it stands at
+the locked x for 0.6 s, a burn); and **his knights** (a rank of three
+spearmen under the heart, then next time a pair of crossbowmen 0.35 s
+apart). A bolt on the shuttered lantern is *NOT YET*; on his armour (helm,
+pauldrons, breastplate, faulds, arms), *WASTED*. Bolts pass through his cloak.
 
 **Endings.** Break the lantern and every cage bursts: all the souls, caged
-and carried, join the heart, the roof splits, and the light takes them up
-together, healing the heart as in rule 9. Run out of bolts with the lantern
-whole, and he locks the heart in a cage with them.
+and carried, join the heart; his armour comes apart (the helm and pauldrons
+fall into the crust) as he burns away; the roof splits, and the light takes
+them up together, healing the heart as in rule 9. Run out of bolts with the
+lantern whole, and he locks the heart in a cage with them.
 
 **Score.** `hearts × 1000 + time bonus + 500 × souls you brought out` — those
 delivered into the light during the rescue, plus those still with you when
@@ -433,16 +459,54 @@ or lost.
 to risk while carrying something. Holding still to open a cage, flying up to
 the light, choosing to carry one or three — each is a decision the hazards
 price. A hit costing the souls you carry (not just a heart) is what makes
-carrying three a gamble rather than a free speed-up. Shades hunting the souls
-instead of the heart give the player something to protect, not only
-something to dodge. The Warden reuses the fight's grammar (windows, two
-hits, one line said once) so a player who beat the devil can read him at a
-glance, and the chains reuse the jet's unled lock so the dodge is geometry.
+carrying three a gamble rather than a free speed-up. The chains were first a
+line lashing out along the aim at 1400 px/s: it read as a laser, not iron. A
+real pendulum is readable from its first moment (the path is drawn, and a
+swing slows at its ends and is fastest at the bottom, as everyone knows), and
+it turns a hazard into a gate to time: the ground inside its arc is open
+between swings. Letting the ball smash cages makes the chain something to
+use as well as dodge — stand by a cage and step away at the last moment, and
+it opens the cage for you. The knights replaced a rising floor of lava that
+did nothing but take half the arena away: a pike thrust is the jet's
+vertical cousin (a column locked on the heart, dodged sideways), and a
+crossbow is the fork's, and both rise out of the magma the floor already
+glows with. The Warden reuses the fight's grammar (windows, two hits, one
+line said once) so a player who beat the devil can read him at a glance; a
+swinging lantern is the devil's sway, lead your shot. Making the dungeon
+something you reach only by beating the pit keeps the story in order — you
+go back down for them — and makes level 2 the reward, not a menu item.
 
-**In code.** `G.level`, `startGame(level)`, the `LEVEL 2` section of
-`game.js`: `STOLEN`, `stolenReset()`, `lowerCage()`, `updateStolen()`, `spawnChain()`,
-`spawnLava()`, `spawnShade()`, `makeWarden()`, `updateWarden()`,
-`wardenBolt()`, the `released` and `caged` endings, and their drawing.
+**In code.** `G.level`, `nextLevel()`, `startGame(level)`, the `LEVEL 2`
+section of `game.js`: `STOLEN`, `stolenReset()`, `lowerCage()`,
+`updateStolen()`; `CHAIN`, `spawnChain()`, `chainPlan()`, `stepChain()`,
+`ropeStep()`, `smashCage()`, `updateStrays()`; `KNIGHT`, `spawnSpears()`,
+`spawnXbows()`, `stepKnights()`; `WARDEN`, `makeWarden()`, `wardenPose()`,
+`spawnFlail()`, `updateWarden()`, `wardenArmour()`, `wardenBolt()`,
+`updateWreck()`; the `released` and `caged` endings; and their drawing
+(`drawChain()`, `drawKnight()`, the Warden's sprites `wardenBack()` /
+`wardenFront()` and `drawWarden()`).
+
+---
+
+## 12. Dev mode
+
+**Rule.** Five clicks on the cabinet's rainbow badge, then five on its orange
+power lamp (no more than 3 s between clicks), turn dev mode on; the same
+knock, or its own button, turns it off. It stays on across reloads on that
+device (`btd.dev`). Its panel, over the page's top-left corner, starts either
+level at once, jumps to the boss, kills him, and toggles no damage, endless
+bolts, slow motion (0.35×) and the frame-time overlay; a small *DEV* shows in
+the corner of the picture while it is on. **A dev run never reaches the world
+board or the counters, and never becomes a saved best** — the win and lose
+panels say *Dev run · not recorded*.
+
+**Why.** Testing level 2 used to mean beating level 1 every time, and a test
+run on the live site bumps the public counters. The knock is on the cabinet
+because it is out of the way of play; the cabinet is not drawn on screens
+under 600 px, so it is a computer's or a tablet's.
+
+**In code.** `DEV`, `devKnock()`, `devToggle()`, `devRender()`, the `#dev`
+panel in `index.html`; `worldStart()` and `saveBest()` check `DEV.on`.
 
 ---
 
@@ -461,3 +525,6 @@ glance, and the chains reuse the jet's unled lock so the dodge is geometry.
    touches drawing; the numbers in the README are the reference.
 7. For anything touching the board, load `dev/api-sim.js` on a `#debug` page
    and play a run through the real server code (see the README).
+8. For level 2, turn on dev mode (rule 12) and use *Play II*, *Boss now* and
+   *No damage*; watch a chain drop and swing, a rank of spearmen, a crossbow,
+   his flail, the lantern windows, and both endings.

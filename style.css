@@ -158,6 +158,8 @@ body{
 .knob:nth-child(2)::after{transform:translateX(-50%) rotate(-42deg)}
 .knob:nth-child(3)::after{transform:translateX(-50%) rotate(64deg)}
 .knob:nth-child(4)::after{transform:translateX(-50%) rotate(-12deg)}
+/* the badge and the lamp take clicks (dev mode's secret knock), nothing else on the panel does */
+#badge,#power{pointer-events:auto;cursor:default;-webkit-user-select:none;user-select:none}
 /* the power lamp in its bezel, at the panel's right end */
 #power{
   position:absolute;right:calc(16px * var(--s));top:50%;transform:translateY(-50%);
@@ -198,6 +200,17 @@ body.bare #stage{border-radius:0;box-shadow:none}
 /* on touch screens the fire button owns the bottom-right corner; the mute goes bottom-left */
 /* the touch controls' layer: over everything, never taking a touch itself */
 #ctl{position:fixed;left:0;top:0;pointer-events:none;z-index:6;display:none}
+/* dev mode's switches, over the page's top-left corner */
+#dev{position:fixed;left:8px;top:8px;z-index:8;display:flex;flex-direction:column;gap:4px;width:150px;
+  padding:8px;background:rgba(10,4,4,.88);border:1px solid rgba(255,90,31,.5);border-radius:3px;
+  font-family:'Press Start 2P',monospace;font-size:8px;line-height:1.5;color:var(--bone)}
+#dev[hidden]{display:none}
+#dev .dev-head{color:var(--title);letter-spacing:2px;margin-bottom:2px}
+#dev button{font-family:inherit;font-size:8px;text-align:left;padding:5px 6px;cursor:pointer;touch-action:manipulation;
+  color:var(--ash);background:transparent;border:1px solid rgba(199,154,143,.35);border-radius:2px}
+#dev button:hover{color:var(--bone);border-color:var(--bone)}
+#dev button.on{color:#0e0303;background:var(--sulfur);border-color:var(--sulfur)}
+#dev .dev-note{font-size:6px;color:var(--ash);margin-top:2px}
 body.touch #ctl{display:block}
 /* the thumbs have the ground under the picture; sound sits at the top centre,
    between the lives and the bolts in play and just under the banner on the title */
@@ -277,23 +290,13 @@ body.touch #mute{right:auto;bottom:auto;left:50%;top:calc(30px * var(--s));trans
 .board li span:nth-child(6){color:var(--ash);text-align:right}
 .board li.me{color:var(--heart)}
 .board li.empty{display:block;text-align:center;color:var(--ash)}
-/* the level buttons: II on the title, the other level on the end panels */
-.levelbtn{font-family:inherit;font-size:max(10px, calc(8px * var(--s)));letter-spacing:1px;cursor:pointer;
-  padding:calc(6px * var(--s)) calc(12px * var(--s));color:var(--title);background:rgba(14,3,2,.65);
-  border:1px solid rgba(255,90,31,.55);border-radius:2px;touch-action:manipulation;
-  text-shadow:0 0 calc(6px * var(--s)) rgba(255,90,31,.6)}
-.levelbtn:hover,.levelbtn:focus-visible{border-color:var(--title);color:#ff8a4f}
-.levelbtn.locked{color:rgba(199,154,143,.5);border-color:rgba(199,154,143,.25);text-shadow:none;cursor:default}
-.levelbtn[hidden]{display:none}
-.levelnote{font-size:calc(6px * var(--s));color:var(--ash);margin-top:calc(-8px * var(--s))}
-/* the end panels: the other level and the way back to the title, side by side */
+/* the end panels: the way back to the title */
 .endbtns{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(8px * var(--s))}
 .endbtns[hidden]{display:none}
 .menubtn{font-family:inherit;font-size:max(10px, calc(8px * var(--s)));letter-spacing:1px;cursor:pointer;
   padding:calc(6px * var(--s)) calc(12px * var(--s));color:var(--ash);background:rgba(14,3,2,.65);
   border:1px solid rgba(199,154,143,.4);border-radius:2px;touch-action:manipulation}
 .menubtn:hover,.menubtn:focus-visible{border-color:var(--bone);color:var(--bone)}
-.levelnote:empty{display:none}
 .board-tabs{display:flex;justify-content:center;gap:calc(6px * var(--s));margin-bottom:calc(4px * var(--s))}
 .board-tabs button{font-family:inherit;font-size:max(9px, calc(6px * var(--s)));cursor:pointer;padding:.4em .8em;
   color:var(--ash);background:transparent;border:1px solid rgba(199,154,143,.3);border-radius:2px;touch-action:manipulation}

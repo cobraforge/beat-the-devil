@@ -158,16 +158,26 @@ var sfx = {
   collapse: function(){ explosion(210, 1.5); noise({dur:1.8, vol:0.4, freq:180, slide:50, attack:0.05}); },
   crumble: function(){ crumble(); },
   heavenCrack: function(){ heavenCrack(); },
-  // level 2: cages, souls, shades, chains, lava and the Warden
+  // level 2: cages, souls, shades, chains, knights and the Warden
   cageLower: function(){ noise({dur:0.6, vol:0.07, type:'bandpass', freq:2000, q:3, slide:900, attack:0.05}); tone({freq:240, slide:180, dur:0.5, vol:0.04, type:'triangle'}); },
   cageTurn: function(k){ tone({freq:700 + 600 * k, dur:0.05, vol:0.12, type:'square', filter:3000}); noise({dur:0.04, vol:0.08, type:'highpass', freq:3000}); },
   cageOpen: function(){ chimes([880, 1318.5, 1760], 0.07, 0.09); noise({dur:0.3, vol:0.12, type:'bandpass', freq:1400, q:2, slide:600}); },
   deliver: function(){ chimes([587.3, 740, 880, 1174.7, 1480], 0.08, 0.1); tone({freq:293.7, dur:1.6, vol:0.1, type:'sine', attack:0.2}); },
   snatch: function(){ wail(); },
   shade: function(){ noise({dur:0.9, vol:0.12, type:'bandpass', freq:900, q:4, slide:300, attack:0.6}); },
-  chainLash: function(x){ chainLash(x); },
-  lavaWarn: function(){ lavaBubbles(); },
-  lavaRise: function(x){ explosion(x < 0 ? 105 : 315, 0.7); noise({dur:1.2, vol:0.18, type:'highpass', freq:2500, slide:1200, attack:0.1}); },
+  chainRattle: function(x){ chainRattle(x); },
+  chainDrop: function(x){ chainDrop(x); },
+  chainSnap: function(x){ chainSnap(x); },
+  chainLoose: function(x){ chainLoose(x); },
+  chainWhoosh: function(x, v){ chainWhoosh(x, v); },
+  ballClang: function(x){ ironRing(x, 230, 0.26, 1.1); },
+  chainReel: function(x){ chainReel(x); },
+  cageSmash: function(){ ironRing(210, 330, 0.2, 0.8); chimes([1318.5, 1760], 0.06, 0.08); noise({dur:0.3, vol:0.2, type:'bandpass', freq:2400, q:1.5, slide:900}); },
+  knightRise: function(x){ knightRise(x); },
+  spearThrust: function(x){ spearThrust(x); },
+  xbowTwang: function(x){ xbowTwang(x); },
+  quarrelThunk: function(x){ quarrelThunk(x); },
+  wardenEyes: function(){ tone({freq:55, slide:40, dur:1.3, vol:0.32, type:'sawtooth', filter:220, attack:0.05}); noise({dur:0.7, vol:0.3, type:'lowpass', freq:420, slide:120, attack:0.02}); },
   shutter: function(){ noise({dur:0.16, vol:0.16, type:'bandpass', freq:3200, q:2, slide:1600}); tone({freq:520, slide:340, dur:0.12, vol:0.1, type:'triangle'}); },
   wardenArrive: function(){ tone({freq:62, slide:40, dur:1.6, vol:0.55, type:'sawtooth', filter:300}); for (var i = 0; i < 8; i++) later(i * 110 + Math.random() * 60, function(){ noise({dur:0.07, vol:0.16, type:'bandpass', freq:2200 + Math.random() * 1200, q:2}); }); },
   lanternBeam: function(){ tone({freq:440, dur:0.7, vol:0.12, type:'sine', attack:0.02}); tone({freq:660, dur:0.7, vol:0.08, type:'sine', attack:0.02}); noise({dur:0.7, vol:0.14, type:'highpass', freq:3500, attack:0.02}); },
@@ -825,21 +835,53 @@ function wail(){
   o.start(t0); o.stop(t0 + 1.05);
   noise({dur:0.6, vol:0.1, type:'bandpass', freq:1200, q:2, slide:400});
 }
-// a chain lashing out: a rising whip of air and the clank of the links
-function chainLash(x){
+// a bus panned to x
+function panBus(x){ var pn = panner(x == null ? 210 : x); if (pn){ pn.connect(sfxBus); return pn; } return sfxBus; }
+// a struck piece of iron: inharmonic partials ringing down over a knock
+function ironRing(x, f0, vol, dur){
   if (!running()) return;
-  var pn = panner(x == null ? 210 : x), bus = sfxBus;
-  if (pn){ pn.connect(sfxBus); bus = pn; }
-  noise({dur:0.18, vol:0.26, type:'highpass', freq:800, slide:5000, bus:bus});
-  for (var i = 0; i < 4; i++) noise({t:actx.currentTime + 0.04 + i * 0.03, dur:0.03, vol:0.14, type:'bandpass', freq:2600 + i * 300, q:3, bus:bus});
+  var bus = panBus(x), t = actx.currentTime;
+  [1, 2.76, 5.4, 8.93].forEach(function(m, i){ tone({ t: t, freq: f0 * m, dur: dur * (1 - i * 0.18), vol: vol * [1, 0.5, 0.3, 0.16][i], type: 'sine', attack: 0.002, bus: bus }); });
+  noise({ t: t, dur: 0.06, vol: vol * 1.3, type: 'bandpass', freq: f0 * 3, q: 1.4, bus: bus });
+  tone({ t: t, freq: f0 * 0.5, slide: f0 * 0.3, dur: 0.12, vol: vol * 0.9, type: 'sine', bus: bus });
 }
-// the crust going soft: low pops over a rumble
-function lavaBubbles(){
+// links shaking: a patter of small clinks, and the winch groaning under them
+function chainRattle(x){
   if (!running()) return;
-  var t0 = actx.currentTime;
-  noise({dur:1.5, vol:0.14, type:'lowpass', freq:220, attack:0.3});
-  for (var i = 0; i < 9; i++) tone({freq:90 + Math.random() * 80, slide:40, t:t0 + Math.random() * 1.4, dur:0.08, vol:0.14, type:'sine'});
+  var bus = panBus(x), t0 = actx.currentTime;
+  for (var i = 0; i < 10; i++) noise({ t: t0 + i * 0.065 + Math.random() * 0.04, dur: 0.025, vol: 0.05 + Math.random() * 0.05, type: 'bandpass', freq: 2600 + Math.random() * 2400, q: 7, bus: bus });
+  tone({ t: t0, freq: 130, slide: 100, dur: 0.7, vol: 0.05, type: 'triangle', attack: 0.1, bus: bus });
 }
+// the clamp lets go
+function chainDrop(x){ if (!running()) return; var bus = panBus(x); tone({freq:210, slide:90, dur:0.12, vol:0.16, type:'square', filter:900, bus:bus}); noise({dur:0.07, vol:0.16, type:'bandpass', freq:1200, q:2, bus:bus}); }
+// his flail let fly: a heave of air and the links running out
+function chainLoose(x){ if (!running()) return; noise({dur:0.3, vol:0.18, type:'bandpass', freq:600, q:1, slide:1600, attack:0.05, bus:panBus(x)}); chainRattle(x); }
+// the chain runs out and catches: a heavy clank and the links jumping
+function chainSnap(x){
+  if (!running()) return;
+  var bus = panBus(x), t0 = actx.currentTime;
+  ironRing(x, 170, 0.18, 0.9);
+  tone({freq:95, slide:45, dur:0.3, vol:0.35, type:'sine', bus:bus});
+  for (var i = 0; i < 5; i++) noise({t: t0 + i * 0.018, dur: 0.02, vol: 0.12, type: 'bandpass', freq: 3200 + i * 400, q: 5, bus: bus});
+}
+// the ball through the bottom of its swing: a rush of air, louder the faster
+function chainWhoosh(x, v){ if (!running()) return; var k = Math.min(1, Math.max(0.25, v / 900)); noise({dur:0.42, vol:0.22 * k, type:'bandpass', freq:380, q:1.3, slide:1200 + 700 * k, attack:0.14, bus:panBus(x)}); }
+// hauled back up: the ratchet
+function chainReel(x){ if (!running()) return; var bus = panBus(x), t0 = actx.currentTime; for (var i = 0; i < 11; i++) noise({t: t0 + i * 0.042, dur: 0.018, vol: 0.1, type: 'bandpass', freq: 1900, q: 4, bus: bus}); }
+// a knight breaking up through the crust: a low seethe, pops, and iron
+function knightRise(x){
+  if (!running()) return;
+  var bus = panBus(x), t0 = actx.currentTime;
+  noise({dur:0.55, vol:0.22, type:'lowpass', freq:380, slide:160, attack:0.05, bus:bus});
+  for (var i = 0; i < 6; i++) tone({t: t0 + Math.random() * 0.5, freq: 80 + Math.random() * 70, slide: 40, dur: 0.07, vol: 0.12, type: 'sine', bus: bus});
+  ironRing(x, 150, 0.05, 0.4);
+}
+// a pike driven up: a rip of air and the ring of the blade
+function spearThrust(x){ if (!running()) return; var bus = panBus(x); noise({dur:0.16, vol:0.24, type:'highpass', freq:700, slide:4200, bus:bus}); tone({freq:2350, slide:2600, dur:0.35, vol:0.05, type:'sine', attack:0.01, bus:bus}); tone({freq:3520, dur:0.25, vol:0.025, type:'sine', bus:bus}); }
+// a crossbow loosed: the string's thwack, then the quarrel's whine
+function xbowTwang(x){ if (!running()) return; var bus = panBus(x); tone({freq:140, slide:62, dur:0.2, vol:0.28, type:'sawtooth', filter:1100, bus:bus}); noise({dur:0.05, vol:0.22, type:'bandpass', freq:1500, q:2, bus:bus}); noise({t: actx.currentTime + 0.04, dur:0.3, vol:0.07, type:'highpass', freq:2500, slide:6500, attack:0.03, bus:bus}); }
+// a quarrel into the rock
+function quarrelThunk(x){ if (!running()) return; var bus = panBus(x); tone({freq:170, slide:80, dur:0.1, vol:0.22, type:'sine', bus:bus}); noise({dur:0.05, vol:0.16, type:'lowpass', freq:900, bus:bus}); }
 
 // ----- the release -----
 // his death: three voices a fifth and an octave apart falling away through a

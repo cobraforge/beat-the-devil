@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=37">
+<link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
 <div id="wrap">
@@ -22,8 +22,6 @@
         <div class="title">BEAT<br>THE DEVIL</div>
         <div class="sub" id="tip">Arrow keys or A / D to move<br>Hold space to fire<br><br>Survive the pitchforks and the fire.<br>Then put a bolt through<br>each of his eyes.</div>
         <div class="blink" id="start-hint">Press space to start</div>
-        <button type="button" class="levelbtn" id="lvl2-title" data-level="2">II &middot; The Stolen</button>
-        <div class="levelnote" id="lvl2-note"></div>
         <div class="stat" id="hi-title"></div>
         <div class="souls" id="souls" hidden></div>
         <div class="board" id="board" hidden>
@@ -39,7 +37,7 @@
         <div class="stat" id="over-score"></div>
         <div class="stat" id="over-hi"></div>
         <div class="blink" id="over-hint">Press space to try again</div>
-        <div class="endbtns"><button type="button" class="levelbtn" id="lvl-over" data-level="2" hidden></button><button type="button" class="menubtn">Main menu</button></div>
+        <div class="endbtns"><button type="button" class="menubtn">Main menu</button></div>
       </div>
 
       <div class="screen" id="scr-win" hidden>
@@ -53,7 +51,7 @@
           <div class="name-btns"><button type="submit">Save</button><button type="button" id="name-skip">Skip</button></div>
         </form>
         <div class="blink" id="win-hint">Press space to play again</div>
-        <div class="endbtns" id="win-btns"><button type="button" class="levelbtn" id="lvl-win" data-level="2" hidden></button><button type="button" class="menubtn">Main menu</button></div>
+        <div class="endbtns" id="win-btns"><button type="button" class="menubtn">Main menu</button></div>
       </div>
 
       <button id="mute" type="button">Sound on</button>
@@ -72,10 +70,24 @@
     </div>
   </div>
 </div>
+<!-- dev mode's switches: hidden until it is turned on (see game.js) -->
+<div id="dev" hidden>
+  <div class="dev-head">DEV MODE</div>
+  <button type="button" data-dev="l1">Play I</button>
+  <button type="button" data-dev="l2">Play II</button>
+  <button type="button" data-dev="boss">Boss now</button>
+  <button type="button" data-dev="win">Kill the boss</button>
+  <button type="button" data-dev="god">No damage</button>
+  <button type="button" data-dev="ammo">Endless bolts</button>
+  <button type="button" data-dev="slow">Slow motion</button>
+  <button type="button" data-dev="fps">Frame times</button>
+  <button type="button" data-dev="off">Leave dev mode</button>
+  <div class="dev-note">Dev runs never reach the board.</div>
+</div>
 <!-- the touch controls: drawn here, outside the picture -->
 <canvas id="ctl" aria-hidden="true"></canvas>
 
-<script src="audio.js?v=37"></script>
-<script src="game.js?v=37"></script>
+<script src="audio.js?v=38"></script>
+<script src="game.js?v=38"></script>
 </body>
 </html>

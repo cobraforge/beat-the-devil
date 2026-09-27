@@ -182,10 +182,10 @@ out of the pit. The timeline is `FREE` in `game.js`, the light is
 
 ## Level 2: The Stolen
 
-Below the pit is his dungeon. It opens on the title (**II · The Stolen**, or
-the `2` key) once level 1 has been beaten on the device, and after a win the
-panel offers *Go back down for them*. The rules are DESIGN.md rule 11; in
-short:
+Below the pit is his dungeon, and the only way down is to beat him: there is
+no level select. Every run starts in the pit; after a win the panel's next
+step (space, or a tap) goes *back down for them*, and a loss in the dungeon
+starts again from the pit. The rules are DESIGN.md rule 11; in short:
 
 - **The rescue** (50 s; the meter reads *HE IS COMING*). Seven stolen souls
   hang in cages from the roof, four at most at a time. Hold the heart by a
@@ -193,26 +193,54 @@ short:
   three (each slows you 6 %) and fly them up into the shaft of light at the
   top centre to set them free. **A hit drags every soul you carry back into a
   cage.**
-- **Chains** lash from the roof on the fork contract: a pale line tracks the
-  heart, locks, and the chain snaps along that line to the floor, lies there a
-  second and retracts. **Lava** bubbles on one half of the floor, then rises
-  80 px, holds and falls. **Shades** gather at a wall while you carry souls
-  and drift after the last one; a bolt ends a shade, at the cost of the bolt.
-- **The Warden** arrives when the meter fills: the cages are hoisted out of
-  reach, and his lantern is the target. It is shuttered except in brief
-  windows; two hits break it. He throws chains, raises the lava, and sweeps
-  the lantern's beam across the floor to burn a column where it locks.
-- **Endings.** Break the lantern and every cage bursts; the souls join the
-  heart and the light takes them all up. Run out of bolts first and he locks
-  the heart in a cage with them.
+- **Chains.** A spiked iron ball waits in a clamp under the roof girder, its
+  chain run to a pulley, while a pale path shows where it will drop and the
+  arc it will swing (through the heart, at the lock). Let go, it falls until
+  the chain runs out, catches with a jolt, and swings as a real pendulum,
+  clanging off the walls, then is hauled back up. The chain is a rope of
+  links (a Verlet rope pinned at the pulley and the ball) that bows and trails
+  as it swings. A ball that meets a hanging cage **smashes it**, spilling the
+  soul for you to pick up; it ends a shade too.
+- **Dark knights** rise out of the crust. Spearmen come up under the heart
+  and wade after it, a pale line over each pike showing its reach; they lock,
+  then drive their pikes straight up one after another. A crossbowman rises
+  to one side, aims up along a pale line, and looses a quarrel along it.
+- **Shades** gather at a wall while you carry souls and drift after the last
+  one; a bolt ends a shade, at the cost of the bolt.
+- **The Warden** arrives when the meter fills: a knight in black iron with a
+  horned helm and a fire in its slit, his cloak in tatters. The cages are
+  hoisted out of reach, and his lantern is the target: it hangs from his fist
+  on a chain and swings as he moves, shuttered except in brief windows; two
+  hits break it. He swings his flail at you (the same pendulum, from his
+  fist), sweeps the lantern's beam across the floor to burn a column where it
+  locks, and calls up his knights. Bolts on his armour are wasted; they pass
+  through his cloak.
+- **Endings.** Break the lantern and every cage bursts; his armour falls apart
+  into the crust, and the souls join the heart as the light takes them all
+  up. Run out of bolts first and he locks the heart in a cage with them.
 - **Score** adds 500 for each soul you brought out (delivered, plus those still
   with you when the lantern breaks), on a board of its own.
 
 In `game.js` it is the `LEVEL 2` section (`STOLEN`, `updateStolen()`, the
-Warden, the `released` and `caged` endings) and its drawing; `G.level` picks
-the level and the shared systems (the heartbeat, bolts, penalties, hazard
-cap, the release into the light) serve both. The music is `stolen` (the
-souls' music box heard through the bars) and `warden` (a march in iron).
+chains, the knights, the Warden, the `released` and `caged` endings) and its
+drawing; `G.level` picks the level and `nextLevel()` which one comes next.
+The shared systems (the heartbeat, bolts, penalties, hazard cap, the release
+into the light) serve both. The Warden's body is drawn once into two sprites
+at the canvas's resolution (behind his arms and in front of them); his arms,
+eyes, lantern and flail are drawn live. The music is `stolen` (the souls'
+music box heard through the bars) and `warden` (a march in iron).
+
+## Dev mode
+
+Click the cabinet's rainbow **beat the devil** badge five times, then its
+orange power lamp five times (no more than three seconds between clicks). A
+panel opens in the page's top-left corner: **Play I**, **Play II**, **Boss
+now**, **Kill the boss**, **No damage**, **Endless bolts**, **Slow motion**,
+**Frame times** and **Leave dev mode**. It stays on across reloads on that
+device until it is left (or knocked for again). A dev run never reaches the
+world board or its counters and never becomes a saved best; its panels say
+*Dev run · not recorded*. The cabinet is not drawn under 600 px, so the knock
+is for a computer or a tablet.
 
 ## The world board
 
@@ -462,9 +490,9 @@ chord per bar.
 The title plays `title`. It is asked for as the page loads, so a browser
 that lets a page make sound before a tap plays it at once; otherwise it comes
 in with the first touch or key that doesn't start a game (scrolling the
-board, the level button, or *Sound on*, which before any sound has played
+board or its tabs, or *Sound on*, which before any sound has played
 lets it in rather than muting). Both end panels have **Main menu** (Esc on a
-keyboard) beside the other level, back to the title and its music with the
+keyboard), back to the title and its music with the
 board fetched fresh; there, space or a tap starts level I.
 
 ## Single-file build
