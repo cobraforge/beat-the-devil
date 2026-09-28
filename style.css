@@ -349,6 +349,13 @@ body.touch #pausebtn::after{content:"";position:absolute;inset:-10px -10px -10px
 .board-tabs button{font-family:inherit;font-size:max(9px, calc(6px * var(--s)));cursor:pointer;padding:.4em .8em;
   color:var(--ash);background:transparent;border:1px solid rgba(199,154,143,.3);border-radius:2px;touch-action:manipulation}
 .board-tabs button.on{color:var(--sulfur);border-color:rgba(255,195,33,.6)}
+/* the thank-you link: small, warm, never in play */
+.coffee{font-size:calc(7px * var(--s));color:var(--sulfur);text-decoration:none;letter-spacing:1px;
+  padding:calc(4px * var(--s)) calc(8px * var(--s));border:1px solid rgba(255,195,33,.35);border-radius:2px;
+  background:rgba(14,3,2,.55);touch-action:manipulation;
+  text-shadow:0 0 calc(6px * var(--s)) rgba(255,150,30,.5)}
+.coffee:hover,.coffee:focus-visible{border-color:var(--sulfur);color:#ffe08a}
+.coffee[hidden]{display:none}
 /* a name for the board, on the win panel */
 .name{display:flex;flex-direction:column;align-items:center;gap:calc(6px * var(--s));
   font-size:calc(7px * var(--s));color:var(--bone);line-height:1.4}

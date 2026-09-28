@@ -334,6 +334,13 @@ would play differently on a slow phone.
   free.* The losing ending is the same grasp that never lets go — the two
   mirror each other, and the win has to *show* the release to mean it. Its
   hands keep rule 6: the ash cracks are curves.
+- **A tip is a gift, never a perk.** The "buy me a coffee" link (`COFFEE_URL`)
+  sits on the title and end panels, never in play, and buys nothing: no
+  badge, no mark on the board, no bonus. Google Play treats a tip that grants
+  nothing and reaches the creator whole as a peer-to-peer payment, outside its
+  billing rules; a tip that bought anything would need Play billing. It is
+  hidden when the game runs as an installed store app until that has been
+  through review.
 - **No references to any source material.** The title is "Beat the Devil"
   and that is all. No author, book, series, year or "based on" — in the UI,
   the README, or code comments.
