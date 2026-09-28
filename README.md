@@ -9,7 +9,8 @@ whole run, and two of them are for his eyes.
 
 - **Five bolts, no refills.** A bolt that misses is gone. A bolt that kills a
   pitchfork is gone too. Nothing stops you spending all five; the title card's
-  "two are for his eyes" is the only warning you get.
+  "two are for his eyes" (repeated on the level's briefing) is the only
+  warning you get.
 - **One bolt per eye.** In the fight he opens one eye at a time, briefly, and
   sways: lead your shot. A bolt into a shut eye or the brow is wasted.
 - At zero bolts with an eye still open, he takes it. One bolt and two eyes is
@@ -180,6 +181,97 @@ roof splits and a shaft of light comes down; in it the heart heals and rises
 out of the pit. The timeline is `FREE` in `game.js`, the light is
 `drawHeaven()`, and the panel then sits low, under it.
 
+## Level 2: The Stolen
+
+Below the pit is his dungeon, and the only way down is to beat him: there is
+no level select. Every run starts in the pit; after a win the panel's next
+step (space, or a tap) goes *back down for them*, and a loss in the dungeon
+starts again from the pit. The rules are DESIGN.md rule 11; in short:
+
+- **The rescue** (50 s; the meter reads *HE IS COMING*). Seven stolen souls
+  hang in cages from the roof, four at most at a time. Hold the heart by a
+  cage for a second to open it; the soul follows in a trail. Carry up to
+  three (each slows you 6 %) and fly them up into the shaft of light at the
+  top centre to set them free. **A hit drags every soul you carry back into a
+  cage.**
+- **Chains.** A spiked iron ball waits in a clamp under the roof girder, its
+  chain run to a pulley, while a pale path shows where it will drop and the
+  arc it will swing (through the heart, at the lock). Let go, it falls until
+  the chain runs out, catches with a jolt, and swings as a real pendulum,
+  clanging off the walls, then is hauled back up. The chain is a rope of
+  links (a Verlet rope pinned at the pulley and the ball) that bows and trails
+  as it swings. What hurts is on fire: the ball glows in its clamp as it
+  heats, and once let go it burns, flames streaming off it and along the
+  chain, until it is hauled back up. A ball that meets a hanging cage
+  **smashes it**, spilling the soul — grab it before it sinks back into the dark.
+- **Dark knights** march in from the sides and hunt the heart: spearmen keep
+  under it, spread either side, and crossbowmen hold the two walls with their
+  crossbows up at it; touching one is a hit. When they attack, spearmen lock a
+  pale line over each pike and drive them straight up one after another; a
+  crossbowman aims along a pale line to the heart and looses a quarrel along it.
+- **The Warden** arrives when the meter fills: a knight in black iron with a
+  horned helm and a fire in its slit, his cloak in tatters. The cages are
+  hoisted out of reach, and his lantern is the target: it hangs from his fist
+  on a chain and swings as he moves, shuttered except in brief windows; two
+  hits break it. He swings his flail at you (the same pendulum, from his
+  fist), fires a beam of energy from the lantern to the floor where the heart
+  was when it locked, and sends his knights at you (calling in more). Bolts on his armour are wasted; they pass
+  through his cloak.
+- **Endings.** Break the lantern and every cage bursts; his armour falls apart
+  into the crust, his knights burn away, and the souls join the heart as the light takes them all
+  up. At the top of the light the gates of heaven appear and swing open (to
+  chimes), the heart and the souls rise through them, and they fade before the
+  panel (`RELEASE.gates`, `drawGates()`). Run out of bolts first and he locks
+  the heart in a cage with them.
+- **Score** adds 500 for each soul you brought out (delivered, plus those still
+  with you when the lantern breaks), on a board of its own.
+
+In `game.js` it is the `LEVEL 2` section (`STOLEN`, `updateStolen()`, the
+chains, the knights, the Warden, the `released` and `caged` endings) and its
+drawing; `G.level` picks the level and `nextLevel()` which one comes next.
+The shared systems (the heartbeat, bolts, penalties, hazard cap, the release
+into the light) serve both. The Warden's body is drawn once into two sprites
+at the canvas's resolution (behind his arms and in front of them); his arms,
+eyes, lantern and flail are drawn live. The music is `stolen` (the souls'
+music box heard through the bars) and `warden` (a march in iron).
+
+## The briefings
+
+Before each level, a **briefing**: the level's story typed out a page at a
+time, then what to do and the controls (DESIGN.md rule 13). From the title it
+opens level 1's; after level 1 is won, the win panel shows **NEXT · LEVEL II ·
+THE STOLEN** and space (or a tap on it) opens level 2's. A **narrator** reads
+each story page aloud (recordings of a neural voice, the music stepping back
+under her); the page types out in step with her. *Skip* jumps to the rules, *Story* goes back; the sound button
+silences her with everything else. She speaks again when level 1 is won: you
+beat the devil, but it is not over — the others are still down there. The
+story plays every run: from a loss or level 2's win, space
+goes back to the main menu, and a new run starts there. The words are in
+`BRIEF` in `game.js`.
+
+## Pause, the menu, the version
+
+**P** or **Esc** pauses on a keyboard; on a phone, the **II** button beside
+*Sound* at the top (shown only in play). Paused, the game is silent
+(`AUDIO.hold()`). The pause screen has **Resume** and
+**Main menu** (**Q** on a keyboard), which abandons the run and goes back to
+the title. The title shows the game's version in its bottom-left corner:
+`GAME_VERSION` in `game.js` (bump it for a release; `BTD_VERSION` counts
+builds and busts caches).
+
+## Dev mode
+
+Click the cabinet's rainbow **beat the devil** badge five times, then its
+orange power lamp five times (no more than three seconds between clicks). A
+panel opens in the page's top-left corner: **Play I**, **Play II**, **Boss
+now**, **Kill the boss**, **No damage**, **Endless bolts**, **Slow motion**,
+**Frame times** and **Leave dev mode**. It stays on across reloads on that
+device until it is left (or knocked for again). A run that dev mode touches
+(on when it starts, or turned on during it) is a dev run: it never reaches
+the world board or its counters and never becomes a saved best; its panels
+say *Dev run · not recorded*. The cabinet is not drawn under 600 px, so the knock
+is for a computer or a tablet.
+
 ## The world board
 
 Only a completed run scores: **hearts left × 1,000, plus up to 2,500 for
@@ -187,22 +279,26 @@ speed** (`(300 − seconds) × 10`), so a heart is worth a hundred seconds. The
 clock runs from the first step into the pit to the killing bolt and never
 stops. The HUD shows the clock and `HI`, the world's best when the server
 answers (the device's own best otherwise). A run that places in the world's
-top ten asks for a name on the win panel; the title shows the top five with
-score, hearts, time and date, and a counter of souls stolen (games lost
-worldwide) and freed (won).
+top fifty asks for a name on the win panel; the title shows all fifty, ten
+at a time in a list that scrolls (to the player's own place, if they have one),
+under headings — RANK, NAME, SCORE, HEARTS (left), TIME (to beat him), DATE
+(beaten) — on one grid with the rows, and a counter of souls stolen (games lost
+worldwide), freed (won) and returned (level 2's souls brought out, in any
+run). Each level has its own board, with a tab for each.
 
 It is a Cloudflare Pages Function, `functions/api/[[route]].js`, over a D1
 database:
 
 | | |
 |---|---|
-| `GET /api/board` | the top ten and the counters |
-| `POST /api/start` | a run begins; returns its id |
-| `POST /api/end {run, outcome, hearts}` | `freed` or `stolen`; the server times it and scores it |
+| `GET /api/board?level=1\|2` | that level's top fifty and the counters |
+| `POST /api/start {level}` | a run begins; returns its id |
+| `POST /api/end {run, outcome, hearts, saved}` | `freed` or `stolen`; the server times it and scores it (`saved`, 0–7, level 2 only) |
 | `POST /api/name {run, name}` | a placing winner's name |
 
 The server's own clock times the run and it computes the score; the client
-sends only the outcome and the hearts left. Wins under 50 s are refused,
+sends only the outcome, the hearts left and (level 2) the souls saved. Wins
+under 50 s (55 s in level 2) are refused,
 starts are limited to 12 a minute per player (by a hash of the address), and
 names are cleaned to 12 upper-case characters.
 
@@ -214,7 +310,8 @@ names are cleaned to 12 upper-case characters.
    Production (and Preview, if you want the board on preview builds).
 3. Redeploy: **Deployments → the latest → Retry deployment**, or push a commit.
 
-The tables create themselves on the first request. Until the binding exists
+The tables create themselves on the first request, and columns added since
+(`level`, `saved`) are added to an existing database the same way. Until the binding exists
 `/api/*` answers 503 and the game hides the board and plays as before.
 
 **Testing it locally** without Cloudflare: `dev/api-sim.js` runs the real
@@ -230,8 +327,8 @@ BTD_API_SIM.sql('SELECT * FROM runs')
 
 ## A coffee
 
-`COFFEE_URL` near the top of the name-box code in `game.js` is the author's
-tip page. While it is empty the link is hidden; set, a small "Enjoyed it? Buy
+`COFFEE_URL` just before the name-box code in `game.js` is the author's
+tip page (buymeacoffee.com/cobraforge). While it is empty the link is hidden; set, a small "Enjoyed it? Buy
 me a coffee" link appears on the title and the end panels (never in play),
 opening the page in a new tab. It buys nothing (DESIGN rule 9) and is hidden
 when the game runs as an installed Play app (a Trusted Web Activity, detected
@@ -254,7 +351,8 @@ by its `android-app://` referrer).
   drawn on their own layer, `#ctl`, a strip around the two controls redrawn
   only when it changes. A mouse still drags and clicks on the picture.
 - **Layout.** On screens under 600 px the bezel goes and the glass takes the
-  whole width; on touch the sound button sits at the top centre.
+  whole width; on touch the sound button sits at the top centre. Its speaker
+  shows the state: waves when on, a red line across it when off.
 - **Performance.** Touch devices cap the device pixel ratio at 1.5. Three
   quality tiers (`QUALITY` in `game.js`: full, medium, low) trade heat
   shimmer, smoke, glow sprites, particle share, flame edge detail, fire
@@ -268,12 +366,45 @@ by its `android-app://` referrer).
 - `index.html` — page shell: canvas, title / game-over / win overlays, mute button
 - `style.css`  — layout, CRT overlay, overlay screens (scales via `--s`)
 - `audio.js`   — Web Audio synth: sound effects and the music sequencer, which
-                 is slaved to the heartbeat (survive, devil, title, dirge, win)
+                 is slaved to the heartbeat (survive, devil, title, dirge, win,
+                 stolen, warden)
 - `game.js`    — the game: heartbeat clock, fire renderer, input, hazards, devil AI, endings, rendering
 - `build.py`   — bundles everything into `dist/index.html`; `dist/` is the deployable site root
 - `dev/bot.js` — the imperfect playtest bot; `dev/perf.py` — frame-time measurement under throttling
+- `voice/`     — the spoken lines (MP3: the narrator's and the Warden's) and `timings.json`; `dev/voice.py` renders them
 
-No build step, no assets. Plain HTML/CSS/JS; all audio is synthesised at runtime.
+No build step. Plain HTML/CSS/JS; all audio is synthesised at runtime except
+the narrator's lines (below).
+
+## The narrator's voice
+
+The spoken lines are neural voices made with [Piper](https://github.com/rhasspy/piper)
+(open-source text-to-speech, MIT). The narrator is its `en_GB-cori-high` voice
+(a British woman's, public domain, trained on LibriVox audiobook readings),
+read with a little more life than the default and a held pause before each
+page's last line; the game plays her with some reverb and a faint ghost
+behind her voice; she also whispers, afraid, as the devil comes, and speaks
+after each win. The Warden (and the devil, dying) is `en_US-norman-medium` (a man's, public
+domain), which the game slows, drops, doubles, distorts and drowns in reverb.
+`dev/voice.py` reads the lines out of `game.js` — the story pages from `BRIEF`
+(the first of each level with its spoken name) and the rest from `SPOKEN` —
+and writes `voice/<key>.mp3` and `voice/timings.json` (each line's length and,
+for story pages, when each paragraph is spoken, for the typing). After
+changing a line, re-render it and bump `VOICE_V` in `game.js`. In a man's
+line, `~` after a word draws that word out into a cry, and a last word in
+CAPITALS is shouted after a beat, the words before it spat
+(*"No~... They were MINE!"*):
+
+```
+pip install soundfile numpy
+python dev/voice.py --piper path/to/piper.exe --model path/to/en_GB-cori-high.onnx --warden path/to/en_US-norman-medium.onnx --only win1
+```
+
+Piper reads a little differently each time, so `--only` re-renders just the
+lines named and keeps every other take as it is.
+
+Piper and the voice model are downloads kept outside the project (see the top
+of `dev/voice.py`). `build.py` copies `voice/` into `dist/`.
 
 ## Run
 
@@ -297,7 +428,8 @@ perfect play.
 ## Debugging
 
 Open `http://localhost:8080/#debug` and the console gets `BTD_G` (the state
-object), `BTD_STEP(dt)` (advance one frame by hand) and `BTD_VERSION`. Set
+object), `BTD_STEP(dt)` (advance one frame by hand), `BTD_START(level)`
+(straight into a level, no menu or briefing; the bot uses it) and `BTD_VERSION`. Set
 `window.BTD_FREEZE = true` to hold the state without the pause overlay, and
 `window.BTD_HEART_SCALE = 5` to magnify the heart for a look at its damage.
 Handy for jumping to the fight: `BTD_G.surv = 41.9`. `BTD_STICK` and
@@ -428,6 +560,14 @@ four-voice chord per bar, via `chords([...])`, with `choirOpen` for the *ah*
 vowel, `choirLevel` for its level) and `box` (a music-box pattern). A sanity check at load throws if a
 pattern's length doesn't match `bars * 16` or a choir isn't one four-note
 chord per bar.
+
+The title plays `title`. It is asked for as the page loads, so a browser
+that lets a page make sound before a tap plays it at once; otherwise it comes
+in with the first touch or key that doesn't start a game (scrolling the
+board or its tabs, or *Sound on*, which before any sound has played
+lets it in rather than muting). Both end panels have **Main menu** (Esc on a
+keyboard), back to the title and its music with the
+board fetched fresh; there, space or a tap starts level I.
 
 ## Single-file build
 

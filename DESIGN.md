@@ -16,8 +16,9 @@ The arena is a logical 420×640 canvas (`LW`, `LH`), floor at `LH - 8`.
 **Rule.** `AMMO = 5`, no reserve, no lockout. All five can be spent in the
 survive phase. The devil needs a bolt through each eye, so a player who
 arrives with fewer than two cannot win — and nothing stops them. The only
-warning is the title card: *"You have five bolts. Two are for his eyes."*
-That line is never repeated during play: no pips changing colour, no "save
+warning is the title card, and the same line on the level's briefing (rule
+13): *"You have five bolts. Two are for his eyes."* It is never repeated
+during play: no pips changing colour, no "save
 two", no click when the fourth is fired.
 
 **Why.** An earlier version reserved two bolts (`RESERVE = 2`) and refused to
@@ -143,7 +144,8 @@ brackets interesting.
 
 **In code.** `throwFork()` (`aimT 0.45`, `lockT 0.22`), `spawnJet()`
 (`aimT 0.9`, `lockT 0.22`), the state machines in `moveHazards()`. Any new
-aimed attack must use the same three states and the same lock length.
+aimed attack must use the same three states and the same lock length; level
+2's chains, spearmen and crossbowmen do (rule 11).
 
 ---
 
@@ -237,8 +239,12 @@ never steers, one that lands on the stick never fires, and a touch anywhere
 else — including on the picture — does nothing at all. Both thumbs work at
 once. The stick's vector is added to the keys' vector, so the speed and every
 movement penalty (rule 2) are the same multipliers on touch as on keys. The
-sound button sits at the top centre. A mouse keeps drag-to-move and
-click-to-fire, and only on the picture.
+sound button (a speaker with its waves when on, a red line across it when
+off) sits at the top centre, and in play the pause button beside it
+(a phone has no Esc or P); they are buttons, not controls, and a tap on either
+does nothing else. Paused, a tap anywhere but the pause screen's buttons
+resumes. A mouse keeps drag-to-move and click-to-fire, and only on the
+picture.
 
 **Why.** Drag-anywhere made the player chase the heart with a finger that
 covered it. The first stick sat in the playfield's bottom-left corner, and a
@@ -286,7 +292,11 @@ would play differently on a slow phone.
 
 - **The heartbeat is the master clock.** 68 bpm at rest to 150 at full
   danger; the floor glow, embers, aura and the music sequencer all pulse from
-  `G.heart`. The choir changes chord on the bar and the music box plays on
+  `G.heart`. **When a boss comes the heart races**: in the devil's fight and
+  the Warden's its danger never drops below 0.72 (127 bpm), against the survive
+  phase's slow build from 68, so the fight's music (`devil`, `warden`: a bass
+  pumping sixteenths, an arpeggio, a riff, snare with ghosts and rolls,
+  sixteenth hats) runs faster and harder than anything before it. The choir changes chord on the bar and the music box plays on
   the steps, so the eerie score speeds up with the heart too. Hits stop it
   for 200 ms, then arrhythmia. In the mix the heart must always be audible:
   `HEART_GAIN 1.3`, fire ducks under every lub, and the laugh ducks
@@ -297,8 +307,14 @@ would play differently on a slow phone.
   3 kHz on purpose: a phone speaker plays almost nothing below 200 Hz, where
   the drone, rumble and bass live, so without them a phone heard little
   music at all.
-- **All audio is synthesised.** No asset files; Web Audio only. Sound counts
-  are capped (thuds 3, fire voices 4) so the mix cannot clip.
+- **All audio is synthesised**, with one exception. No asset files; Web
+  Audio only. Sound counts are capped (thuds 3, fire voices 4) so the mix
+  cannot clip. The exception is the spoken lines: the narrator's (rule 13)
+  and the Warden's one line (rule 11) are recordings of neural voices,
+  rendered offline from the game's own text (`dev/voice.py`, `voice/`, about
+  a third of a megabyte), because no browser's built-in voice was good enough
+  to tell the story. They still play through Web Audio, so mute and pause hold
+  them.
 - **The palette lives in `style.css`.** JS reads the custom properties once
   (`COLORS`, `col()`); no hardcoded hex in draw calls.
 - **The pit stays dark where the play is.** The arena is the bowels of hell
@@ -347,7 +363,8 @@ with `/api/start` and is decided with `/api/end`, sent the moment the devil
 dies or the heart is lost; the seconds are the server's own clock between the
 two, and the server computes the score. The client sends only the outcome
 and the hearts left, checked for range; a win under 50 s is refused (the
-fastest real one is about 55). The ten best *named* runs make the board; a
+fastest real one is about 55; in level 2, under 55 s, since its rescue alone
+is 50). The fifty best *named* runs make the board; a
 run that places gets fifteen minutes to take a name (twelve characters,
 upper case). Each is stored with its date. Every game counts toward the
 soul counters on the title: *stolen* (every loss — the heart gave out or he
@@ -375,6 +392,273 @@ the time floor keep that to deliberate effort, not a script.
 
 ---
 
+## 11. Level 2: The Stolen
+
+The second level, and the only way into it is through the first: there is
+no choosing a level. Every run starts in the pit; beat the devil and the win
+panel's next step (space, or a tap) goes *back down for them*. From anywhere
+else — the title, any loss, level 2's own win — the next run is the pit
+again, so losing in the dungeon means starting over from the beginning.
+Level 2 starts with five hearts and five bolts of its own. Everything above
+holds in it — five bolts, five hearts, the 2.0 s penalty, the telegraph
+contract, two hazards at most — except where this section says otherwise.
+
+**The premise.** The light will not take you alone. Below the pit is his
+dungeon: cages hang from the roof, each holding a stolen soul (a small, dim
+heart), and the floor is a crust over magma. A shaft of light comes down at
+the top centre. You free the souls and carry them up into it.
+
+**The rescue phase** lasts `G.SURV = 50` s; the meter reads *HE IS COMING*.
+- **Seven souls**, in cages at most four at a time (a new cage lowers when
+  one is emptied), 190–420 px down. **To open one**, hold the heart within
+  30 px of it for 1.0 s; leaving drains the lock back at twice the rate.
+- **Freed souls follow** in a short trail. You can carry **three**; each slows
+  you 6 % (a multiplier like the penalties, so rule 2 still holds).
+- **To deliver**, carry them into the light: 88 px wide at the top centre,
+  reached by flying to within 44 px of the ceiling there.
+- **A hit drags every soul you carry back into a cage.** Lives, invulnerability
+  and the penalty are the same as ever.
+
+**Its hazards**, two groups at most, skipped not queued:
+
+| | aim | lock | fire |
+|---|---|---|---|
+| Chain | a spiked ball waits in a clamp under the roof girder (`CHAIN.ROOF = 97`, under the HUD), its chain run to a pulley; a pale path shows its drop and the arc it will swing, 0.9 s; the chain's length tracks the heart | path snaps solid, flashes, 0.22 s; the arc passes through the heart **at lock, not led** | the clamp opens; the ball falls (gravity 1300 px/s²) until the chain runs out, catches, and swings as a pendulum for 3.0 s, striking the walls and coming off them at half speed; then it is hauled up in 0.5 s, harmless |
+| Spear attack | 1–3 spearmen of the patrol (the nearest free) stride under the heart at 75 px/s, 64 px apart; a pale line over each pike shows its reach (the heart's height + 50, 150–360 px above the floor), 0.9 s | lines solid, flash, 0.22 s, then a further 0.18 s per knight, left to right | each drives his pike straight up in 0.1 s, holds 0.4 s, pulls it back 0.3 s, and after 0.5 s marches on; the pike is a plain hit within 13 px of its shaft |
+| Crossbow attack | a crossbowman of the patrol stops, raises his crossbow to his shoulder (0.3 s) and aims up at the heart along a pale line, 0.7 s | line solid, flashes, 0.22 s; **at lock, not led** | a quarrel along that line at 720 px/s, into the roof or a wall; a plain hit |
+
+The chain's ball hurts from the moment it is let go (within 19 px of the
+heart's centre); its chain hurts once it swings (within 11 px). **What hurts
+is on fire**: the ball heats in its clamp through the aim and lock (a glow,
+then flames), and from the moment it is let go the ball burns — flames
+streaming back from its motion, embers shedding — and the chain glows and
+burns along its length; the fire dies down as it is hauled up, when it no
+longer hurts. His flail burns the same way. **One swinging
+chain at a time.** It is let go on the far side of the heart when there is
+room (down through the bottom and up through the heart), or dropped beyond
+it on the heart's own side, whichever carries the swing past it.
+**The patrol.** Dark knights march in from the sides as the meter fills (a
+spearman as the level's card clears, another at 20 %, a crossbowman at 40 %,
+a spearman at 70 %; four at most). They are not a patrol: **they hunt the
+heart.** Spearmen keep under it at 48 px/s, each in his slot (the first
+straight under it, then 66 px either side, then 132), so wherever the heart
+goes low they are waiting; **crossbowmen hold the two sides** (34 px in from
+each wall, the first on the left), standing, their crossbows half raised and
+following the heart. All of them keep their helms turned up to it.
+**Touching one is a hit** (within 20 px of his middle, below
+the top of his helm, 100 px up). The patrol itself is not a hazard for the cap
+of two; its attacks are — a spear attack is one group, a crossbow attack (and
+its quarrel in flight) another. Spear attacks come from 20 % of the phase (one
+spearman before 45 %, two before 75 %, then three), every 6.5 s easing to
+4.5 s; a crossbow attack from 40 %, every 8–10.5 s (a little sooner as the
+meter fills); a chain is tried every 3.4–4.4 s.
+**A ball that meets a hanging cage smashes it** — if it is moving hard (over
+220 px/s) — and the soul spills out. It does not wait: it sinks toward the
+crust at 22 px/s, guttering in its last 1.6 s, and after 4.5 s the pit takes
+it back to be caged again (*LOST*). The heart collects it by touching it, if
+there is room to carry it. (There were shades once, swirls that stole the
+last soul you carried; they are gone — the knights and the chains are enough,
+and a thing that stole souls felt unfair more than dangerous.)
+
+**The Warden** arrives when the meter fills: the cages are hoisted out of
+reach (spilled souls are taken back up with them), the ceiling drops to
+`LH*0.42` as in the fight, and he comes down out of the dark. He is a knight
+in black iron, his legs lost in a tattered cloak: a horned great helm with a
+fire in its slit (it lights as he arrives, then he roars), peaked and spiked
+pauldrons, ribs worked into his breastplate with a fire in the grooves, the
+keys to every cage at his hip. **His lantern hangs from his left fist** on a
+chain and swings with his movement (a pendulum, like everything that hangs in
+this level), so a shot at it is led; it is the target, shuttered except in its
+open windows (1.9 s, 0.3 s shorter per hit), when he raises it. **Two hits
+break it.** As he arrives, the fire lights in his helm's slit and **he speaks**:
+*"You will never escape."* — a man's recorded line (Piper's "norman") that the
+game slows and drops to 0.8, doubles a shade lower (0.775), tears with a soft
+clip, darkens and throws hard into the long reverb, his eyes burning as he
+says it and the words written under him; he attacks 0.4 s after it ends (if
+the sound is off, or the line is not there, he roars instead, as before).
+**When the lantern breaks he has last words** — *"Nooooo... they were MINE!"* —
+in the same voice, 0.25 s after it shatters: the *No* drawn out into a cry
+(said very slowly, then stretched further as its pitch sags and wavers —
+`cry()` in `dev/voice.py`, marked `No~` in `SPOKEN`), a pause, then the rest
+**spat**: *they were* clipped, quick and held down (0.86 of the time, 0.62 of
+the level), a beat (0.12 s), and *MINE!* shouted — driven hard into a clip,
+three times as loud, the loudest thing he says (`spat()` and `shout()`; a word
+in CAPITALS in `SPOKEN` is shouted). His voice lingers as he burns away. (The
+rest was said flat at first, and sounded sorry more than spiteful: it is his
+loss, and he should hate you for it.)
+*"You have five bolts. Two are for his lantern."* is said once, on
+the level's briefing (rule 13), and never again; once play starts, a grace of
+`STOLEN.INTRO = 1.5` s passes before its hazards. His attacks cycle: his **flail** (the
+chain from his right fist, wound back along its arc through the aim and lock
+and let fly, 110–520 px long, swinging 2.6 s — he stands still while it is
+out); his **lantern beam** (the lantern gathers its light for 0.9 s while a
+pale line runs from its foot to the floor under the heart, tracking its x;
+the line locks and flashes for 0.22 s; then a beam of energy stands along it
+for 0.6 s, 10 px wide at the lantern and 40 px where it strikes — a burn); and
+**his knights** (he sends the patrol at the heart: its spearmen as a rank of up
+to three, then next time its crossbowmen, 0.35 s apart; and more march in
+until there are three spearmen and two crossbowmen). **His crossbowmen also
+shoot on their own** all through the fight: two march in as he comes, and one
+of them looses at the heart every 3.2–4.4 s (0.4 s sooner for each hit on the
+lantern), on top of his cycle. A quarrel through a heart that cannot be hurt
+(just hit) flies on. A bolt on the shuttered lantern is *NOT YET*; on his armour (helm,
+pauldrons, breastplate, faulds, arms), *WASTED*. Bolts pass through his cloak.
+
+**Endings.** Break the lantern and every cage bursts: all the souls, caged
+and carried, join the heart; his armour comes apart (the helm and pauldrons
+fall into the crust) as he burns away, and his knights burn away with him; the roof splits, and the light takes
+them up together, healing the heart as in rule 9. **At the top of the light
+the gates of heaven appear** — two pillars, an arch, two golden leaves — and
+swing open as the heart and the souls rise through them, then fade
+(`RELEASE.gates`: they come 4.3–5.1 s after the lantern breaks, open
+5.2–6.8 s to chimes climbing D major, and go 8.5–9.8 s; the rise is 5.8–8.6 s
+and the panel comes at 10.0 s). Level 1 ends with the heart going up into the
+light; this level is about where the souls go, so the win shows the way in,
+open, and then leaves the light alone before the panel. Run out of bolts with
+the lantern whole, and he locks the heart in a cage with them.
+
+**Score.** `hearts × 1000 + time bonus + 500 × souls you brought out` — those
+delivered into the light during the rescue, plus those still with you when
+the lantern breaks. The board is its own (level 2's top fifty), and the
+title's counters add *souls returned*: every soul delivered, in any run, won
+or lost.
+
+**Why.** Level 1 is about not being hit; level 2 is about what you are willing
+to risk while carrying something. Holding still to open a cage, flying up to
+the light, choosing to carry one or three — each is a decision the hazards
+price. A hit costing the souls you carry (not just a heart) is what makes
+carrying three a gamble rather than a free speed-up. The chains were first a
+line lashing out along the aim at 1400 px/s: it read as a laser, not iron. A
+real pendulum is readable from its first moment (the path is drawn, and a
+swing slows at its ends and is fastest at the bottom, as everyone knows), and
+it turns a hazard into a gate to time: the ground inside its arc is open
+between swings. Letting the ball smash cages makes the chain something to
+use as well as dodge — stand by a cage and step away at the last moment, and
+it opens the cage for you. The knights replaced a rising floor of lava that
+did nothing but take half the arena away: a pike thrust is the jet's
+vertical cousin (a column locked on the heart, dodged sideways), and a
+crossbow is the fork's. They first rose out of the crust wherever the heart
+was, with nothing to see before they came; as a patrol they are on the floor
+the whole time, looking up at the heart, so the player can see which of them
+will come and from where, and the floor is somewhere to keep away from rather
+than a trapdoor. The lantern's beam was first a column standing at the
+heart's x with a line bent to it from the lantern, and it seemed to come from
+nowhere (or from his keys); a beam is a straight line from what makes it.
+The Warden reuses the fight's grammar (windows, two hits, one line said once) so a player who beat the devil can read him at a glance; a
+swinging lantern is the devil's sway, lead your shot. Making the dungeon
+something you reach only by beating the pit keeps the story in order — you
+go back down for them — and makes level 2 the reward, not a menu item.
+
+**In code.** `G.level`, `nextLevel()`, `startGame(level)`, the `LEVEL 2`
+section of `game.js`: `STOLEN`, `stolenReset()`, `lowerCage()`,
+`updateStolen()`; `CHAIN`, `spawnChain()`, `chainPlan()`, `stepChain()`,
+`ropeStep()`, `smashCage()`, `updateStrays()`; `KNIGHT`, `PATROL`,
+`knightEnter()`, `knightAttack()`, `updateKnights()`; `WARDEN`, `makeWarden()`,
+`wardenPose()`, `spawnFlail()`, `beamLine()`, `updateWarden()`, `wardenArmour()`,
+`wardenBolt()`,
+`updateWreck()`; the `released` and `caged` endings (`RELEASE`, the gates in
+`G.gates`); and their drawing (`drawChain()`, `drawKnight()`, the Warden's
+sprites `wardenBack()` / `wardenFront()` and `drawWarden()`, `drawGates()`).
+
+---
+
+## 12. Dev mode
+
+**Rule.** Five clicks on the cabinet's rainbow badge, then five on its orange
+power lamp (no more than 3 s between clicks), turn dev mode on; the same
+knock, or its own button, turns it off. It stays on across reloads on that
+device (`btd.dev`). Its panel, over the page's top-left corner, starts either
+level at once, jumps to the boss, kills him, and toggles no damage, endless
+bolts, slow motion (0.35×) and the frame-time overlay; a small *DEV* shows in
+the corner of the picture while it is on. A run is a **dev run** if dev mode
+is on when it starts or is turned on at any moment during it (`G.dev`): **a
+dev run never reaches the world board or the counters, and never becomes a
+saved best** — its end is never sent, no name is asked for, and the win and
+lose panels say *Dev run · not recorded*.
+
+**Why.** Testing level 2 used to mean beating level 1 every time, and a test
+run on the live site bumps the public counters. The knock is on the cabinet
+because it is out of the way of play; the cabinet is not drawn on screens
+under 600 px, so it is a computer's or a tablet's.
+
+**In code.** `DEV`, `devKnock()`, `devToggle()`, `devRender()`, the `#dev`
+panel in `index.html`; `G.dev` is set in `reset()` and by `devToggle()`, and
+`worldStart()`, `runOver()` and `saveBest()` check it.
+
+---
+
+## 13. A briefing before each level
+
+**Rule.** Every run from the title opens on level 1's **briefing**, and the way
+down from level 1's win opens on level 2's: a panel with the level's name, its
+story typed out a page at a time (38 letters a second, by the clock), then a
+page of what to do — the level's rules in a few lines and the controls for this
+device. Space, a click or a tap finishes a page still typing, turns a finished
+one, and on the last page begins the level; *Skip* jumps to the rules, *Story*
+goes back to the start, and Esc does the first (and from the rules, goes to the
+title). **The story plays every run**, read aloud by the narrator (below).
+**Every run starts from the main menu**: from a loss, or level 2's win, space
+or a tap goes back to the title (its hint says so, and there is no Main menu
+button where space already goes there). Level 1's win panel says plainly what
+comes next — a boxed *NEXT · LEVEL II · THE STOLEN* with a line of
+the story, which a tap follows, and *continue to Level II* on its hint.
+
+**The story.** Level 1: a game in a shop that was not there last week; nights
+lost to it, friends drifting off; tonight the white heart on the screen beats
+with your own, and he wants it. Level 2: the light would not take you alone;
+you were not the first to play, and the ones he beat before you hang in his
+dungeon — seven stolen souls, and his Warden keeps the keys. It is told to
+*you*, the player, and names no one; rule 9's no-references rule holds.
+
+**The narrator.** Each story page is read aloud: a recording of a neural
+voice (Piper's "cori", a British woman's voice from audiobook readings, public
+domain), rendered offline from `BRIEF` itself by `dev/voice.py` — so the
+recordings always say what the pages show; re-run it after changing the
+story, and bump `VOICE_V`. Page 1 of each level begins with the level's spoken
+name (its `say`). She reads with more life than the model's default (noise
+0.82 / 0.95), a little slow (1.1), letting each sentence land (0.5 s); the
+last line of a page with more than one paragraph is its sting — a held 0.9 s
+before it, and drawn out (1.3). The lines play through Web Audio at 0.97
+speed, with the long reverb around her and a ghost just behind her voice (the
+same voice through a slowly wavering 28 ms delay, darker, at 0.3), the music
+stepping back to a third under her. `voice/timings.json`
+says when each paragraph is spoken and which letters it covers, and the page
+types out in step, paragraph by paragraph. They are fetched as the page loads.
+On a fresh page a browser lets sound in only a moment *after* the first
+press — the very press that opens the story — so she waits for the sound and
+her line (`AUDIO.whenRunning()`), then starts the page from its beginning;
+the first version checked once, found no sound yet, and stayed silent until
+the second run. The narrator is silent when the game is muted (the sound
+button is the only switch for her); starting the level, Skip, or the title
+stops her. **She speaks again at the turns of the story** (`SPOKEN`): in the
+silence before the devil lands she whispers, afraid, *"He's here."* (her voice
+trembling — a 6.5 Hz shake in its level — thinner, and further off); 1.4 s
+after level 1's win panel comes up, *"You beat the devil. — But it is not over
+yet. The others he took are still down there. — We have to save them."*, the
+NEXT box beside it; and 1.4 s after level 2's, *"You brought them back. — You
+saved them."* (It closed on *"Thank you, hero"* at first; that was cut — the
+gates say the rest.) **The devil speaks once**, dying: *"No! No...
+NO!"* over his death cry, in the Warden's treatment made deeper (0.66, darker,
+torn harder). (The first version used the
+browser's own speech synthesis; on Windows it was the old desktop voice, and
+it sounded cheap. The second was a man's voice, read flat.)
+
+**Why.** A new player met the pit with no idea what it was for, and level 2
+began with a four-second card over live play that could not teach its new
+rules (cages, carrying, the light, the lantern). A briefing tells the story
+and the rules before anything can hurt you; the story is what gives the heart
+its weight (it is yours), and it gives level 2 its reason (you go back down for
+them). Every run goes back through the menu and the story because the story
+is the game's frame; *Skip* is there for anyone who knows it.
+
+**In code.** `BRIEF`, `BRIEF_CONTROLS`, `openBrief()`, `briefRender()`,
+`briefTick()`, `briefNext()`, `briefSkip()`, `briefSpeak()`, `NARRATOR`,
+`narratorLoad()`, `hush()`, `AUDIO.narrator` (`narrLoad/Play/Stop` in
+`audio.js`), `G.mode = 'brief'`, `tryStart()`; `#scr-brief` and `#win-next` in
+`index.html`; `dev/voice.py` and `voice/`.
+
+---
+
 ## Checking a change
 
 1. `python build.py` must produce a single-file `dist/index.html`.
@@ -390,3 +674,6 @@ the time floor keep that to deliberate effort, not a script.
    touches drawing; the numbers in the README are the reference.
 7. For anything touching the board, load `dev/api-sim.js` on a `#debug` page
    and play a run through the real server code (see the README).
+8. For level 2, turn on dev mode (rule 12) and use *Play II*, *Boss now* and
+   *No damage*; watch a chain drop and swing, a rank of spearmen, a crossbow,
+   his flail, the lantern windows, and both endings.

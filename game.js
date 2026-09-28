@@ -65,6 +65,80 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', function(){ setTimeout(resize, 120); });
 resize();
 
+// the version the title shows; bump it with each release (BTD_VERSION counts builds)
+var GAME_VERSION = '1.0';
+document.getElementById('ver').textContent = 'v' + GAME_VERSION;
+// ---------- the briefings ----------
+// Before each level: its story, typed out a page at a time (and read aloud),
+// then what to do. Every run starts from the main menu with it; Skip jumps to
+// the rules. Space, a click or a tap goes on.
+var BRIEF = {
+  1: { head: 'LEVEL I \u00b7 THE PIT', say: 'Level one. The Pit.', story: [
+        'The shop was not there last week.\nA narrow door, a dusty window,\nand one game on the shelf\nwith no price on it.',
+        'You played it all night.\nThen the next night.\nYour friends stopped calling.\nYou stopped noticing.',
+        'Tonight the screen is different.\nThe white heart on it beats\nwhen your own heart beats.\n\nIt is yours. And he wants it.'
+      ],
+      how: 'HOW TO BEAT HIM', rules: [
+        'Survive the pitchforks and the hellfire until he comes.',
+        'Then put a bolt through each of his eyes, only while it is open.',
+        'You have five bolts for the whole run. Two are for his eyes.'
+      ] },
+  2: { head: 'LEVEL II \u00b7 THE STOLEN', say: 'Level two. The Stolen.', story: [
+        'The light came down for your heart.\nIt would not take you alone.',
+        'You were not the first to play.\nBelow the pit is his dungeon,\nand the ones he beat before you\nhang there in cages.',
+        'Seven stolen souls.\nHis Warden keeps the keys.\n\nGo back down for them.'
+      ],
+      how: 'HOW TO FREE THEM', rules: [
+        'Hold still beside a cage to open it. The soul follows you.',
+        'Carry up to three up into the light at the top.',
+        'A hit drags every soul you carry back into a cage.',
+        'Dodge the burning chains and the knights on the floor. A chain can smash a cage open for you.',
+        'When the Warden comes, shoot his lantern while it is open. You have five bolts. Two are for his lantern.'
+      ] }
+};
+// ---------- the narrator ----------
+// The briefings' stories are read aloud: recordings of a neural voice (an
+// audiobook reader's, public domain), rendered offline from BRIEF itself by
+// dev/voice.py into voice/*.mp3, with voice/timings.json saying when each
+// paragraph is spoken so the page types itself out in step. They are the
+// game's only recorded sound, and they play through Web Audio (AUDIO.narrator)
+// like the rest of it. Silent when the game is muted, or with the briefing's
+// Voice button (remembered on the device).
+var VOICE_V = 6;                      // bump when the recordings are re-rendered
+var NARRATOR = { timings: null, rate: 0.97, loadP: null };
+// lines spoken outside the briefings, rendered by dev/voice.py like the stories:
+// the narrator's when level I is won, and the Warden's as he comes
+var SPOKEN = {
+  here: { who: 'scared', text: 'He\'s here.' },
+  devildie: { who: 'devil', text: 'No! No... NO!' },
+  win1: { who: 'narrator', text: 'You beat the devil.\n\nBut it is not over yet. The others he took are still down there.\n\nWe have to save them.' },
+  warden: { who: 'warden', text: 'You will never escape.' },
+  wardendie: { who: 'warden', text: 'No~... They were MINE!' },    // ~: that word drawn out into a cry; CAPITALS: shouted
+  win2: { who: 'narrator', text: 'You brought them back.\n\nYou saved them.' }
+};
+// the narrator says a line (not while the game is muted); its length, or 0
+function sayLine(key, fx){
+  if (AUDIO.isMuted() || !AUDIO.narrator.ready(key)) return 0;
+  return AUDIO.narrator.play(key, NARRATOR.rate, null, fx);
+}
+// the devil or the Warden says his line, after `ms`
+function growl(key, deep, ms){
+  setTimeout(function(){ if (!AUDIO.isMuted() && AUDIO.narrator.ready(key)) AUDIO.narrator.warden(key, deep); }, ms || 0);
+}
+function voiceKey(level, page){ return 'l' + level + '-' + page; }
+function voiceUrl(key){ return 'voice/' + key + '.mp3?v=' + VOICE_V; }
+// fetch the lines (a quarter of a megabyte in all), once, after the page is up
+function narratorLoad(){
+  if (NARRATOR.loadP || !window.fetch) return NARRATOR.loadP;
+  return NARRATOR.loadP = fetch('voice/timings.json?v=' + VOICE_V).then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
+    NARRATOR.timings = j;
+    if (j) Object.keys(j).forEach(function(k){ AUDIO.narrator.load(k, voiceUrl(k)); });
+    return j;
+  }).catch(function(){ return null; });
+}
+function hush(){ AUDIO.narrator.stop(); }
+var BRIEF_CONTROLS = isTouch ? 'Left thumb on the circle to move\nRight thumb on the button to fire \u00b7 II to pause'
+                             : 'Arrows / WASD to move \u00b7 Space to fire\nP to pause \u00b7 M to mute';
 var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eyes.<br><br>';
 document.getElementById('tip').innerHTML = STORY + (isTouch
   ? 'Left thumb on the circle to move<br>Right thumb on the button to fire'
@@ -72,15 +146,22 @@ document.getElementById('tip').innerHTML = STORY + (isTouch
 if (isTouch){
   document.body.classList.add('touch');
   document.getElementById('start-hint').textContent = 'Tap to start';
-  document.getElementById('over-hint').textContent = 'Tap to try again';
-  document.getElementById('win-hint').textContent = 'Tap to play again';
 }
+if (!isTouch) [].forEach.call(document.querySelectorAll('.menubtn'), function(b){ b.textContent = 'Main menu (Esc)'; });
 
 // ---------- storage ----------
 // the best completed run on this device, in board points
-var best = 0;
-try { var v = localStorage.getItem('btd.best'); if (v) best = parseInt(v,10) || 0; } catch(e){}
-function saveBest(){ try { localStorage.setItem('btd.best', String(best)); } catch(e){} }
+var bests = { 1: 0, 2: 0 };
+try { bests[1] = parseInt(localStorage.getItem('btd.best'), 10) || 0; bests[2] = parseInt(localStorage.getItem('btd.best2'), 10) || 0; } catch(e){}
+function saveBest(level, v){
+  if (G.dev || DEV.on || !(v > bests[level])) return;   // a dev run is not a best
+  bests[level] = v;
+  try { localStorage.setItem(level === 2 ? 'btd.best2' : 'btd.best', String(v)); } catch(e){}
+}
+// Dev mode (see the dev section below): its switches, and whether it is on.
+// Set up here because the run's bookkeeping asks it before anything else.
+var DEV = { on: false, god: false, ammo: false, slow: false, badge: 0, lamp: 0, lastT: 0 };
+try { DEV.on = localStorage.getItem('btd.dev') === '1'; } catch(e){}
 
 // ---------- scoring ----------
 // Only a completed run scores: hearts left are worth a thousand each, and
@@ -88,7 +169,7 @@ function saveBest(){ try { localStorage.setItem('btd.best', String(best)); } cat
 // runs from the first step into the pit to the bolt that kills him, and it
 // never stops, not for a pause. The server keeps its own clock and computes
 // the score that goes on the board; this copy is for showing it at once.
-function boardScore(hearts, seconds){ return hearts * 1000 + Math.max(0, Math.round((300 - seconds) * 10)); }
+function boardScore(hearts, seconds, saved){ return hearts * 1000 + Math.max(0, Math.round((300 - seconds) * 10)) + 500 * (saved || 0); }
 function clock(s){ s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function thousands(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 function runSeconds(){ return G.runSecs != null ? G.runSecs : (G.mode === 'play' && G.runStart ? (performance.now() - G.runStart) / 1000 : 0); }
@@ -98,7 +179,9 @@ function runSeconds(){ return G.runSecs != null ? G.runSecs : (G.mode === 'play'
 // (functions/api/[[route]].js). The game never waits on it. Every call has a
 // short timeout, and if there is no server — a static host answering with a
 // page, or no database bound — the board is hidden and the game plays the same.
-var WORLD = { online: null, top: [], souls: null, run: null, runP: null, endP: null, result: null, naming: false, mine: null };
+var WORLD = { online: null, boards: { 1: [], 2: [] }, view: 1, souls: null, places: 50, run: null, runP: null, endP: null, result: null, naming: false, mine: null };
+// the player's own entry, remembered on this device so the board can mark it
+try { WORLD.mine = JSON.parse(localStorage.getItem('btd.mine') || 'null'); } catch(e){}
 function api(path, body){
   if (WORLD.online === false) return Promise.reject(new Error('offline'));
   var ac = window.AbortController ? new AbortController() : null;
@@ -118,26 +201,32 @@ function api(path, body){
   }, function(e){ if (timer) clearTimeout(timer); throw e; });
 }
 function worldLoad(){
-  return api('board').then(function(j){ WORLD.top = j.top || []; WORLD.souls = j.souls || null; }).catch(function(){}).then(renderWorld);
+  return Promise.all([1, 2].map(function(l){
+    return api('board?level=' + l).then(function(j){ WORLD.boards[l] = j.top || []; WORLD.souls = j.souls || WORLD.souls; WORLD.places = j.places || WORLD.places; });
+  })).catch(function(){}).then(renderWorld);
 }
 function worldStart(){
-  WORLD.run = null; WORLD.result = null; WORLD.endP = null; WORLD.naming = false;
-  WORLD.runP = api('start', {}).then(function(j){ WORLD.run = j.run; }).catch(function(){});
+  WORLD.run = null; WORLD.result = null; WORLD.endP = null; WORLD.naming = false; WORLD.runP = null;
+  if (DEV.on) return;                                 // a dev run never reaches the world
+  WORLD.runP = api('start', { level: G.level }).then(function(j){ WORLD.run = j.run; }).catch(function(){});
 }
-// outcome 'freed' or 'stolen', sent the moment it is decided
-function worldEnd(outcome, hearts){
+// outcome 'freed' or 'stolen', sent the moment it is decided; in level 2,
+// with the souls brought out
+function worldEnd(outcome, hearts, saved){
   if (!WORLD.runP) return;
   WORLD.endP = WORLD.runP.then(function(){
     if (!WORLD.run) throw new Error('no run');
-    return api('end', { run: WORLD.run, outcome: outcome, hearts: hearts });
-  }).then(function(j){ WORLD.result = j; if (j.souls) WORLD.souls = j.souls; renderWorld(); return j; });
+    var body = { run: WORLD.run, outcome: outcome, hearts: hearts };
+    if (saved != null) body.saved = saved;
+    return api('end', body);
+  }).then(function(j){ WORLD.result = j; if (j.souls) WORLD.souls = j.souls; if (j.places) WORLD.places = j.places; renderWorld(); return j; });
   WORLD.endP.catch(function(){});
 }
 function dateOf(ms){
   var d = new Date(ms), M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   return d.getDate() + ' ' + M[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2);
 }
-function hiScore(){ return Math.max(best, WORLD.top.length ? WORLD.top[0].score : 0); }
+function hiScore(){ var b = WORLD.boards[G.level] || []; return Math.max(bests[G.level] || 0, b.length ? b[0].score : 0); }
 function soulsLine(){ return WORLD.souls ? thousands(WORLD.souls.stolen) + ' souls stolen' : ''; }
 // the title's counter and board, and the lose panel's count
 function renderWorld(){
@@ -146,23 +235,30 @@ function renderWorld(){
     sl.hidden = false;
     sl.textContent = '';
     sl.appendChild(document.createTextNode(thousands(s.stolen) + ' souls stolen'));
-    var fr = document.createElement('span'); fr.textContent = ' \u00b7 ' + thousands(s.freed) + ' freed'; sl.appendChild(fr);
+    var fr = document.createElement('span'); fr.textContent = ' \u00b7 ' + thousands(s.freed) + ' freed' + (s.returned ? ' \u00b7 ' + thousands(s.returned) + ' returned' : ''); sl.appendChild(fr);
   } else sl.hidden = true;
   var bd = document.getElementById('board'), rows = document.getElementById('board-rows');
   bd.hidden = !WORLD.online;
   if (WORLD.online){
     rows.textContent = '';
-    if (!WORLD.top.length){
-      var li0 = document.createElement('li'); li0.className = 'empty'; li0.textContent = 'No soul has been freed yet'; rows.appendChild(li0);
+    var top = WORLD.boards[WORLD.view] || [];
+    [].forEach.call(document.querySelectorAll('.board-tabs button'), function(b){ b.classList.toggle('on', +b.getAttribute('data-view') === WORLD.view); });
+    if (!top.length){
+      var li0 = document.createElement('li'); li0.className = 'empty';
+      li0.textContent = WORLD.view === 2 ? 'No one has brought them back yet' : 'No soul has been freed yet';
+      rows.appendChild(li0);
     }
-    WORLD.top.slice(0, 5).forEach(function(e, i){
+    var mineRow = null;
+    top.forEach(function(e, i){
       var li = document.createElement('li');
       [String(i + 1), e.name, thousands(e.score), e.hearts + '\u2665', clock(e.seconds), dateOf(e.at)].forEach(function(t){
         var sp = document.createElement('span'); sp.textContent = t; li.appendChild(sp);
       });
-      if (WORLD.mine && WORLD.mine.name === e.name && WORLD.mine.score === e.score) li.className = 'me';
+      if (WORLD.mine && (WORLD.mine.level || 1) === WORLD.view && WORLD.mine.name === e.name && WORLD.mine.score === e.score){ li.className = 'me'; mineRow = mineRow || li; }
       rows.appendChild(li);
     });
+    // ten show at a time; the list scrolls to the player's own place if it is further down
+    rows.scrollTop = mineRow ? Math.max(0, mineRow.offsetTop - rows.clientHeight / 2) : 0;
   }
   if (G.mode === 'over' && s) document.getElementById('over-hi').textContent = soulsLine();
 }
@@ -215,7 +311,7 @@ var RGB = {}; Object.keys(COLORS).forEach(function(k){ RGB[k] = hexRgb(COLORS[k]
 function col(name, a){ var c = RGB[name]; return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
 var FLOOR = LH - 8;
 // how high the heart may fly: more room in the survive phase, below his chin in the fight
-function ceilingY(){ return G.phase === 'survive' ? LH * 0.25 : LH * 0.42; }
+function ceilingY(){ return G.phase === 'survive' || G.phase === 'rescue' ? LH * 0.25 : LH * 0.42; }
 // the tallest a floor flame may be and still leave 80 px of air above the ceiling
 function flameLimit(){ return LH - ceilingY() - 80; }
 
@@ -361,7 +457,7 @@ var faceFire = faceFireHi, colFire = colFireHi;   // swapped by setTier
 
 // ---------- state ----------
 var G = {};
-function reset(){
+function reset(level){
   G.mode = 'title';           // title | play | ending | over | won
   G.tier = tier;
   G.t = 0;
@@ -373,6 +469,8 @@ function reset(){
   G.phase = 'survive';        // survive | devil
   G.surv = 0;
   G.SURV = 42;
+  G.level = level === 2 ? 2 : 1;
+  G.dev = DEV.on;             // a dev run: never sent to the world, never a best
   G.prog = 0;
   G.player = { x: LW/2, y: LH - 78, vx: 0, vy: 0, px: LW/2, py: LH - 78 };
   G.bolts = []; G.forks = []; G.flames = []; G.parts = []; G.embers = []; G.texts = []; G.splats = [];
@@ -391,8 +489,11 @@ function reset(){
   G.titleHearts = [];
   for (var th=0; th<14; th++) G.titleHearts.push({ x: rnd(20, LW-20), y: rnd(0, LH), v: rnd(18, 42), s: rnd(5, 11), p: rnd(0, 6.28) });
   G.taken = null;                          // the losing sequence
+  if (G.level === 2){ G.phase = 'rescue'; G.SURV = 50; stolenReset(); }
+  else { G.cages = G.carried = G.rising = G.comers = G.strays = G.knights = G.quarrels = []; G.warden = null; G.cagedEnd = null; G.intro = 0; G.saved = 0; G.soulsOut = 0; G.shaft = 0; }
   G.freed = null;                          // the winning one: his last grasp, and the release
   G.heaven = null;                         // the light that comes down for it
+  G.gates = null;                          // level II's end: the gates of heaven in that light
   G.heartSilent = false;                   // after he takes it, the beat is never heard again
   G.paused = false;
   G.ending = null;
@@ -415,8 +516,9 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 34;
+  window.BTD_VERSION = 51;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
+  window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
 
 // ---------- input ----------
@@ -487,6 +589,9 @@ window.addEventListener('keydown', function(e){
   var lk = k.toLowerCase();
   keys[lk] = true;
   if (lk === 'm'){ toggleMute(); return; }
+  if (lk === 'escape' && G.mode === 'brief'){ if (brief && brief.page < BRIEF[brief.level].story.length) briefSkip(); else toTitle(); return; }
+  if (lk === 'escape' && G.mode !== 'play'){ goTitle(); return; }
+  if (lk === 'q' && G.paused){ toTitle(); return; }            // from the pause screen, the main menu
   if (lk === 'p' || lk === 'escape'){ togglePause(); return; }
   if (space || k === 'Enter'){
     if (G.mode === 'play'){ if (!G.paused) fireQueued = true; }
@@ -515,7 +620,7 @@ function toLogical(e){
 // picture. A mouse still has to press on the picture itself.
 window.addEventListener('pointerdown', function(e){
   if (e.target === muteBtn) return;
-  if (e.target.closest && e.target.closest('.name, .coffee')) return;   // the link opens; it does not restart
+  if (e.target.closest && e.target.closest('.name, .coffee, .board, .menubtn, .pausebtn, .briefbtn, .nextlvl, #pausebtn, #dev')) return;   // (the briefing's Skip and Voice too)   // the name box, the board and the buttons take their own touches
   var onPicture = stage.contains(e.target);
   if (!isTouch && !onPicture) return;
   var p = toLogical(e), q = { x: e.clientX, y: e.clientY };
@@ -567,17 +672,34 @@ window.addEventListener('pointercancel', endPointer);
 
 var muteBtn = document.getElementById('mute');
 function toggleMute(){
+  // before any sound has played, the button that says "Sound on" lets it in
+  // rather than turning it off
+  if (!AUDIO.running() && !AUDIO.isMuted()){
+    AUDIO.unlock();
+    if (G.mode === 'title') music.play('title');
+    return;
+  }
   AUDIO.unlock();
   AUDIO.setMuted(!AUDIO.isMuted());
-  muteBtn.textContent = AUDIO.isMuted() ? 'Sound off' : 'Sound on';
+  muteLabel();
+  if (AUDIO.isMuted()) hush();                      // the narrator too
   if (G.mode === 'title') music.play('title');
 }
 muteBtn.addEventListener('click', function(e){ e.stopPropagation(); toggleMute(); });
+// its label, and its speaker (waves when on, a red line across it when off)
+function muteLabel(){
+  var off = AUDIO.isMuted();
+  muteBtn.querySelector('.lbl').textContent = off ? 'Sound off' : 'Sound on';
+  muteBtn.setAttribute('aria-label', off ? 'Sound off' : 'Sound on');
+  muteBtn.classList.toggle('off', off);
+}
 
 function togglePause(){
   if (G.mode !== 'play') return;
   G.paused = !G.paused;
-  keys = {}; fireQueued = false;
+  keys = {}; fireQueued = false; stickRelease();
+  document.getElementById('scr-pause').hidden = !G.paused;
+  AUDIO.hold(G.paused);                              // paused, the game is silent
   sfx.pause();
   if (G.paused) music.pause(); else music.resume();
 }
@@ -585,31 +707,243 @@ function togglePause(){
 var scrTitle = document.getElementById('scr-title');
 var scrOver  = document.getElementById('scr-over');
 var scrWin   = document.getElementById('scr-win');
+var scrBrief = document.getElementById('scr-brief'), brief = null;
+function openBrief(level){
+  var B = BRIEF[level];
+  reset(level); G.mode = 'brief';
+  scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true;
+  closeNameForm();
+  brief = { level: level, page: 0, at: performance.now(), done: false, shown: -1, voiced: false, segs: null };
+  scrBrief.hidden = false;
+  if (level === 2) music.play('stolen');           // his dungeon, under the story
+  briefRender();
+  briefSpeak();
+}
+// The narrator reads the page just turned to (the first with the level's name).
+// She needs three things: the lines' timings, this line, and the sound let in
+// — and on a fresh page the sound only starts a moment after the very press
+// that opened the story. So she waits for all three, and starts the page from
+// its beginning when they are there (if it is still this page, and it has not
+// been waiting more than a few seconds); until then it types without her.
+function briefSpeak(){
+  var B = BRIEF[brief.level], b = brief, page = brief.page, key = voiceKey(brief.level, page), asked = performance.now();
+  hush(); b.voiced = false; b.segs = null;
+  if (page >= B.story.length || AUDIO.isMuted()) return;
+  function go(){
+    if (brief !== b || b.page !== page || b.done || AUDIO.isMuted() || performance.now() - asked > 4000) return;
+    if (!NARRATOR.timings || !NARRATOR.timings[key]) return;
+    var dur = AUDIO.narrator.play(key, NARRATOR.rate, function(){ if (brief === b && b.page === page){ b.done = true; briefRender(); } });
+    if (!dur) return;
+    b.voiced = true; b.segs = NARRATOR.timings[key].segs; b.at = performance.now(); b.done = false; b.shown = -1;
+  }
+  if (AUDIO.running() && AUDIO.narrator.ready(key)){ go(); return; }
+  Promise.resolve(narratorLoad())
+    .then(function(){ return NARRATOR.timings ? AUDIO.narrator.load(key, voiceUrl(key)) : null; })
+    .then(function(){ return AUDIO.whenRunning(); })
+    .then(go);
+}
+function briefRender(){
+  var B = BRIEF[brief.level], n = B.story.length, onRules = brief.page >= n, go = isTouch ? 'Tap' : 'Press space';
+  document.getElementById('brief-level').textContent = B.head;
+  var pg = document.getElementById('brief-page');
+  pg.classList.toggle('rules', onRules);
+  if (onRules){
+    pg.textContent = '';
+    var h = document.createElement('div'); h.className = 'brief-how'; h.textContent = B.how; pg.appendChild(h);
+    var ul = document.createElement('ul');
+    B.rules.forEach(function(r){ var li = document.createElement('li'); li.textContent = r; ul.appendChild(li); });
+    pg.appendChild(ul);
+    var c = document.createElement('div'); c.className = 'brief-controls'; c.style.whiteSpace = 'pre-line'; c.textContent = BRIEF_CONTROLS; pg.appendChild(c);
+  } else pg.textContent = brief.done ? B.story[brief.page] : B.story[brief.page].slice(0, Math.max(0, brief.shown));
+  var dots = document.getElementById('brief-dots'); dots.textContent = '';
+  for (var i = 0; i <= n; i++){ var d = document.createElement('span'); if (i === brief.page) d.className = 'on'; dots.appendChild(d); }
+  document.getElementById('brief-hint').textContent = go + (onRules ? ' to begin' : ' to continue');
+  document.getElementById('brief-skip').textContent = onRules ? 'Story' : 'Skip';
+}
+// the story types itself out: in step with the narrator, each paragraph over
+// the time he speaks it; without him, 38 letters a second. By the clock, not
+// the frame rate.
+function briefTick(){
+  if (!brief || brief.done) return;
+  var B = BRIEF[brief.level];
+  if (brief.page >= B.story.length){ brief.done = true; return; }
+  var full = B.story[brief.page].length, s = (performance.now() - brief.at) / 1000, n = 0;
+  if (brief.voiced && brief.segs){
+    var e = s * NARRATOR.rate;                       // where he is in the recording
+    brief.segs.forEach(function(g){
+      if (e >= g[1]) n = Math.max(n, g[3]);
+      else if (e > g[0]) n = Math.max(n, g[2] + Math.floor((g[3] - g[2]) * (e - g[0]) / (g[1] - g[0])));
+    });
+  } else n = Math.floor(s * 38);
+  n = Math.max(0, Math.min(full, n));
+  if (n >= full) brief.done = true;
+  if (n !== brief.shown || brief.done){ brief.shown = n; briefRender(); }
+}
+function briefPage(pg){ brief.page = pg; brief.at = performance.now(); brief.done = false; brief.shown = -1; briefRender(); briefSpeak(); }
+// on: a page still typing finishes; a finished one turns; the rules begin the level
+function briefNext(){
+  if (!brief || performance.now() - brief.at < 200) return;
+  var B = BRIEF[brief.level], n = B.story.length;
+  if (brief.page < n && !brief.done){ brief.done = true; briefRender(); return; }
+  if (brief.page < n){ briefPage(brief.page + 1); return; }
+  startGame(brief.level);
+}
+// the story skipped to the rules, or the rules back to the story
+function briefSkip(){
+  if (!brief) return;
+  var n = BRIEF[brief.level].story.length;
+  briefPage(brief.page < n ? n : 0);
+}
 
+// level: 1 or 2; nothing given means the level last played
+// There is no choosing a level: every run starts in the pit, and the only way
+// down to the stolen is to beat him first. From level I's win panel the next
+// step goes down for them; anywhere else (the title, a loss, level II's win)
+// it is the pit again.
+function nextLevel(){ return G.mode === 'won' && G.level === 1 ? 2 : 1; }
 function tryStart(){
   AUDIO.unlock();
   if (WORLD.naming) return;                       // a winner is giving a name
+  if (G.mode === 'brief'){ briefNext(); return; }
   if (G.mode === 'title' || G.mode === 'over' || G.mode === 'won'){
     if (G.mode !== 'title' && G.endT < 0.9) return;
-    startGame();
+    if (G.mode === 'title') openBrief(1);         // the story first, from the title
+    else if (nextLevel() === 2) openBrief(2);     // and on the way down to the stolen
+    else toTitle();                               // anything else: back to the main menu
   }
 }
-function startGame(){
-  reset();
+function startGame(level){
+  level = level === 2 ? 2 : 1;
+  reset(level);
   AUDIO.muffle(false);
   G.mode = 'play';
   G.runStart = performance.now();
-  scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true;
+  scrTitle.hidden = true; scrOver.hidden = true; scrWin.hidden = true; scrBrief.hidden = true; brief = null; hush();
   closeNameForm();
-  music.play('survive');
+  music.play(level === 2 ? 'stolen' : 'survive');
   worldStart();
 }
+// from an end panel back to the title: the pit, the board fresh from the world, and its music
+function goTitle(){
+  if (WORLD.naming || (G.mode !== 'over' && G.mode !== 'won') || G.endT < 0.9) return;
+  toTitle();
+}
+// back to the title from anywhere: an end panel, or the pause screen (the run is abandoned)
+function toTitle(){
+  G.paused = false;
+  document.getElementById('scr-pause').hidden = true;
+  AUDIO.hold(false);
+  scrBrief.hidden = true; brief = null; hush();
+  reset(1);
+  AUDIO.muffle(false);
+  scrOver.hidden = true; scrWin.hidden = true;
+  closeNameForm();
+  showTitle();
+  worldLoad();
+  music.play('title', true);
+}
 function showTitle(){
-  document.getElementById('hi-title').textContent = best ? ('Your best ' + thousands(best)) : '';
+  document.getElementById('hi-title').textContent = (bests[1] ? 'Your best ' + thousands(bests[1]) : '') + (bests[2] ? ' \u00b7 II ' + thousands(bests[2]) : '');
   scrTitle.hidden = false;
 }
+// what space (or a tap) does from an end panel, said on it
+function endHints(){
+  var go = isTouch ? 'Tap' : 'Press space', down = nextLevel() === 2;
+  document.getElementById('over-hint').textContent = go + ' for the main menu';
+  document.getElementById('win-hint').textContent = go + (down ? ' to continue to Level II' : ' for the main menu');
+  document.getElementById('win-next').hidden = !down;
+  // a Main menu button only where space goes somewhere else
+  document.querySelector('#scr-over .menubtn').hidden = true;
+  document.querySelector('#scr-win .menubtn').hidden = !down;
+}
+[].forEach.call(document.querySelectorAll('.menubtn'), function(b){
+  b.addEventListener('click', function(e){ e.stopPropagation(); b.blur(); goTitle(); });
+});
+// the briefing's Skip / Story, and the win panel's way on to level II
+document.getElementById('brief-skip').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); AUDIO.unlock(); briefSkip(); });
+document.getElementById('win-next').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); tryStart(); });
+// pausing: the phone's pause button (a keyboard has P and Esc), and the pause screen's buttons
+var pauseBtn = document.getElementById('pausebtn'), pauseShown = false;
+pauseBtn.addEventListener('click', function(e){ e.stopPropagation(); pauseBtn.blur(); AUDIO.unlock(); if (G.mode === 'play' && !G.paused) togglePause(); });
+document.getElementById('pause-resume').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); if (G.paused) togglePause(); });
+document.getElementById('pause-menu').addEventListener('click', function(e){ e.stopPropagation(); this.blur(); if (G.paused) toTitle(); });
+if (isTouch) document.getElementById('pause-hint').textContent = 'Tap to resume';
+else document.getElementById('pause-menu').textContent = 'Main menu (Q)';
+// the pause button shows only in play (and the sound button moves over for it)
+function pauseUI(){
+  var want = G.mode === 'play' && !G.paused;
+  if (want === pauseShown) return;
+  pauseShown = want; pauseBtn.hidden = !want;
+  document.body.classList.toggle('playing', want);
+}
+// ---------- dev mode ----------
+// Five clicks on the cabinet's rainbow badge, then five on its orange power
+// lamp, turn it on; the same knock (or its own button) turns it off. It stays
+// on across reloads on this device. Its switches start either level at once,
+// jump to the boss, kill him, and turn on no damage, endless bolts, slow
+// motion and the frame-time overlay. A dev run never reaches the world board
+// and never becomes a saved best.
+var devPanel = document.getElementById('dev');
+function devRender(){
+  devPanel.hidden = !DEV.on;
+  [].forEach.call(devPanel.querySelectorAll('button'), function(b){
+    var k = b.getAttribute('data-dev');
+    b.classList.toggle('on', !!((k === 'god' && DEV.god) || (k === 'ammo' && DEV.ammo) || (k === 'slow' && DEV.slow) || (k === 'fps' && perfShow)));
+  });
+}
+function devToggle(){
+  DEV.on = !DEV.on;
+  if (!DEV.on){ DEV.god = DEV.ammo = DEV.slow = false; }
+  else if (G.mode === 'play' || G.mode === 'ending') G.dev = true;   // turned on mid-run: this run is a dev run now
+  try { localStorage.setItem('btd.dev', DEV.on ? '1' : '0'); } catch(e){}
+  AUDIO.unlock(); sfx.cageOpen();
+  devRender();
+}
+function devKnock(which){
+  var now = performance.now();
+  if (now - DEV.lastT > 3000){ DEV.badge = 0; DEV.lamp = 0; }   // a pause breaks the knock
+  DEV.lastT = now;
+  if (which === 'badge'){ if (DEV.lamp){ DEV.lamp = 0; DEV.badge = 0; } DEV.badge++; return; }
+  if (DEV.badge < 5){ DEV.badge = 0; DEV.lamp = 0; return; }
+  DEV.lamp++;
+  if (DEV.lamp >= 5){ DEV.badge = 0; DEV.lamp = 0; devToggle(); }
+}
+document.getElementById('badge').addEventListener('click', function(){ devKnock('badge'); });
+document.getElementById('power').addEventListener('click', function(){ devKnock('lamp'); });
+function devStart(level){
+  AUDIO.unlock();
+  closeNameForm();
+  startGame(level);
+}
+devPanel.addEventListener('click', function(e){
+  var b = e.target.closest && e.target.closest('button'); if (!b) return;
+  e.stopPropagation(); b.blur();
+  var k = b.getAttribute('data-dev');
+  if (k === 'l1' || k === 'l2') devStart(k === 'l1' ? 1 : 2);
+  else if (k === 'boss'){ if (G.mode === 'play' && openPhase()) G.surv = Math.max(G.surv, G.SURV - 0.1); }
+  else if (k === 'win'){
+    if (G.mode !== 'play') return;
+    if (G.devil && !G.devil.dying && G.devil.state !== 'wait'){ G.devil.eyes.forEach(function(e2){ e2.dead = true; }); devilDies(); }
+    else if (G.warden && !G.warden.dying && G.warden.state !== 'wait' && G.warden.state !== 'enter'){ G.warden.hits = 2; wardenDies(); }
+  }
+  else if (k === 'god') DEV.god = !DEV.god;
+  else if (k === 'ammo'){ DEV.ammo = !DEV.ammo; if (DEV.ammo && G.mode === 'play') G.ammo = AMMO; }
+  else if (k === 'slow') DEV.slow = !DEV.slow;
+  else if (k === 'fps') perfShow = !perfShow;
+  else if (k === 'off') devToggle();
+  devRender();
+});
+[].forEach.call(document.querySelectorAll('.board-tabs button'), function(b){
+  b.addEventListener('click', function(e){ e.stopPropagation(); WORLD.view = +b.getAttribute('data-view'); renderWorld(); });
+});
 showTitle();
 worldLoad();
+devRender();
+narratorLoad();                                    // her lines (a third of a megabyte), fetched at once
+// the title's music is asked for at once: a browser that lets a page sound
+// before a tap plays it now; otherwise it comes in on the first touch or key
+// that isn't a start (the board, its tabs, Sound on)
+music.play('title');
 
 // ---------- a coffee ----------
 // A thank-you link to the author's tip page, on the title and the end panels,
@@ -617,7 +951,7 @@ worldLoad();
 // it must stay that way (DESIGN rule 9). It is hidden when the page runs as an
 // installed store app: a Trusted Web Activity opens with an android-app://
 // referrer, remembered for the session.
-var COFFEE_URL = '';            // the tip page (Ko-fi, Buy Me a Coffee...); empty hides the link
+var COFFEE_URL = 'https://buymeacoffee.com/cobraforge';   // the tip page; empty hides the link
 var inStoreApp = false;
 try {
   if (/^android-app:\/\//.test(document.referrer)) sessionStorage.setItem('btd.app', '1');
@@ -631,16 +965,16 @@ try {
 
 // ---------- a name for the board ----------
 var nameForm = document.getElementById('name-form'), nameIn = document.getElementById('name-in');
-var winHint = document.getElementById('win-hint'), winHi = document.getElementById('win-hi');
+var winHint = document.getElementById('win-hint'), winHi = document.getElementById('win-hi'), winBtns = document.getElementById('win-btns');
 function openNameForm(){
   WORLD.naming = true;
-  nameForm.hidden = false; winHint.hidden = true;
+  nameForm.hidden = false; winHint.hidden = true; winBtns.hidden = true;   // a name or Skip first
   try { nameIn.value = localStorage.getItem('btd.name') || ''; } catch(e){}
   if (!isTouch) setTimeout(function(){ nameIn.focus(); }, 60);   // a phone opens its keyboard on the tap
 }
 function closeNameForm(){
   WORLD.naming = false;
-  nameForm.hidden = true; winHint.hidden = false;
+  nameForm.hidden = true; winHint.hidden = false; winBtns.hidden = false;
   if (document.activeElement === nameIn) nameIn.blur();
 }
 nameForm.addEventListener('submit', function(e){
@@ -650,7 +984,10 @@ nameForm.addEventListener('submit', function(e){
   try { localStorage.setItem('btd.name', n); } catch(err){}
   winHi.textContent = 'Carving it in\u2026';
   api('name', { run: WORLD.run, name: n }).then(function(j){
-    WORLD.top = j.top || WORLD.top; WORLD.mine = { name: j.name, score: WORLD.result && WORLD.result.score };
+    var lv = j.level || G.level;
+    WORLD.boards[lv] = j.top || WORLD.boards[lv]; WORLD.view = lv;
+    WORLD.mine = { name: j.name, score: WORLD.result && WORLD.result.score, level: lv };
+    try { localStorage.setItem('btd.mine', JSON.stringify(WORLD.mine)); } catch(err){}
     winHi.textContent = j.name + ' \u00b7 #' + j.rank + ' in the world';
     renderWorld();
   }, function(){ winHi.textContent = 'The board would not take it'; }).then(closeNameForm);
@@ -675,6 +1012,9 @@ function nearestHazard(){
     } else if (fl.type === 'ember'){
       if (fl.state === 'fly') d = Math.hypot(p.x - fl.x, p.y - fl.y) + 30;
       else d = fl.t > fl.fuse * 0.5 ? Math.hypot(p.x - fl.tx, p.y - fl.ty) : 1e9;
+    } else if (fl.type === 'chain'){
+      if (fl.state === 'aim' || fl.state === 'lock') d = Math.abs(Math.hypot(p.x - fl.ax, p.y - fl.ay) - fl.L) + 50;
+      else d = Math.min(Math.hypot(p.x - fl.bx, p.y - fl.by) - fl.r, fl.state === 'swing' ? distToSeg(p.x, p.y, fl.ax, fl.ay, fl.bx, fl.by) - 4 : 1e9);
     } else if (fl.type === 'breath'){
       d = (p.x < LW/2 ? -1 : 1) === fl.side ? 40 : 1e9;
     } else if (fl.type === 'jet'){
@@ -687,6 +1027,7 @@ function nearestHazard(){
   if (G.devil) G.devil.eyes.forEach(function(e){
     if (e.charge > 0 || e.beam > 0){ d = Math.abs(p.x - e.lockX) + 20; if (d < best) best = d; }
   });
+  if (G.knights && G.knights.length) best = Math.min(best, knightsNear(p));
   return best;
 }
 function updateHeart(dt){
@@ -694,8 +1035,8 @@ function updateHeart(dt){
   if (h.override >= 0) target = h.override;
   else if (G.mode === 'play' || G.mode === 'ending'){
     var danger = 1 - clamp((nearestHazard() - 30) / 220, 0, 1);
-    if (G.phase === 'survive') danger = Math.max(danger, G.prog * 0.55);
-    else danger = Math.max(danger, 0.45);
+    if (openPhase()) danger = Math.max(danger, G.prog * 0.55);
+    else danger = Math.max(danger, 0.72);            // a boss: the heart races (127 bpm and up), and the music with it
     if (G.lives === 1) danger = Math.max(danger, 0.55);
     h.danger = danger;
     target = 68 + 82 * danger;
@@ -777,10 +1118,14 @@ function hazardCount(){
   var groups = {}, n = 0;
   G.forks.forEach(function(f){ if (!groups[f.group]){ groups[f.group] = true; n++; } });
   G.flames.forEach(function(f){ if (!(f.type === 'walker' && f.state === 'die')) n++; });
+  if (G.knights){                                    // a spear attack is one group, a crossbow's another
+    if (G.knights.some(function(k){ return k.kind === 'spear' && knightArmed(k); })) n++;
+    if (G.knights.some(function(k){ return k.kind === 'xbow' && knightArmed(k); }) || G.quarrels.some(function(q){ return !q.stuck; })) n++;
+  }
   return n;
 }
 // survive phase: never more than two hazards of any kind at once. Skip, never queue.
-function mayspawn(){ return G.phase !== 'survive' || hazardCount() < 2; }
+function mayspawn(){ return !openPhase() || hazardCount() < 2; }
 // which halves currently have a jet aiming or firing from their wall
 function jetHalves(){
   var h = {};
@@ -924,7 +1269,7 @@ function devilSpeed(d){ return Math.pow(1.2, d.rage); }
 function fire(){
   var p = G.player;
   if (G.fireCd > 0 || G.ammo <= 0) return;     // empty is just empty
-  G.ammo--;
+  if (!(DEV.on && DEV.ammo)) G.ammo--;               // dev: endless bolts
   G.bolts.push({ x: p.x, y: p.y - 14, vy: -BOLT_SPEED });
   G.fireCd = 0.28;
   G.recoil = 1;
@@ -943,6 +1288,12 @@ function boltWasted(b, why){
 }
 // Only at zero. One bolt and two eyes is already lost, and it plays on.
 function checkAmmo(){
+  if (G.level === 2){
+    var w = G.warden;
+    if (G.phase !== 'warden' || !w || w.dying || G.mode !== 'play' || w.state === 'wait' || w.state === 'enter' || w.state === 'arrive') return;
+    if (G.ammo + G.bolts.length === 0 && w.hits < 2 && w.takeIn == null) w.takeIn = 1.0;
+    return;
+  }
   if (G.phase !== 'devil' || !G.devil || G.devil.dying || G.mode !== 'play') return;
   if (G.devil.state === 'wait' || G.devil.state === 'enter' || G.devil.state === 'arrive') return;
   if (G.ammo + G.bolts.length === 0 && livingEyes(G.devil).length > 0 && G.devil.takeIn == null) G.devil.takeIn = 1.0;
@@ -960,7 +1311,9 @@ function beginEnding(kind, dur){
 // fist. He turns and points at the player. The beat stops. Black.
 function runOver(outcome){
   G.runSecs = runSeconds();
-  worldEnd(outcome, outcome === 'freed' ? G.lives : 0);
+  // level 2: the souls brought out are those delivered, plus those carried when the lantern breaks
+  if (G.level === 2) G.soulsOut = G.saved + (outcome === 'freed' ? G.carried.length : 0);
+  if (!G.dev) worldEnd(outcome, outcome === 'freed' ? G.lives : 0, G.level === 2 ? G.soulsOut : null);
 }
 function loseHeart(){
   var d = G.devil;
@@ -1026,12 +1379,20 @@ function burnOutHazards(){
   G.forks.forEach(function(f){ burst(f.x, f.y, '#ff6a1f', 3, 90); });
   G.forks.length = 0;
   G.bolts.length = 0;
+  if (G.knights) knightsStand(false);
   G.flames.forEach(function(fl){
     if (fl.type === 'walker'){ fl.state = 'die'; fl.t = 0; }
     else if (fl.type === 'ember'){ fl.state = 'bloom'; fl.t = fl.fuse + 0.5; }
     else if (fl.type === 'jet'){ if (fl.len > 0){ fl.state = 'retract'; fl.t = 0; } else { fl.state = 'retract'; fl.t = 1; } }
+    else if (fl.type === 'chain') windDown(fl);
     else fl.t = fl.warn + fl.burn;
   });
+}
+// a chain is hauled up (one still in its clamp just goes)
+function windDown(fl){
+  if (fl.type !== 'chain' || fl.state === 'reel') return;
+  if ((fl.state === 'aim' || fl.state === 'lock') && fl.from === 'roof'){ fl.gone = true; return; }
+  fl.state = 'reel'; fl.t = 0; fl.len0 = fl.len;
 }
 // ---------- the release ----------
 // He dies, burning and sinking into the pit. With the last of him his hands
@@ -1052,6 +1413,7 @@ function devilDies(){
   sfx.kill();
   sfx.roar();
   sfx.deathCry();
+  growl('devildie', true, 250);                    // and in words: he cannot believe it
   burnOutHazards();
   G.freed = { hand: { x: G.player.x, y: G.player.y, close: 0 }, grabbed: false, char: 0, released: false, heal: 0 };
   if (G.arms){ G.arms.l.mode = 'reach'; G.arms.r.mode = 'reach'; G.arms.reach = 0; }
@@ -1090,8 +1452,13 @@ function updateFreed(dt){
     }
     if (t >= FREE.crumble) crumbleArms();
   } else if (t >= FREE.crumble && !F.released){ F.released = true; AUDIO.muffle(false); }
-  // the roof splits, and the light comes down
-  if (t >= FREE.crack && !G.heaven){
+  heavenAscent(t, FREE, dt);
+}
+// the roof splits, the light comes down, the heart heals in it and rises up
+// it and out. T holds the times (FREE for the devil, RELEASE for the Warden).
+function heavenAscent(t, T, dt){
+  var p = G.player, F = G.freed;
+  if (t >= T.crack && !G.heaven){
     G.heaven = { x: clamp(p.x, 50, LW - 50), t: 0, crack: 0, beam: 0, wash: 0 };
     G.shake = Math.max(G.shake, 0.7);
     burst(G.heaven.x, 6, '#6a5048', 12, 120, 420);            // the roof coming down in pieces
@@ -1101,14 +1468,13 @@ function updateFreed(dt){
     var H = G.heaven;
     H.t += dt;
     H.crack = smooth(H.t / 0.5);
-    H.beam = smooth((t - FREE.beam[0]) / (FREE.beam[1] - FREE.beam[0]));
+    H.beam = smooth((t - T.beam[0]) / (T.beam[1] - T.beam[0]));
     H.wash = H.beam;
     if (H.beam > 0 && !H.sung){ H.sung = true; music.play('win'); }
   }
-  // in the light it heals, then rises up it and out
-  F.heal = smooth((t - FREE.heal[0]) / (FREE.heal[1] - FREE.heal[0]));
+  F.heal = smooth((t - T.heal[0]) / (T.heal[1] - T.heal[0]));
   if (F.released && G.heaven) p.x = lerp(p.x, G.heaven.x, Math.min(1, dt * 1.6));
-  var rk = (t - FREE.rise[0]) / (FREE.rise[1] - FREE.rise[0]);
+  var rk = (t - T.rise[0]) / (T.rise[1] - T.rise[0]);
   if (rk > 0){
     if (F.riseY == null) F.riseY = p.y;
     p.y = lerp(F.riseY, -70, Math.pow(Math.min(1, rk), 1.8));
@@ -1146,9 +1512,13 @@ function updateEnding(dt){
   if (E.kind === 'taken'){ updateTaken(dt); return; }
   if (d && !d.dying){ d.sway += dt; d.x = LW/2 + Math.sin(d.sway * 0.55) * d.swayAmp; }
   if (E.kind === 'devil') updateFreed(dt);
+  else if (E.kind === 'released') updateReleased(dt);
+  else if (E.kind === 'caged') updateCaged(dt);
+  else if (G.level === 2){ updateCages(dt); updateCarried(dt); updateStrays(dt); updateKnights(dt, false); }
   if (E.t >= E.dur){
     G.ending = null;
-    if (E.kind === 'devil') victory();
+    if (E.kind === 'devil' || E.kind === 'released') victory();
+    else if (E.kind === 'caged') gameOver('He locked you in with them.', true);
     else gameOver('Your heart gave out.');
   }
 }
@@ -1157,38 +1527,47 @@ function gameOver(why, quiet){
   G.endT = 0;
   document.getElementById('over-why').textContent = why;
   scrOver.classList.toggle('low', !!quiet);
-  document.getElementById('over-score').textContent = G.runSecs != null ? 'You lasted ' + clock(G.runSecs) : '';
-  document.getElementById('over-hi').textContent = soulsLine() || (best ? 'Your best ' + thousands(best) : '');
+  document.getElementById('over-score').textContent = (G.runSecs != null ? 'You lasted ' + clock(G.runSecs) : '') + (G.level === 2 && G.saved ? ' \u00b7 ' + G.saved + ' freed' : '');
+  document.getElementById('over-hi').textContent = G.dev ? 'Dev run \u00b7 not recorded' : (soulsLine() || (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : ''));
+  endHints();
   scrOver.hidden = false;
   if (!quiet) sfx.over();
   setTimeout(function(){ if (G.mode === 'over'){ AUDIO.muffle(false); G.heart.override = -1; music.play('dirge'); } }, quiet ? 2500 : 1000);
 }
-function showWinScore(hearts, secs, score){
-  document.getElementById('win-score').textContent = hearts + ' heart' + (hearts > 1 ? 's' : '') + ' \u00b7 ' + clock(secs) + ' \u00b7 ' + thousands(score) + ' points';
+function showWinScore(hearts, secs, score, saved){
+  document.getElementById('win-score').textContent = hearts + ' heart' + (hearts > 1 ? 's' : '') + ' \u00b7 ' + clock(secs)
+    + (G.level === 2 ? ' \u00b7 ' + saved + ' soul' + (saved === 1 ? '' : 's') : '') + ' \u00b7 ' + thousands(score) + ' points';
 }
 function victory(){
   G.mode = 'won';
   G.endT = 0;
-  var spare = G.ammo, secs = G.runSecs || 0;
-  G.score = boardScore(G.lives, secs);
-  if (G.score > best){ best = G.score; saveBest(); }
-  document.getElementById('win-why').innerHTML = 'Your soul is free.<br>' + (spare
-    ? ('Two eyes. ' + spare + ' bolt' + (spare > 1 ? 's' : '') + ' to spare.')
-    : 'Two eyes. Not a bolt to spare.');
-  showWinScore(G.lives, secs, G.score);
-  winHi.textContent = WORLD.endP ? 'Asking the world\u2026' : (best ? 'Your best ' + thousands(best) : '');
+  var spare = G.ammo, secs = G.runSecs || 0, saved = G.level === 2 ? G.soulsOut : 0;
+  G.score = boardScore(G.lives, secs, saved);
+  saveBest(G.level, G.score);
+  document.getElementById('win-big').innerHTML = G.level === 2 ? 'YOU BROUGHT<br>THEM BACK' : 'YOU BEAT<br>THE DEVIL';
+  document.getElementById('win-why').innerHTML = G.level === 2
+    ? 'They are free.<br>' + (saved ? 'You carried ' + saved + ' of them out yourself.' : 'The lantern freed them. Not your hands.')
+    : 'Your soul is free.<br>' + (spare
+      ? ('Two eyes. ' + spare + ' bolt' + (spare > 1 ? 's' : '') + ' to spare.')
+      : 'Two eyes. Not a bolt to spare.');
+  showWinScore(G.lives, secs, G.score, saved);
+  winHi.textContent = G.dev ? 'Dev run \u00b7 not recorded' : (WORLD.endP ? 'Asking the world\u2026' : (bests[G.level] ? 'Your best ' + thousands(bests[G.level]) : ''));
+  endHints();
   scrWin.hidden = false;
   // the server's clock is the one that counts: when it answers, its time and
   // score replace ours, and a place on the board asks for a name
   if (WORLD.endP) WORLD.endP.then(function(r){
     if (G.mode !== 'won' || r.score == null) return;
-    showWinScore(G.lives, r.seconds, r.score);
-    if (r.score > best){ best = r.score; saveBest(); }
-    winHi.textContent = '#' + r.rank + ' in the world' + (r.qualifies ? '' : ' \u00b7 the board holds ten');
+    showWinScore(G.lives, r.seconds, r.score, saved);
+    saveBest(G.level, r.score);
+    winHi.textContent = '#' + r.rank + ' in the world' + (r.qualifies ? '' : ' \u00b7 the board holds ' + WORLD.places);
     if (r.qualifies) openNameForm();
-  }, function(){ if (G.mode === 'won') winHi.textContent = 'Scoreboard offline \u00b7 your best ' + thousands(best); });
+  }, function(){ if (G.mode === 'won') winHi.textContent = 'Scoreboard offline \u00b7 your best ' + thousands(bests[G.level]); });
   sfx.win();
   setTimeout(function(){ if (G.mode === 'won') music.play('win'); }, 900);
+  // level I: she tells you it is not over
+  var line = G.level === 1 ? 'win1' : 'win2', lv = G.level;          // level I: it is not over; level II: thank you
+  setTimeout(function(){ if (G.mode === 'won' && G.level === lv) sayLine(line); }, 1400);
 }
 
 // ---------- update ----------
@@ -1211,7 +1590,7 @@ function update(dt){
   updateHeart(dt);
 
   // embers rise faster as the phase darkens and with every beat
-  var emberK = 1 + G.prog * 1.3 + 0.8 * G.heart.pulse + (G.phase === 'devil' ? 0.6 : 0);
+  var emberK = 1 + G.prog * 1.3 + 0.8 * G.heart.pulse + (G.phase === 'devil' || G.phase === 'warden' ? 0.6 : 0);
   for (var i=0;i<G.embers.length;i++){
     var em = G.embers[i];
     em.y -= em.v * emberK * dt;
@@ -1256,6 +1635,7 @@ function update(dt){
   // movement. embedded: slow, dragging the fork. burnt: fast and twitchy.
   var pen = G.penalty ? G.penalty.kind : '';
   var sp = 265 * (pen === 'fork' ? 0.65 : (pen === 'burn' ? 1.15 : 1)), mx = 0, my = 0;
+  if (G.carried && G.carried.length) sp *= 1 - STOLEN.SLOW * G.carried.length;   // each soul carried is a little weight
   if (keys['arrowleft'] || keys['a']) mx -= 1;
   if (keys['arrowright']|| keys['d']) mx += 1;
   if (keys['arrowup']   || keys['w']) my -= 1;
@@ -1318,6 +1698,12 @@ function update(dt){
   for (var i=G.bolts.length-1;i>=0;i--){
     var b = G.bolts[i];
     b.y += b.vy * dt;
+    if (G.level === 2){
+      // out of the air before anything counts what is left (the last bolt must not count itself)
+      G.bolts.splice(i, 1);
+      if (wardenBolt(b)) continue;
+      G.bolts.splice(i, 0, b);                         // it met nothing: back in flight
+    }
     if (G.devil && (G.devil.state === 'open' || G.devil.state === 'attack')){
       var d = G.devil, ey = d.y + 4;
       if (b.y <= ey + 17 && b.y > ey - 40 && Math.abs(b.x - d.x) < d.w * 0.42){
@@ -1380,15 +1766,19 @@ function update(dt){
     }
 
     if (G.surv >= G.SURV){
-      // silence. the heart skips. then he lands.
+      // silence. the heart skips. she whispers that he is here. then he lands.
       G.phase = 'devil';
       G.prog = 1;
       G.devil = makeDevil();
       G.hold = 1.4;
       music.stop(0.5);
       music.whisper(0);
+      sayLine('here', 'fear');
       G.forks.length = 0;
     }
+  } else if (G.level === 2){
+    updateStolen(dt);
+    if (G.mode !== 'play') return;
   } else if (G.devil){
     updateDevil(dt);
     if (G.mode !== 'play') return;
@@ -1563,6 +1953,8 @@ function moveHazards(dt, live){
         burn = distToSeg(p.x, p.y, fl.ox, fl.oy, fl.ox + jd2.x * fl.len, fl.oy + jd2.y * fl.len) < 20 + 6;
         if (burn) burnAt = [p.x + jd2.x * -20, p.y + jd2.y * -20];
       }
+    } else if (fl.type === 'chain'){
+      if (stepChain(fl, dt, live)){ G.flames.splice(i, 1); continue; }
     } else if (fl.type === 'breath'){
       if (fl.t > fl.warn + fl.burn){ G.flames.splice(i,1); continue; }
       if (fl.t > fl.warn && !fl.roared){ fl.roared = true; sfx.breath(); G.shake = Math.max(G.shake, 0.6); }
@@ -1633,7 +2025,7 @@ function hits(p, x, y, r){
 // kind: 'fork' (a pitchfork embeds), 'burn' (fire clings), or nothing.
 // hx, hy: where it came from, for the struck side and the fork's angle.
 function hurt(kind, hx, hy, vx, vy){
-  if (G.invuln > 0 || G.mode !== 'play') return;
+  if (G.invuln > 0 || G.mode !== 'play' || (DEV.on && DEV.god)) return;
   var p = G.player;
   G.lives--;
   G.invuln = 2.0;
@@ -1642,6 +2034,7 @@ function hurt(kind, hx, hy, vx, vy){
   burst(p.x, p.y, COLORS.bone, 14, 260);
   sfx.hurt();
   G.forks.length = 0;
+  if (G.level === 2) dropSouls();
   // the beat stops dead, restarts with a hard irregular thump, then arrhythmia;
   // and it sheds light it will not get back
   var h = G.heart;
@@ -1876,6 +2269,1813 @@ function makeLightning(){
     pts.push({ x: x + (tx - x)*k + (i && i<n ? rnd(-26,26) : 0), y: y + (ty - y)*k });
   }
   return pts;
+}
+
+// =====================================================================
+// ---------- LEVEL 2: THE STOLEN ----------
+// (DESIGN rule 11) Below the pit is his dungeon. Cages hang from the roof,
+// each with a stolen soul in it; a shaft of light comes down at the top
+// centre. Free them, carry them up into the light, then break the Warden's
+// lantern. Everything else — bolts, hearts, the penalty, the telegraphs,
+// the two-hazard cap — is level 1's.
+// =====================================================================
+var STOLEN = { SOULS: 7, HANG: 4, CARRY: 3, OPEN_T: 1.0, OPEN_R: 30, SLOW: 0.06, SHAFT_W: 88, SHAFT_REACH: 44, INTRO: 1.5 };
+function openPhase(){ return G.phase === 'survive' || G.phase === 'rescue'; }
+function stolenReset(){
+  G.cages = []; G.carried = []; G.rising = []; G.comers = [];
+  G.pool = STOLEN.SOULS;      // souls not in a hanging cage (yet, or again)
+  G.saved = 0;                // delivered into the light
+  G.soulsOut = 0;             // saved + carried out at the end: what scores
+  G.intro = STOLEN.INTRO;
+  G.warden = null;
+  G.chainT = 1.0; G.spearT = 9; G.xbowT = 6; G.cageT = 0.3;
+  G.knights = []; G.quarrels = []; G.patrolN = 0;   // the patrol on the floor, and its quarrels in flight
+  G.strays = [];              // souls spilled from smashed cages, waiting to be picked up
+  G.shaft = 1;                // the light's strength: it goes while the Warden is here
+  G.cagedEnd = null;
+}
+function hangingCages(){ return G.cages.filter(function(c){ return c.soul && c.state !== 'rise'; }).length; }
+// a cage lowers somewhere clear of the others and of the light's column
+function lowerCage(){
+  var x, y, tries = 0, ok;
+  do {
+    x = rnd(52, LW - 52); y = rnd(190, 420); tries++;
+    ok = !(Math.abs(x - LW/2) < 80 && y < 270) && !G.cages.some(function(c){ return c.state !== 'rise' && Math.hypot(c.x - x, c.ty - y) < 104; });
+  } while (!ok && tries < 40);
+  G.pool--;
+  G.cages.push({ x: x, y: -40, ty: y, soul: true, lock: 0, state: 'lower', t: 0, sway: rnd(0, 6.28), shake: 0 });
+  sfx.cageLower();
+}
+function updateCages(dt){
+  var p = G.player, near = null;
+  for (var i = G.cages.length - 1; i >= 0; i--){
+    var c = G.cages[i];
+    c.t += dt; c.sway += dt; c.shake = decay(c.shake, 3, dt);
+    if (c.state === 'lower'){
+      c.y = lerp(-40, c.ty, smooth(c.t / 1.2));
+      if (c.t >= 1.2){ c.state = 'hang'; c.t = 0; }
+    } else if (c.state === 'rise'){
+      c.y -= 170 * dt;
+      if (c.y < -90){ if (c.soul) G.pool++; G.cages.splice(i, 1); continue; }
+    } else {
+      c.y = c.ty + Math.sin(c.sway * 0.8) * 3;
+      if (c.soul && G.mode === 'play' && Math.hypot(p.x - c.x, p.y - c.y) < STOLEN.OPEN_R) near = c;
+      else c.lock = Math.max(0, c.lock - dt * 2 / STOLEN.OPEN_T);   // leaving drains it at twice the rate
+      if (!c.soul && c.t > 0.9){ c.state = 'rise'; c.t = 0; }
+    }
+  }
+  if (!near){ G.fullWarned = false; return; }
+  if (G.carried.length >= STOLEN.CARRY){
+    near.lock = Math.max(0, near.lock - dt);
+    if (!G.fullWarned){ G.fullWarned = true; addText(p.x, p.y - 30, 'CARRY THEM UP', COLORS.sulfur, 1.1, 7); }
+    return;
+  }
+  var before = near.lock;
+  near.lock = Math.min(1, near.lock + dt / STOLEN.OPEN_T);
+  near.shake = Math.max(near.shake, 0.35);
+  if (Math.floor(near.lock * 4) > Math.floor(before * 4)) sfx.cageTurn(near.lock);
+  if (near.lock >= 1) openCage(near);
+}
+function openCage(c){
+  c.soul = false; c.lock = 0; c.t = 0; c.shake = 1;
+  G.carried.push({ x: c.x, y: c.y, t: 0, seed: Math.random() });
+  burst(c.x, c.y, col('heart', 0.9), 10, 140, -20);
+  sfx.cageOpen();
+}
+// the freed follow in a trail, and go up when carried into the light
+function updateCarried(dt){
+  var p = G.player, prev = { x: p.x, y: p.y + 4 };
+  G.carried.forEach(function(s, i){
+    s.t += dt;
+    var dx = s.x - prev.x, dy = s.y - prev.y, d = Math.hypot(dx, dy) || 1, gap = i ? 15 : 20;
+    if (d > gap){ s.x = prev.x + dx / d * gap; s.y = prev.y + dy / d * gap; }
+    s.y += Math.sin(s.t * 3 + i) * 6 * dt;
+    prev = s;
+  });
+  // souls coming down to the heart at the end join the trail when they reach it
+  for (var j = G.comers.length - 1; j >= 0; j--){
+    var cm = G.comers[j], tail = G.carried[G.carried.length - 1] || p;
+    cm.t += dt;
+    var cdx = tail.x - cm.x, cdy = tail.y - cm.y, cd = Math.hypot(cdx, cdy) || 1, sp = 260 + 140 * cm.t;
+    cm.x += cdx / cd * Math.min(cd, sp * dt); cm.y += cdy / cd * Math.min(cd, sp * dt);
+    if (cd < 14){ G.carried.push({ x: cm.x, y: cm.y, t: 0, seed: cm.seed }); G.comers.splice(j, 1); sfx.graze(); }
+  }
+  if (G.mode === 'play' && G.carried.length && G.shaft > 0.5 && Math.abs(p.x - LW/2) < STOLEN.SHAFT_W / 2 && p.y < ceilingY() + STOLEN.SHAFT_REACH){
+    G.carried.forEach(function(s){ G.rising.push({ x: s.x, y: s.y, t: 0, seed: s.seed }); });
+    G.saved += G.carried.length;
+    addText(LW/2, ceilingY() + 24, G.carried.length > 1 ? G.carried.length + ' ARE FREE' : 'FREE', col('grace', 1), 1.3, 9);
+    G.carried = [];
+    sfx.deliver();
+  }
+  for (var k = G.rising.length - 1; k >= 0; k--){
+    var r = G.rising[k];
+    r.t += dt; r.y -= (60 + 180 * r.t) * dt;
+    if (!r.dark) r.x += (LW/2 - r.x) * Math.min(1, dt * 2);
+    if (r.y < -30) G.rising.splice(k, 1);
+  }
+}
+// a hit hauls every soul you carry back up into the dark, to be caged again
+function dropSouls(){
+  if (!G.carried || !G.carried.length) return;
+  G.carried.forEach(function(s){ G.rising.push({ x: s.x, y: s.y, t: 0, seed: s.seed, dark: true }); });
+  G.pool += G.carried.length;
+  G.carried = [];
+  sfx.snatch();
+}
+// ----- chains: a spiked iron ball on a real chain (rules 4 and 11) -----
+// From the roof it waits in a hatch, its chain run along the roof to a
+// pulley; let go, it falls until the chain runs out, catches with a jolt and
+// swings. From the Warden's fist he winds it back along its arc and lets it
+// fly. Either way, from the moment it is let go the ball is a pendulum under
+// gravity: it slows at the top of each swing, strikes the walls and comes
+// back off them, and its chain is a rope of links that trails and bows.
+var CHAIN = { ROOF: 97, G: 1300, BALL: 11, HIT_BALL: 19, HIT_LINK: 11, SWING: 3.0, REEL: 0.5, NODES: 18, BOUNCE: 0.5, DAMP: 0.08, AIM: 0.9, LOCK: 0.22 };
+function chainLive(from){ return G.flames.some(function(f){ return f.type === 'chain' && f.from === from; }); }
+function spawnChain(){
+  var p = G.player, s = p.x < LW / 2 ? 1 : -1;       // the pulley over the heart, toward the middle
+  if (Math.random() < 0.35) s = -s;
+  var ax = clamp(p.x + s * rnd(40, 150), 26, LW - 26);
+  var fl = { type: 'chain', from: 'roof', ax: ax, ay: CHAIN.ROOF + 7, lmin: 150, lmax: 600, r: CHAIN.BALL, ts: 1, swingT: CHAIN.SWING,
+             state: 'aim', t: 0, aimT: CHAIN.AIM, lockT: CHAIN.LOCK, th: 0, om: 0, len: 0, L: 200, A: 1, th0: 0.8, side: 1,
+             hx: ax, bx: ax, by: CHAIN.ROOF + 13, vy: 0, nodes: null, spin: 0, lastTh: 0, wheel: 0, seed: Math.random() };
+  chainPlan(fl);
+  fl.bx = fl.hx;
+  G.flames.push(fl);
+  sfx.aim(); sfx.chainRattle(fl.hx);
+  return true;
+}
+// the swing's reach, for a ball dropped from the roof at `start` from straight
+// down: it falls until the chain runs out, keeps the part of its speed that is
+// across the chain, and swings out to this angle on the other side
+function dropAmplitude(start){
+  var c = Math.cos(start), s = Math.sin(start);
+  return Math.acos(clamp(c - c * s * s, -1, 1));
+}
+// Plan the swing from where the heart is: the chain is as long as the heart is
+// far from the pivot, so the arc passes through it, and the ball is let go on
+// the side that carries the swing past it (the far side when there is room:
+// down through the bottom and up through the heart). Called every frame of
+// the aim, and not again after the lock.
+function chainPlan(fl){
+  var p = G.player, dx = p.x - fl.ax, dy = Math.max(30, p.y - fl.ay);
+  var L = clamp(Math.hypot(dx, dy), fl.lmin, fl.lmax), phi = Math.atan2(dx, dy), ap = Math.abs(phi), sg = phi < 0 ? -1 : 1, best = null;
+  fl.L = L;
+  [-sg, sg].forEach(function(side, far){
+    var room = side > 0 ? LW - fl.r - 4 - fl.ax : fl.ax - fl.r - 4;
+    var lim = room >= L ? 1.4 : Math.asin(Math.max(0, room) / L);   // how far out that side's wall lets it start
+    var start, amp, margin;
+    if (fl.from === 'roof'){
+      if (far === 0){
+        // the smallest drop that swings 20° past the heart on the other side
+        var want = Math.min(1.4, Math.max(ap + 0.35, 0.8)), lo = 0.05, hi = Math.min(lim, 1.4);
+        if (dropAmplitude(hi) > want){ for (var it = 0; it < 14; it++){ var mid = (lo + hi) / 2; if (dropAmplitude(mid) > want) hi = mid; else lo = mid; } }
+        start = hi; amp = dropAmplitude(start); margin = amp - ap;
+      } else {
+        start = Math.min(lim, Math.max(ap + 0.35, 0.5)); amp = dropAmplitude(start); margin = start - ap;
+      }
+    } else {
+      start = Math.min(lim, 1.25, Math.max(ap + 0.4, 0.75)); amp = start; margin = start - ap;
+    }
+    var score = margin + (far === 0 ? 0.15 : 0);
+    if (!best || score > best.score) best = { score: score, side: side, start: start, amp: amp };
+  });
+  fl.side = best.side; fl.th0 = best.start * best.side; fl.A = best.amp;
+  if (fl.from === 'roof') fl.hx = fl.ax + Math.sin(fl.th0) * L;     // straight above where the chain runs out
+}
+// how far along its arc the ball can go before a wall stops it
+function chainArc(fl){
+  var lim = fl.r + 2;
+  var lo = -Math.asin(Math.min(1, Math.max(0, fl.ax - lim) / fl.L)), hi = Math.asin(Math.min(1, Math.max(0, LW - lim - fl.ax) / fl.L));
+  return [Math.max(-fl.A, lo), Math.min(fl.A, hi)];
+}
+function ballFromAngle(fl){ fl.bx = fl.ax + Math.sin(fl.th) * fl.len; fl.by = fl.ay + Math.cos(fl.th) * fl.len; }
+function ballVelocity(fl){
+  if (fl.state === 'drop') return { x: 0, y: fl.vy * fl.ts };
+  if (fl.state !== 'swing') return { x: 0, y: 0 };
+  var v = fl.om * fl.len * fl.ts;
+  return { x: Math.cos(fl.th) * v, y: -Math.sin(fl.th) * v };
+}
+// how hot it is: it heats in its clamp or his fist through the telegraph,
+// burns from the moment it is let go, and dies down as it is hauled up
+function chainHeat(fl){
+  if (fl.state === 'aim') return 0.15 + 0.45 * Math.min(1, fl.t / fl.aimT);
+  if (fl.state === 'lock') return 0.75;
+  if (fl.state === 'drop' || fl.state === 'swing') return 1;
+  return Math.max(0, 1 - fl.t / CHAIN.REEL);
+}
+// the chain itself: a rope of nodes pinned at the pivot and the ball
+function ropeInit(fl, x0, y0, x1, y1){
+  fl.nodes = [];
+  for (var i = 0; i <= CHAIN.NODES; i++){ var u = i / CHAIN.NODES, x = lerp(x0, x1, u), y = lerp(y0, y1, u); fl.nodes.push({ x: x, y: y, px: x, py: y }); }
+}
+function ropeStep(fl, dt, slack){
+  var n = fl.nodes, N = n.length - 1, i, it;
+  n[0].x = fl.ax; n[0].y = fl.ay; n[N].x = fl.bx; n[N].y = fl.by;
+  var rest = Math.max(0.3, fl.len * slack / N), g = CHAIN.G * dt * dt;
+  for (i = 1; i < N; i++){
+    var q = n[i], vx = (q.x - q.px) * 0.98, vy = (q.y - q.py) * 0.98;
+    q.px = q.x; q.py = q.y; q.x += vx; q.y += vy + g;
+  }
+  // links pull, never push: a chain can go slack, never stiff
+  for (it = 0; it < 12; it++){
+    var fwd = it % 2 === 0;
+    for (var j = 0; j < N; j++){
+      i = fwd ? j : N - 1 - j;
+      var a = n[i], b = n[i + 1], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+      if (d <= rest || d < 1e-4) continue;
+      var k = (d - rest) / d;
+      if (i === 0){ b.x -= dx * k; b.y -= dy * k; }
+      else if (i + 1 === N){ a.x += dx * k; a.y += dy * k; }
+      else { a.x += dx * k * 0.5; a.y += dy * k * 0.5; b.x -= dx * k * 0.5; b.y -= dy * k * 0.5; }
+    }
+  }
+  n[0].x = fl.ax; n[0].y = fl.ay; n[N].x = fl.bx; n[N].y = fl.by;
+}
+function chainTouches(fl, x, y, r){
+  var n = fl.nodes; if (!n) return false;
+  for (var i = 0; i < n.length - 1; i++) if (distToSeg(x, y, n[i].x, n[i].y, n[i + 1].x, n[i + 1].y) < r) return true;
+  return false;
+}
+// one frame of a chain; true when it is gone
+function stepChain(fl, dt, live){
+  if (fl.gone) return true;                            // hauled off before it was let go
+  var p = G.player, sdt = dt * fl.ts;
+  if (fl.state === 'aim'){
+    if (live) chainPlan(fl);                          // tracks, then freezes at lock: not led
+    if (fl.from === 'fist'){
+      var e = smooth(fl.t / fl.aimT);                 // he winds it back along its arc
+      fl.len = lerp(fl.len0, fl.L, e); fl.th = lerp(fl.thI, fl.th0, e); ballFromAngle(fl);
+      ropeStep(fl, dt, 1.02);
+    } else { fl.bx = fl.hx + Math.sin(fl.t * 47) * 0.9 * (fl.t / fl.aimT); fl.by = fl.ay + 6; }   // it trembles in its clamp
+    if (fl.t >= fl.aimT){ fl.state = 'lock'; fl.t = 0; sfx.lock(); }
+  } else if (fl.state === 'lock'){
+    if (fl.from === 'roof'){ fl.bx = fl.hx + rnd(-1, 1) * 1.3; }
+    else ropeStep(fl, dt, 1.02);
+    if (fl.t >= fl.lockT){
+      fl.t = 0;
+      if (fl.from === 'roof'){
+        fl.state = 'drop'; fl.vy = 0; fl.bx = fl.hx; fl.by = fl.ay + 6; fl.len = Math.hypot(fl.hx - fl.ax, 6);
+        ropeInit(fl, fl.ax, fl.ay, fl.hx, fl.ay + 6);
+        sfx.chainDrop(fl.hx);
+      } else {
+        fl.state = 'swing'; fl.om = 0; fl.th = fl.th0; fl.len = fl.L; fl.lastTh = fl.th;
+        sfx.chainLoose(fl.bx);
+      }
+    }
+  } else if (fl.state === 'drop'){
+    fl.vy += CHAIN.G * sdt; fl.by += fl.vy * sdt;
+    var ddx = fl.bx - fl.ax, ddy = fl.by - fl.ay, d = Math.hypot(ddx, ddy);
+    fl.len = d; fl.wheel += fl.vy * sdt / 6;
+    if (d >= fl.L){
+      // the chain runs out: it catches, and the fall becomes a swing
+      fl.th = Math.atan2(ddx, ddy); fl.len = fl.L; fl.lastTh = fl.th;
+      fl.om = -fl.vy * Math.sin(fl.th) / fl.L;
+      ballFromAngle(fl);
+      fl.state = 'swing'; fl.t = 0;
+      if (live){ G.shake = Math.max(G.shake, 0.35); sfx.chainSnap(fl.bx); }
+      burst(fl.ax, fl.ay + 5, '#ffb060', 6, 130);
+    }
+    ropeStep(fl, sdt, 1.0);
+  } else if (fl.state === 'swing'){
+    for (var k = 0, h = sdt / 4; k < 4; k++){
+      fl.om += (-(CHAIN.G / fl.len) * Math.sin(fl.th) - CHAIN.DAMP * fl.om) * h;
+      fl.th += fl.om * h;
+      // the walls: it strikes, and comes back off them at half the speed
+      var bxk = fl.ax + Math.sin(fl.th) * fl.len, lim = fl.r + 2;
+      if (bxk < lim || bxk > LW - lim){
+        var left = bxk < lim, edge = left ? lim : LW - lim;
+        fl.th = Math.asin(clamp((edge - fl.ax) / fl.len, -1, 1));
+        if (left ? fl.om < 0 : fl.om > 0){
+          var sp = Math.abs(fl.om * fl.len);
+          fl.om = -fl.om * CHAIN.BOUNCE;
+          if (sp > 90){
+            ballFromAngle(fl);
+            burst(edge + (left ? -fl.r : fl.r) * 0.6, fl.by, '#ffc070', 7, 200);
+            if (live){ sfx.ballClang(edge); G.shake = Math.max(G.shake, 0.3); }
+          }
+        }
+      }
+    }
+    ballFromAngle(fl);
+    var speed = Math.abs(fl.om * fl.len);
+    if ((fl.th > 0) !== (fl.lastTh > 0) && speed > 260 && live) sfx.chainWhoosh(fl.bx, speed);
+    fl.lastTh = fl.th;
+    fl.spin += fl.om * sdt * 2.2;
+    ropeStep(fl, sdt, 1.012);
+    if (fl.t >= fl.swingT){ fl.state = 'reel'; fl.t = 0; fl.len0 = fl.len; sfx.chainReel(fl.ax); }
+  } else {
+    // hauled back up: into the roof, or into his fist
+    var end = fl.from === 'fist' ? WARDEN.FLAIL_LEN : 0;
+    fl.len = lerp(fl.len0, end, smooth(fl.t / CHAIN.REEL));
+    fl.om *= Math.max(0, 1 - 5 * dt); fl.th += fl.om * dt; fl.th *= Math.max(0, 1 - 2.5 * dt);
+    fl.wheel -= fl.len0 / CHAIN.REEL * dt / 6;
+    ballFromAngle(fl);
+    ropeStep(fl, dt, 1.0);
+    if (fl.t >= CHAIN.REEL){
+      if (fl.owner){ fl.owner.flail = { th: fl.th, om: fl.om, len: WARDEN.FLAIL_LEN }; fl.owner.flailOut = null; }
+      return true;
+    }
+  }
+  var out = fl.state === 'drop' || fl.state === 'swing';
+  if (out && Math.random() < 0.6){
+    // it burns: embers shed from the ball, and now and then from a link
+    var V = ballVelocity(fl), n = fl.nodes && fl.nodes[1 + Math.floor(Math.random() * (fl.nodes.length - 2))];
+    addPart({ x: fl.bx + rnd(-5, 5), y: fl.by + rnd(-5, 5), vx: -V.x * 0.15 + rnd(-30, 30), vy: -V.y * 0.15 - rnd(20, 80), life: rnd(0.4, 0.9), t: 0, c: Math.random() < 0.5 ? '#ffb050' : '#ff6a10', r: rnd(1, 2.2), g: -40, turb: 20 });
+    if (n && Math.random() < 0.4) addPart({ x: n.x, y: n.y, vx: rnd(-20, 20), vy: rnd(-70, -20), life: rnd(0.3, 0.7), t: 0, c: '#ff9a40', r: rnd(0.8, 1.6), g: -30, turb: 15 });
+  }
+  if (out){
+    // it smashes a cage it meets (the soul spills out)
+    var hard = fl.state === 'drop' ? fl.vy > 220 : Math.abs(fl.om * fl.len) > 220;     // only a ball moving hard breaks a cage
+    if (G.cages && hard) G.cages.forEach(function(c){ if (c.state === 'hang' && c.soul && Math.hypot(c.x - fl.bx, c.y - fl.by) < fl.r + 18) smashCage(c, fl); });
+    // the ball hurts from the moment it is let go; the chain once it swings
+    if (live){
+      if (Math.hypot(p.x - fl.bx, p.y - fl.by) < CHAIN.HIT_BALL) hurt(null, fl.bx, fl.by);
+      else if (fl.state === 'swing' && chainTouches(fl, p.x, p.y, CHAIN.HIT_LINK)) hurt(null, p.x, p.y - 10);
+    }
+  }
+  return false;
+}
+// a ball through a hanging cage breaks it open: the soul spills out and waits
+function smashCage(c, fl){
+  c.soul = false; c.broken = true; c.lock = 0; c.t = 0; c.shake = 1.4;
+  var a = Math.atan2(c.y - fl.by, c.x - fl.bx);
+  G.strays.push({ x: c.x, y: c.y + 3, vx: Math.cos(a) * 120, vy: Math.sin(a) * 120 - 40, t: 0, seed: Math.random() });
+  burst(c.x, c.y, '#6e605a', 12, 220);
+  burst(c.x, c.y, col('heart', 0.9), 8, 140, -20);
+  fl.om *= 0.8;
+  G.shake = Math.max(G.shake, 0.4);
+  addText(c.x, c.y - 34, 'SMASHED', COLORS.heart, 1.0, 7);
+  sfx.cageSmash();
+}
+// Souls spilled from a smashed cage do not wait: they sink toward the crust,
+// fading, and after STRAY.LIFE seconds the pit takes them back (to be caged
+// again).
+var STRAY = { LIFE: 4.5, SINK: 22 };
+function updateStrays(dt){
+  var p = G.player;
+  for (var i = G.strays.length - 1; i >= 0; i--){
+    var s = G.strays[i], damp = Math.max(0, 1 - 3 * dt);
+    s.t += dt; s.vx *= damp; s.vy *= damp;
+    s.x = clamp(s.x + s.vx * dt, 14, LW - 14);
+    s.y = clamp(s.y + (s.vy + STRAY.SINK) * dt + Math.sin(s.t * 2.4 + s.seed * 6) * 8 * dt, LH * 0.25 + 8, FLOOR - 20);
+    if (s.t >= STRAY.LIFE){
+      G.rising.push({ x: s.x, y: s.y, t: 0, seed: s.seed, dark: true });
+      G.pool++; G.strays.splice(i, 1);
+      addText(s.x, s.y - 16, 'LOST', COLORS.ember, 1.0, 7);
+      sfx.snatch();
+      continue;
+    }
+    if (G.mode !== 'play' || Math.hypot(p.x - s.x, p.y - s.y) > 18){ s.warned = false; continue; }
+    if (G.carried.length < STOLEN.CARRY){ G.carried.push({ x: s.x, y: s.y, t: 0, seed: s.seed }); G.strays.splice(i, 1); sfx.cageOpen(); }
+    else if (!s.warned){ s.warned = true; addText(p.x, p.y - 30, 'CARRY THEM UP', COLORS.sulfur, 1.1, 7); }
+  }
+}
+
+// ----- the knights: a patrol of dark knights marching the crust (rules 4 and 11) -----
+// They march in from the sides and pace back and forth along the floor, their
+// helms turned up to follow the heart; touching one is a hit. Now and then
+// one attacks: a spearman strides under the heart, a pale line over his pike
+// showing how high it will reach, braces, and drives it straight up; a
+// crossbowman stops, raises his crossbow along a pale line to the heart, and
+// looses a quarrel along it. Neither leads the heart: it is where the heart
+// was at the lock.
+var KNIGHT = { HUNT: 48, POST: 34, SLOTS: [0, -66, 66, -132, 132], TRACK: 75, AIM: 0.9, LOCK: 0.22, THRUST: 0.1, HOLD: 0.4, PULL: 0.3, RECOVER: 0.5, STAGGER: 0.18, GAP: 64,
+               REST: 120, REACH_MIN: 150, REACH_MAX: 360, XAIM: 0.7, RAISE: 0.3, QUARREL: 720, SHAFT: 13, SPEAR_DX: 10, H: 100, BODY: 14, MAX: 5,
+               WARDEN_XBOWS: 2, WARDEN_SHOT: [3.2, 4.4], WARDEN_SHOT_HIT: 0.4 };
+// who marches in, and when (the meter's share): spearmen first, then a crossbowman
+var PATROL = [[0, 'spear'], [0.2, 'spear'], [0.4, 'xbow'], [0.7, 'spear']];
+function knightEnter(kind, side){
+  if (G.knights.length >= KNIGHT.MAX) return null;
+  side = side || (Math.random() < 0.5 ? -1 : 1);
+  var edge = function(sd){ return G.knights.some(function(o){ return o.st !== 'die' && Math.abs(o.x - (sd < 0 ? -26 : LW + 26)) < 70; }); };
+  if (edge(side) && !edge(-side)) side = -side;           // not in on top of another
+  var k = { kind: kind, x: side < 0 ? -26 : LW + 26, dir: -side, face: -side, st: 'walk', t: 0, step: Math.random() * 6,
+            look: 0, raise: 0, reach: 200, tip: KNIGHT.REST, ang: 0, tx: 0, ty: 0, off: 0, delay: 0, fade: 1, seed: Math.random() };
+  G.knights.push(k);
+  sfx.knightMarch(k.x);
+  return k;
+}
+function spearX(k){ return k.x + KNIGHT.SPEAR_DX * k.face; }
+function knightArmed(k){ return k.st === 'aim' || k.st === 'lock' || k.st === 'thrust' || k.st === 'hold' || k.st === 'shot'; }
+// where a knight wants to be: a spearman under the heart in his slot (the
+// first straight under it, then either side), a crossbowman at his side's post
+function knightPost(k){
+  var mine = G.knights.filter(function(o){ return o.kind === k.kind && o.st !== 'die'; }), i = mine.indexOf(k);
+  if (k.kind === 'xbow') return i % 2 ? LW - KNIGHT.POST : KNIGHT.POST;
+  return clamp(G.player.x + KNIGHT.SLOTS[i % KNIGHT.SLOTS.length], 48, LW - 48);
+}
+// the crossbow's pivot at his shoulder, raised to aim
+function xbowAt(k){ return { x: k.x + 4 * k.face, y: FLOOR - 78 }; }
+// send up to n free knights of a kind at the heart; true if any went
+function knightAttack(kind, n){
+  var p = G.player, offs = [0, -KNIGHT.GAP, KNIGHT.GAP];
+  var free = G.knights.filter(function(k){ return k.kind === kind && k.st === 'walk' && k.x > 16 && k.x < LW - 16; })
+    .sort(function(a, b){ return Math.abs(a.x - p.x) - Math.abs(b.x - p.x); }).slice(0, n);
+  if (!free.length) return false;
+  free.forEach(function(k, i){ k.st = 'aim'; k.t = 0; k.delay = 0; k.off = kind === 'spear' ? offs[i] : 0; k.face = p.x + k.off >= k.x ? 1 : -1; });
+  if (kind === 'spear') free.slice().sort(function(a, b){ return a.off - b.off; }).forEach(function(k, i){ k.delay = i * KNIGHT.STAGGER; });   // left to right, a beat apart
+  else free.forEach(function(k, i){ k.t = -i * 0.35; });                                  // a pair looses one after the other
+  sfx.aim();
+  return true;
+}
+function knightsBusy(){ return G.knights.some(knightArmed) || G.quarrels.some(function(q){ return !q.stuck; }); }
+function knightsOf(kind){ return G.knights.filter(function(k){ return k.kind === kind && k.st !== 'die'; }).length; }
+// how near the heart is to the patrol and its attacks, for its beat
+function knightsNear(p){
+  var best = 1e9;
+  G.knights.forEach(function(k){
+    if (k.st === 'die') return;
+    best = Math.min(best, Math.max(0, Math.abs(p.x - k.x) - KNIGHT.BODY) + Math.max(0, (FLOOR - KNIGHT.H) - p.y) + 30);
+    if (k.kind === 'spear' && knightArmed(k)){
+      var tele = k.st === 'aim' || k.st === 'lock', top = FLOOR - (tele ? k.reach : k.tip);
+      best = Math.min(best, Math.abs(p.x - spearX(k)) + Math.max(0, top - p.y) + (tele ? 40 : 0));
+    } else if (k.kind === 'xbow' && (k.st === 'aim' || k.st === 'lock') && k.t >= 0){
+      var X = xbowAt(k); best = Math.min(best, distToSeg(p.x, p.y, X.x, X.y, k.tx, k.ty) + 50);
+    }
+  });
+  G.quarrels.forEach(function(q){ if (!q.stuck) best = Math.min(best, Math.hypot(p.x - q.x, p.y - q.y)); });
+  return best;
+}
+// the patrol stands down (an ending); with their master gone, they burn away
+function knightsStand(dying){
+  G.knights.forEach(function(k){
+    if (dying){ if (k.st !== 'die'){ k.st = 'die'; k.t = 0; } return; }
+    if (k.st !== 'walk' && k.st !== 'die'){ k.st = 'walk'; k.t = 0; k.tip = KNIGHT.REST; k.raise = 0; }
+  });
+  G.quarrels = G.quarrels.filter(function(q){ return q.stuck; });
+}
+function updateKnights(dt, live){
+  var p = G.player, i;
+  for (i = G.knights.length - 1; i >= 0; i--){
+    var k = G.knights[i];
+    k.t += dt;
+    // their helms turn up to follow the heart
+    var want = clamp(Math.atan2(p.x - k.x, Math.max(20, (FLOOR - KNIGHT.H) - p.y)) * 0.5, -0.4, 0.4);
+    k.look += (want - k.look) * Math.min(1, dt * 4);
+    if (k.st === 'die'){
+      k.fade = Math.max(0, 1 - k.t / 1.1);
+      if (Math.random() < 0.6) addPart({ x: k.x + rnd(-12, 12), y: FLOOR - rnd(0, KNIGHT.H), vx: rnd(-20, 20), vy: rnd(-90, -40), life: rnd(0.5, 1), t: 0, c: Math.random() < 0.5 ? '#ffb060' : '#4a3e3a', r: rnd(1, 2.2), g: -20 });
+      if (k.fade <= 0) G.knights.splice(i, 1);
+      continue;
+    }
+    if (k.st === 'walk'){
+      // not a patrol: spearmen keep under the heart, each in his slot either
+      // side of it; crossbowmen hold the two sides, their crossbows up at it
+      var tx = knightPost(k), dx = tx - k.x, mv = clamp(dx, -KNIGHT.HUNT * dt, KNIGHT.HUNT * dt), there = Math.abs(dx) < 4;
+      k.x += mv;
+      if (Math.abs(mv) > 0.05){ k.step += Math.abs(mv) / 8; k.dir = mv > 0 ? 1 : -1; }
+      k.face = there ? (p.x >= k.x ? 1 : -1) : k.dir;
+      if (k.kind === 'xbow'){
+        k.raise += ((there ? 0.55 : 0) - k.raise) * Math.min(1, dt * 4);
+        var Xa = xbowAt(k); k.ang = Math.atan2(p.y - Xa.y, p.x - Xa.x);
+      }
+    } else if (k.st === 'recover'){
+      k.raise = Math.max(0, k.raise - dt / KNIGHT.RAISE);
+      if (k.t >= KNIGHT.RECOVER){ k.st = 'walk'; k.t = 0; }
+    } else if (k.kind === 'spear'){
+      if (k.st === 'aim'){
+        // he strides under the heart, his line showing how high he will reach
+        if (live){
+          var tx = clamp(p.x + k.off - KNIGHT.SPEAR_DX * k.face, 20, LW - 20), mv = clamp(tx - k.x, -KNIGHT.TRACK * dt, KNIGHT.TRACK * dt);
+          k.x += mv; k.step += Math.abs(mv) / 8;
+          k.reach = clamp(FLOOR - p.y + 50, KNIGHT.REACH_MIN, KNIGHT.REACH_MAX);
+        }
+        if (k.t >= KNIGHT.AIM){ k.st = 'lock'; k.t = 0; if (k.delay === 0) sfx.lock(); }
+      } else if (k.st === 'lock'){
+        if (k.t >= KNIGHT.LOCK + k.delay){ k.st = 'thrust'; k.t = 0; if (live) sfx.spearThrust(spearX(k)); }
+      } else if (k.st === 'thrust'){
+        k.tip = lerp(KNIGHT.REST, k.reach, Math.min(1, k.t / KNIGHT.THRUST));
+        if (k.t >= KNIGHT.THRUST){ k.st = 'hold'; k.t = 0; }
+      } else if (k.st === 'hold'){
+        k.tip = k.reach;
+        if (k.t >= KNIGHT.HOLD){ k.st = 'pull'; k.t = 0; }
+      } else if (k.st === 'pull'){
+        k.tip = lerp(k.reach, KNIGHT.REST, smooth(k.t / KNIGHT.PULL));
+        if (k.t >= KNIGHT.PULL){ k.st = 'recover'; k.t = 0; k.tip = KNIGHT.REST; }
+      }
+      // the pike, from its tip down to the crust, while it is driven and held
+      if (live && (k.st === 'thrust' || k.st === 'hold') && Math.abs(p.x - spearX(k)) < KNIGHT.SHAFT && p.y > FLOOR - k.tip - 6)
+        hurt(null, spearX(k), p.y + 20);
+    } else {
+      if (k.st === 'aim' && k.t >= 0){
+        k.raise = Math.min(1, k.raise + dt / KNIGHT.RAISE);
+        if (live){ k.tx = p.x; k.ty = p.y; }
+        k.face = k.tx >= k.x ? 1 : -1;
+        var X = xbowAt(k); k.ang = Math.atan2(k.ty - X.y, k.tx - X.x);
+        if (k.t >= KNIGHT.XAIM){ k.st = 'lock'; k.t = 0; sfx.lock(); }
+      } else if (k.st === 'lock'){
+        if (k.t >= KNIGHT.LOCK){
+          k.st = 'shot'; k.t = 0;
+          var X2 = xbowAt(k), c = Math.cos(k.ang), sn = Math.sin(k.ang);
+          G.quarrels.push({ x: X2.x + c * 16, y: X2.y + sn * 16, vx: c * KNIGHT.QUARREL, vy: sn * KNIGHT.QUARREL, ang: k.ang, stuck: false, t: 0 });
+          if (live) sfx.xbowTwang(X2.x);
+        }
+      } else if (k.st === 'shot'){
+        if (k.t >= 0.35){ k.st = 'recover'; k.t = 0; }
+      }
+    }
+    // touching one is a hit
+    if (live && Math.abs(p.x - k.x) < KNIGHT.BODY + 6 && p.y > FLOOR - KNIGHT.H + 8) hurt(null, k.x, p.y);
+  }
+  for (i = G.quarrels.length - 1; i >= 0; i--){
+    var q = G.quarrels[i];
+    if (q.stuck){ q.t += dt; if (q.t > 1.2) G.quarrels.splice(i, 1); continue; }
+    var ox = q.x, oy = q.y;
+    q.x += q.vx * dt; q.y += q.vy * dt;
+    // it strikes only a heart that can be hurt; through one that cannot (just hit) it flies on
+    if (live && G.invuln <= 0 && !(DEV.on && DEV.god) && distToSeg(p.x, p.y, ox, oy, q.x, q.y) < 12){ hurt(null, q.x, q.y); G.quarrels.splice(i, 1); continue; }
+    if (q.y < 6 || q.x < 4 || q.x > LW - 4){
+      q.stuck = true; q.t = 0; q.x = clamp(q.x, 4, LW - 4); q.y = Math.max(6, q.y);
+      if (live) sfx.quarrelThunk(q.x);
+    } else if (q.y > LH + 20) G.quarrels.splice(i, 1);
+  }
+}
+// ----- the rescue, then the Warden -----
+function updateStolen(dt){
+  if (G.intro > 0) G.intro -= dt;
+  G.shaft = G.phase === 'rescue' ? Math.min(1, G.shaft + dt) : Math.max(0, G.shaft - dt * 0.8);
+  updateCages(dt);
+  updateCarried(dt);
+  updateStrays(dt);
+  updateKnights(dt, G.mode === 'play');
+  if (G.phase === 'rescue'){
+    G.surv += dt;
+    var prog = G.prog = Math.min(1, G.surv / G.SURV);
+    G.cageT -= dt;
+    if (G.pool > 0 && hangingCages() < STOLEN.HANG && G.cageT <= 0){ lowerCage(); G.cageT = 0.7; }
+    if (G.intro <= 0){
+      // the patrol marches in as the meter fills
+      while (G.patrolN < PATROL.length && prog >= PATROL[G.patrolN][0]){ knightEnter(PATROL[G.patrolN][1], G.patrolN % 2 ? 1 : -1); G.patrolN++; }
+      // one swinging chain at a time; spear attacks from 20 %, a crossbow from 40 %
+      G.chainT -= dt;
+      if (G.chainT <= 0){ G.chainT = rnd(3.4, 4.4) - prog * 1.0; if (mayspawn() && !chainLive('roof')) spawnChain(); }
+      if (prog > 0.2){
+        G.spearT -= dt;
+        if (G.spearT <= 0){ G.spearT = lerp(6.5, 4.5, prog); if (mayspawn()) knightAttack('spear', prog < 0.45 ? 1 : (prog < 0.75 ? 2 : 3)); }
+      }
+      if (prog > 0.4){
+        G.xbowT -= dt;
+        if (G.xbowT <= 0){ G.xbowT = rnd(8, 10.5) - prog * 2; if (mayspawn()) knightAttack('xbow', 1); }
+      }
+    }
+    if (G.surv >= G.SURV) wardenComes();
+  } else if (G.warden){
+    updateWarden(dt);
+    // his crossbowmen keep shooting all through the fight, faster as he is hurt
+    var ww = G.warden;
+    if (!ww.dying && (ww.state === 'open' || ww.state === 'attack') && G.mode === 'play'){
+      G.xbowT -= dt;
+      if (G.xbowT <= 0){ G.xbowT = rnd(KNIGHT.WARDEN_SHOT[0], KNIGHT.WARDEN_SHOT[1]) - KNIGHT.WARDEN_SHOT_HIT * ww.hits; knightAttack('xbow', 1); }
+    }
+  }
+}
+// the meter is full: silence, the cages are hoisted away, and he comes down
+function wardenComes(){
+  G.phase = 'warden'; G.prog = 1;
+  G.warden = makeWarden();
+  G.hold = 1.4;
+  G.cages.forEach(function(c){ c.state = 'rise'; c.t = 0; });
+  G.flames.forEach(function(fl){ if (fl.type === 'chain') windDown(fl); });
+  knightsStand(false);
+  while (knightsOf('xbow') < KNIGHT.WARDEN_XBOWS && knightEnter('xbow'));   // his crossbowmen march in for the fight
+  G.xbowT = 3.5;
+  G.strays.forEach(function(s){ G.rising.push({ x: s.x, y: s.y, t: 0, seed: s.seed, dark: true }); });   // taken back up
+  G.pool += G.strays.length; G.strays = [];
+  music.stop(0.5);
+  music.whisper(0);
+}
+// The Warden: a knight in black iron, looming out of the dark, his legs lost
+// in his cloak. A horned great helm with a fire in its slit; a lantern
+// hanging from his left fist (the target: shuttered but for its windows); a
+// flail in his right. Both hang on chains, and both swing as he moves.
+var WARDEN = { Y: 158, LAMP_FIST: [80, 30], FLAIL_FIST: [-94, 58], SHOULDER: [90, 14], BONES: [40, 38],
+               LAMP_CHAIN: 20, LAMP_T: 22, LAMP_W: 17, FLAIL_LEN: 26, FLAIL_BALL: 13 };
+function makeWarden(){
+  return { x: LW/2, y: -290, targetY: WARDEN.Y, state: 'wait', st: 0, sway: 0, cycle: 0, attack: '', hits: 0,
+           shutter: 0, beam: null, thrown: 0, summoned: false, knightsN: 0, dying: false, dieT: 0, dead: false, kick: 0, takeIn: null,
+           eyes: 0, flare: 0, lamp: { th: 0, om: 0 }, flail: { th: 0, om: 0, len: WARDEN.FLAIL_LEN }, flailOut: null,
+           prevL: null, prevF: null, broken: false, wreck: [] };
+}
+// where everything is this frame: his centre, both fists, the lantern
+function wardenPose(w){
+  var dieK = w.dying ? clamp(w.dieT / RELEASE.dead, 0, 1) : 0;
+  var x = w.x + (w.dying ? Math.sin(G.t * 40) * 4 * dieK : 0), y = w.y - w.kick * 18 + Math.sin(G.t * 1.7) * 1.2 + dieK * dieK * 90;
+  var raise = w.state === 'open' ? 12 * w.shutter : 0;          // he holds it up when it is open
+  var lf = { x: x + WARDEN.LAMP_FIST[0], y: y + WARDEN.LAMP_FIST[1] - raise }, ff = { x: x + WARDEN.FLAIL_FIST[0], y: y + WARDEN.FLAIL_FIST[1] };
+  var sn = Math.sin(w.lamp.th), cs = Math.cos(w.lamp.th);
+  var ring = { x: lf.x + sn * WARDEN.LAMP_CHAIN, y: lf.y + 6 + cs * WARDEN.LAMP_CHAIN };
+  return { x: x, y: y, lampFist: lf, flailFist: ff, ring: ring, lantern: { x: ring.x + sn * WARDEN.LAMP_T, y: ring.y + cs * WARDEN.LAMP_T }, rot: w.lamp.th };
+}
+function wardenLantern(w){ return wardenPose(w).lantern; }
+// two bones from shoulder to fist, the elbow bent outward
+function limb(S, F, a, b, out){
+  var dx = F.x - S.x, dy = F.y - S.y, d = Math.max(1, Math.min(Math.hypot(dx, dy), a + b - 0.5)), ang = Math.atan2(dy, dx);
+  var A = Math.acos(clamp((a * a + d * d - b * b) / (2 * a * d), -1, 1));
+  var e1 = { x: S.x + Math.cos(ang + A) * a, y: S.y + Math.sin(ang + A) * a }, e2 = { x: S.x + Math.cos(ang - A) * a, y: S.y + Math.sin(ang - A) * a };
+  return (e1.x - e2.x) * out > 0 ? e1 : e2;
+}
+function wardenArms(P){
+  var sl = { x: P.x + WARDEN.SHOULDER[0], y: P.y + WARDEN.SHOULDER[1] }, sf = { x: P.x - WARDEN.SHOULDER[0], y: P.y + WARDEN.SHOULDER[1] };
+  return [
+    { s: 1, S: sl, E: limb(sl, P.lampFist, WARDEN.BONES[0], WARDEN.BONES[1], 1), F: P.lampFist },
+    { s: -1, S: sf, E: limb(sf, P.flailFist, WARDEN.BONES[0], WARDEN.BONES[1], -1), F: P.flailFist }
+  ];
+}
+// what hangs from a fist swings from the fist's own movement
+function swingFrom(pend, len, fist, prev, dt, damp){
+  if (dt <= 0) return;
+  var vx = (fist.x - prev.x) / dt, ax = clamp((vx - prev.vx) / dt, -2500, 2500);
+  prev.x = fist.x; prev.vx = vx;
+  pend.om += (-(CHAIN.G / len) * Math.sin(pend.th) - (ax / len) * Math.cos(pend.th) - damp * pend.om) * dt;
+  pend.th = clamp(pend.th + pend.om * dt, -1.3, 1.3);
+}
+var WARDEN_ATTACKS = ['knights', 'flail', 'beam'];
+function wardenAttack(w){
+  w.state = 'attack'; w.st = 0; w.cycle++;
+  w.attack = WARDEN_ATTACKS[w.cycle % WARDEN_ATTACKS.length];
+  w.thrown = 0; w.summoned = false; w.beam = null;
+}
+function wardenOpen(w){ w.state = 'open'; w.st = 0; w.beam = null; sfx.shutter(); }
+// his flail: the ball on its chain, wound back from his fist and let fly
+function spawnFlail(w, speed){
+  var P = wardenPose(w), F = P.flailFist, fl = w.flail;
+  var c = { type: 'chain', from: 'fist', owner: w, ax: F.x, ay: F.y + 6, lmin: 110, lmax: 520, r: WARDEN.FLAIL_BALL, ts: speed, swingT: 2.6,
+            state: 'aim', t: 0, aimT: CHAIN.AIM, lockT: CHAIN.LOCK, th: fl.th, om: 0, len: fl.len, len0: fl.len, thI: fl.th, L: 200, A: 1, th0: 0.8, side: 1,
+            bx: 0, by: 0, nodes: null, spin: 0, lastTh: 0, wheel: 0, seed: Math.random() };
+  ballFromAngle(c);
+  chainPlan(c);
+  ropeInit(c, c.ax, c.ay, c.bx, c.by);
+  G.flames.push(c);
+  w.flailOut = c;
+  sfx.aim(); sfx.chainRattle(F.x);
+}
+function updateWarden(dt){
+  var w = G.warden, p = G.player;
+  w.st += dt; w.kick = decay(w.kick, 3, dt); w.flare = decay(w.flare, 1.4, dt);
+  if (w.state === 'wait'){
+    if (G.hold <= 0){ w.state = 'enter'; w.st = 0; G.shake = 1.2; G.herald = 2.0; sfx.wardenArrive(); music.play('warden'); }
+    return;
+  }
+  if (!w.flailOut) w.sway += dt;                         // he stands still to swing it
+  w.x = LW/2 + Math.sin(w.sway * 0.5) * 50;
+  var P = wardenPose(w);
+  if (!w.prevL){ w.prevL = { x: P.lampFist.x, vx: 0 }; w.prevF = { x: P.flailFist.x, vx: 0 }; }
+  swingFrom(w.lamp, WARDEN.LAMP_CHAIN + WARDEN.LAMP_T, P.lampFist, w.prevL, dt, 1.1);
+  if (!w.flailOut) swingFrom(w.flail, WARDEN.FLAIL_LEN, P.flailFist, w.prevF, dt, 1.3);
+  else { w.prevF.x = P.flailFist.x; w.prevF.vx = 0; }
+  if (w.takeIn != null){ w.takeIn -= dt; if (w.takeIn <= 0){ lockedIn(); return; } }
+  w.shutter = w.state === 'open' ? Math.min(1, w.shutter + dt * 5) : Math.max(0, w.shutter - dt * 6);
+  if (w.state === 'enter'){
+    w.y += (w.targetY - w.y) * Math.min(1, dt * 1.8);
+    if (Math.abs(w.y - w.targetY) < 2){ w.state = 'arrive'; w.st = 0; }
+    return;
+  }
+  if (w.state === 'arrive'){
+    // the fire lights in his helm's slit; then he speaks — his line, in his
+    // voice — or, if it cannot be heard, he roars
+    w.eyes = Math.min(1, w.st / 0.4);
+    if (!w.lit && w.st > 0.12){ w.lit = true; w.flare = 1; sfx.wardenEyes(); }
+    if (!w.roared && w.st > 0.45){
+      w.roared = true; G.shake = 0.8; w.lamp.om += 3;
+      w.said = AUDIO.isMuted() ? 0 : AUDIO.narrator.warden('warden');
+      if (!w.said) sfx.roar();
+      addText(w.x, w.y + 150, SPOKEN.warden.text.toUpperCase(), COLORS.ember, Math.max(1.6, w.said || 0), 9);
+    }
+    if (w.said && w.st < 0.45 + w.said) w.flare = Math.max(w.flare, 0.8);   // his eyes burn as he speaks
+    if (w.st > Math.max(1.8, 0.45 + (w.said || 0) + 0.4)){
+      if (G.ammo + G.bolts.length === 0) w.takeIn = 0.8;   // he can see you have nothing
+      wardenAttack(w);
+    }
+    return;
+  }
+  w.eyes = 1;
+  if (w.state === 'open'){
+    if (w.st > 1.9 - 0.3 * w.hits) wardenAttack(w);
+    return;
+  }
+  var speed = Math.pow(1.2, w.hits), st = w.st * speed;
+  if (w.attack === 'flail'){
+    if (!w.thrown){ w.thrown = 1; w.flare = 0.7; spawnFlail(w, speed); }
+    if (!w.flailOut && st > 0.5) wardenOpen(w);
+  } else if (w.attack === 'beam'){
+    var bm = w.beam, L = P.lantern;
+    if (!bm){ bm = w.beam = { state: 'aim', t: 0, x: p.x }; sfx.aim(); }
+    bm.t += dt * speed;
+    if (bm.state === 'aim'){
+      bm.x += (p.x - bm.x) * Math.min(1, dt * 9);         // tracks, then freezes at lock
+      if (bm.t >= 0.9){ bm.state = 'lock'; bm.t = 0; sfx.lock(); }
+    } else if (bm.state === 'lock'){
+      if (bm.t >= 0.22){ bm.state = 'fire'; bm.t = 0; sfx.lanternBeam(); G.shake = Math.max(G.shake, 0.4); }
+    } else if (bm.state === 'fire'){
+      if (beamTouches(w, p.x, p.y, 8)) hurt('burn', p.x, p.y - 20);
+      if (Math.random() < 0.8) addPart({ x: bm.x + rnd(-14, 14), y: FLOOR - 3, vx: rnd(-140, 140), vy: rnd(-240, -80), life: rnd(0.3, 0.6), t: 0, c: Math.random() < 0.5 ? '#fff0c0' : '#ffc860', r: rnd(1, 2.2), g: 520 });
+      if (bm.t >= 0.6) bm.state = 'done';
+    }
+    if (bm.state === 'done' && st > 2.2) wardenOpen(w);
+  } else {
+    // he sends his knights at the heart: the spearmen in a rank, or the crossbows;
+    // and more march in, for next time
+    if (!w.summoned){
+      w.summoned = true; w.knightsN++; w.flare = 0.7;
+      var kind = w.knightsN % 2 ? 'spear' : 'xbow';
+      knightAttack(kind, kind === 'spear' ? 3 : 2);
+      if (knightsOf('spear') < 3) knightEnter('spear');
+      if (knightsOf('xbow') < KNIGHT.WARDEN_XBOWS) knightEnter('xbow');
+    }
+    if (st > 2.4 && !knightsBusy()) wardenOpen(w);
+  }
+}
+// when he dies his armour comes apart: the helm and pauldrons (and the flail,
+// if he holds it) fall into the crust
+function updateWreck(w, t, dt){
+  if (t >= 0.55 && !w.broken){
+    w.broken = true;
+    var P = wardenPose(w);
+    w.wreck.push({ kind: 'helm', x: P.x, y: P.y - 62, vx: rnd(-40, 40), vy: -170, rot: 0, spin: rnd(-2.5, 2.5), a: 1 });
+    w.wreck.push({ kind: 'pauldron', s: -1, x: P.x - 72, y: P.y - 24, vx: -90, vy: -90, rot: 0, spin: -1.6, a: 1 });
+    w.wreck.push({ kind: 'pauldron', s: 1, x: P.x + 72, y: P.y - 24, vx: 90, vy: -90, rot: 0, spin: 1.6, a: 1 });
+    if (!w.flailOut){ var F = P.flailFist; w.wreck.push({ kind: 'ball', x: F.x + Math.sin(w.flail.th) * w.flail.len, y: F.y + 12 + Math.cos(w.flail.th) * w.flail.len, vx: 0, vy: 0, rot: 0, spin: 0, a: 1 }); }
+    burst(P.x, P.y - 40, '#5b534e', 16, 220);
+    sfx.clank(); G.shake = Math.max(G.shake, 0.6);
+  }
+  w.wreck.forEach(function(pc){
+    if (!pc.landed){
+      pc.vy += 900 * dt; pc.x += pc.vx * dt; pc.y += pc.vy * dt; pc.rot += pc.spin * dt;
+      if (pc.y > FLOOR - 12){ pc.landed = true; pc.y = FLOOR - 12; burst(pc.x, FLOOR - 4, '#ffb060', 12, 200); sfx.ballClang(pc.x); }
+    } else { pc.y += 14 * dt; pc.a = Math.max(0, pc.a - dt * 0.7); }
+  });
+}
+// the lantern's beam: from the lantern's foot straight to the locked point on
+// the floor, narrow where it leaves the lantern and wide where it strikes
+var BEAM = { W0: 5, W1: 20 };
+function beamLine(w){
+  var P = wardenPose(w), L = P.lantern;
+  return { x0: L.x + Math.sin(P.rot) * WARDEN.LAMP_T, y0: L.y + Math.cos(P.rot) * WARDEN.LAMP_T, x1: w.beam.x, y1: FLOOR };
+}
+function beamTouches(w, x, y, r){
+  var B = beamLine(w), dx = B.x1 - B.x0, dy = B.y1 - B.y0, ll = dx * dx + dy * dy || 1;
+  var u = clamp(((x - B.x0) * dx + (y - B.y0) * dy) / ll, 0, 1), cx = B.x0 + dx * u, cy = B.y0 + dy * u;
+  return Math.hypot(x - cx, y - cy) < lerp(BEAM.W0, BEAM.W1, u) + r;
+}
+// is this point on his armour? (bolts go through his cloak)
+function wardenArmour(w, x, y){
+  var P = wardenPose(w), dx = x - P.x, dy = y - P.y, ax = Math.abs(dx);
+  if (ax < 27 && dy > -104 && dy < -22) return true;                 // the helm
+  if (ax > 18 && ax < 124 && dy > -72 && dy < 22) return true;       // the pauldrons
+  if (ax < 58 && dy > -28 && dy < 96) return true;                   // the breastplate
+  if (ax < 46 && dy > 92 && dy < 116) return true;                   // the faulds
+  var arms = wardenArms(P);
+  for (var i = 0; i < arms.length; i++){
+    var A = arms[i];
+    if (distToSeg(x, y, A.S.x, A.S.y, A.E.x, A.E.y) < 11 || distToSeg(x, y, A.E.x, A.E.y, A.F.x, A.F.y) < 10 || Math.hypot(x - A.F.x, y - A.F.y) < 12) return true;
+  }
+  return false;
+}
+// a bolt reaching him: the lantern if it is open, iron if it is not
+function wardenBolt(b){
+  var w = G.warden;
+  if (!w || w.dying || (w.state !== 'open' && w.state !== 'attack')) return false;
+  var L = wardenLantern(w);
+  if (Math.abs(b.x - L.x) < WARDEN.LAMP_W && Math.abs(b.y - L.y) < WARDEN.LAMP_T + 4){
+    if (w.state === 'open' && w.shutter > 0.6) lanternHit(w);
+    else boltWasted(b, 'NOT YET');
+    return true;
+  }
+  if (wardenArmour(w, b.x, b.y)){ boltWasted(b, 'WASTED'); return true; }
+  return false;
+}
+function lanternHit(w){
+  w.hits++; w.kick = 1; G.shake = 1.3; G.white = 0.5; w.flare = 1;
+  w.lamp.om += (Math.random() < 0.5 ? -1 : 1) * 5;          // it swings from the blow
+  var L = wardenLantern(w);
+  burst(L.x, L.y, COLORS.sulfur, 10, 240);
+  burst(L.x, L.y, col('grace', 0.9), 12, 300);
+  sfx.lanternHit();
+  if (w.hits >= 2){ wardenDies(); return; }
+  sfx.roar();
+  addText(w.x, w.y + 130, 'THEY ARE MINE', COLORS.sulfur, 1.4, 8);
+  wardenAttack(w);
+  checkAmmo();
+}
+// ----- the release: the lantern breaks, every cage bursts, the light takes them all
+var RELEASE = { cages: 1.3, dead: 2.0, crack: 2.6, beam: [2.8, 3.5], heal: [3.5, 5.0], rise: [5.8, 8.6], end: 10.0,
+                // the gates of heaven at the top of the light: they come, they open, the heart and the souls go up through them, they fade
+                gates: { come: [4.3, 5.1], open: [5.2, 6.8], go: [8.5, 9.8] } };
+function wardenDies(){
+  var w = G.warden, L = wardenLantern(w);
+  runOver('freed');
+  w.dying = true; w.dieT = 0;
+  beginEnding('released', RELEASE.end);
+  G.white = 1; G.shake = 1.6;
+  music.stop();
+  sfx.lanternShatter(); sfx.roar();
+  growl('wardendie', false, 250);                  // his last words: a long cry, then the rest
+  burnOutHazards();
+  knightsStand(true);                       // with their master gone, his knights burn away
+  G.freed = { hand: { x: G.player.x, y: G.player.y, close: 0 }, grabbed: false, char: 0, released: true, heal: 0 };
+  for (var i = 0; i < 26; i++)
+    addPart({ x: L.x, y: L.y, vx: rnd(-260, 260), vy: rnd(-260, 120), life: rnd(0.6, 1.4), t: 0, c: Math.random() < 0.5 ? col('grace', 0.9) : '#9fb8c8', r: rnd(1, 2.6), g: 420 });
+}
+function updateReleased(dt){
+  var t = G.ending.t, w = G.warden, F = G.freed;
+  if (w) updateWreck(w, t, dt);
+  updateKnights(dt, false);
+  if (w && !w.dead){
+    w.dieT = t;
+    if (Math.random() < 0.5)
+      addPart({ x: w.x + rnd(-110, 110), y: w.y + rnd(-20, 160), vx: rnd(-20, 20), vy: rnd(-90, -40), life: rnd(0.6, 1.2), t: 0, c: Math.random() < 0.5 ? '#ffb060' : '#5b534e', r: rnd(1, 2.4), g: -20, turb: 40 });
+    if (t >= RELEASE.dead){ w.dead = true; burst(w.x, w.y + 60, '#5b534e', 24, 240, 200); sfx.collapse(); }
+  }
+  // every cage bursts: the souls come down out of the dark to the heart
+  if (t >= RELEASE.cages && !F.called){
+    F.called = true;
+    var n = G.pool + G.cages.filter(function(c){ return c.soul; }).length;
+    G.pool = 0; G.cages.forEach(function(c){ c.soul = false; });
+    for (var i = 0; i < n; i++) G.comers.push({ x: rnd(40, LW - 40), y: -20 - i * 22, t: 0, seed: Math.random() });
+    if (n) sfx.cagesBurst();
+  }
+  updateCages(dt);
+  updateCarried(dt);
+  heavenAscent(t, RELEASE, dt);
+  var GT = RELEASE.gates;
+  if (t >= GT.come[0] && G.heaven){
+    if (!G.gates) G.gates = { a: 0, open: 0, sung: false };
+    G.gates.a = smooth((t - GT.come[0]) / (GT.come[1] - GT.come[0])) * (1 - smooth((t - GT.go[0]) / (GT.go[1] - GT.go[0])));
+    G.gates.open = smooth((t - GT.open[0]) / (GT.open[1] - GT.open[0]));
+    if (t >= GT.open[0] && !G.gates.sung){ G.gates.sung = true; sfx.gatesOpen(); }
+  }
+}
+// ----- out of bolts with the lantern whole: he locks the heart in with them
+function lockedIn(){
+  runOver('stolen');
+  beginEnding('caged', 5.0);
+  G.cagedEnd = { y: -60, slam: false };
+  music.stop(1.2);
+  burnOutHazards();
+}
+function updateCaged(dt){
+  var t = G.ending.t, c = G.cagedEnd, p = G.player, h = G.heart;
+  c.y = lerp(-60, p.y, smooth(t / 1.2));
+  if (t >= 1.2 && !c.slam){ c.slam = true; AUDIO.muffle(true); sfx.cageSlam(); G.shake = 0.9; }
+  h.override = t < 3.6 ? lerp(70, 38, t / 3.6) : 0;
+  if (t >= 3.6) G.heartSilent = true;
+  if (t >= 4.2) G.black = 1;
+  updateCages(dt); updateCarried(dt); updateKnights(dt, false);
+}
+
+// ---------- level 2: drawing ----------
+// the dungeon over the pit: a portcullis across the back wall and chains hanging still
+var dungeonLayer = makeLayer();
+function renderDungeon(){
+  var R = seeded(2222), i;
+  ctx.lineCap = 'round';
+  for (i = 0; i < 9; i++){
+    var bx = 24 + i * 46, bot = FLOOR - 80 - (i % 3) * 14;
+    ctx.strokeStyle = 'rgba(6,3,3,.85)'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(bx, 50); ctx.lineTo(bx, bot); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,90,20,.12)'; ctx.lineWidth = 1;          // the glow from below catches one edge
+    ctx.beginPath(); ctx.moveTo(bx + 2.5, 330); ctx.lineTo(bx + 2.5, bot); ctx.stroke();
+  }
+  // the iron girder under the roof that his chains hang from
+  var gy = CHAIN.ROOF - 9, gg = ctx.createLinearGradient(0, gy, 0, gy + 9);
+  gg.addColorStop(0, '#2a2224'); gg.addColorStop(0.5, '#171113'); gg.addColorStop(1, '#0c0809');
+  ctx.fillStyle = gg; ctx.fillRect(0, gy, LW, 9);
+  ctx.strokeStyle = 'rgba(255,100,40,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, gy + 9); ctx.lineTo(LW, gy + 9); ctx.stroke();
+  ctx.fillStyle = 'rgba(170,150,140,.35)';
+  for (i = 8; i < LW; i += 22){ ctx.beginPath(); ctx.arc(i, gy + 4.5, 1.2, 0, 6.2832); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(6,3,3,.85)'; ctx.lineWidth = 4;
+  [120, 300].forEach(function(y){ ctx.beginPath(); ctx.moveTo(12, y); ctx.quadraticCurveTo(LW / 2, y + 6, LW - 12, y); ctx.stroke(); });
+  for (i = 0; i < 6; i++){
+    var cx = 30 + R() * (LW - 60), len = 50 + R() * 130;
+    for (var d = 0; d < len; d += 8){
+      ctx.strokeStyle = 'rgba(40,30,30,.8)'; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      if ((d / 8) % 2) ctx.ellipse(cx, d + 4, 1.4, 4, 0, 0, 6.2832);
+      else ctx.ellipse(cx, d + 4, 3.2, 4.2, 0, 0, 6.2832);
+      ctx.stroke();
+    }
+  }
+}
+// the light the souls go up into: top centre, as wide as its reach
+function drawShaft(){
+  if (G.shaft <= 0.01) return;
+  var reach = ceilingY() + STOLEN.SHAFT_REACH, w = STOLEN.SHAFT_W;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.5 * G.shaft;
+  ctx.drawImage(beamSprite(), LW/2 - w * 0.95, 0, w * 1.9, reach + 70);
+  ctx.globalAlpha = G.shaft;
+  drawGlow(LW/2, reach, 40, RGB.grace, 0.35 + 0.15 * Math.sin(G.t * 2), w * 1.5, 56);
+  ctx.restore();
+  // where it takes them: marked while you carry any
+  if (G.carried.length && G.mode === 'play'){
+    ctx.save();
+    ctx.strokeStyle = col('grace', 0.35 + 0.25 * Math.sin(G.t * 5));
+    ctx.lineWidth = 1; ctx.setLineDash([3, 6]);
+    ctx.beginPath(); ctx.moveTo(LW/2 - w/2, reach); ctx.lineTo(LW/2 + w/2, reach); ctx.stroke();
+    ctx.restore();
+  }
+}
+// a cage: a domed iron birdcage on its chain, the soul dim inside, the lock's progress as a ring
+function drawCage(c){
+  var sh = c.shake ? Math.sin(G.t * 55) * 2.2 * c.shake : 0, x = c.x + sh, y = c.y;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(80,66,62,.9)'; ctx.lineWidth = 1.6;
+  for (var d = 4; d < y - 26; d += 8){
+    ctx.beginPath();
+    if ((d / 8 | 0) % 2) ctx.ellipse(c.x + sh * d / y, d, 1.2, 3.6, 0, 0, 6.2832);
+    else ctx.ellipse(c.x + sh * d / y, d, 2.8, 3.8, 0, 0, 6.2832);
+    ctx.stroke();
+  }
+  if (c.soul) drawGem(x, y + 3, 6, { alpha: 0.55 + 0.2 * Math.sin(G.t * 3 + c.sway), pulse: 0.2, dmg: 1 });
+  ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+  for (var k = -2; k <= 2; k++){
+    if (c.broken && (k === 0 || k === 1)) continue;          // smashed: two bars gone, the rest bent out
+    var bx = x + k * 7.5, bend = c.broken ? k * 6 : 0;
+    ctx.strokeStyle = 'rgba(96,82,78,.95)';
+    ctx.beginPath(); ctx.moveTo(bx + bend * 0.5, y + 17); ctx.quadraticCurveTo(bx + k * 1.5 + bend, y - 10, x + k * 2, y - 22); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,120,50,.28)'; ctx.lineWidth = 0.8;              // warm from the lava below
+    ctx.beginPath(); ctx.moveTo(bx + 0.8, y + 17); ctx.lineTo(bx + 0.8, y + 4); ctx.stroke();
+    ctx.lineWidth = 1.8;
+  }
+  ctx.strokeStyle = 'rgba(110,94,88,1)'; ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.ellipse(x, y + 17, 17, 4, 0, 0, 6.2832); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y - 25, 3, 0, 6.2832); ctx.stroke();
+  if (c.lock > 0){
+    ctx.strokeStyle = col('heart', 0.85); ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y, 26, -Math.PI / 2, -Math.PI / 2 + c.lock * 6.2832); ctx.stroke();
+  }
+  ctx.restore();
+}
+// the souls: those carried, those going up, those coming down at the end
+function drawSouls(){
+  var p = G.player;
+  if (G.carried.length){
+    ctx.save();
+    ctx.strokeStyle = col('heart', 0.22); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y);
+    G.carried.forEach(function(s){ ctx.lineTo(s.x, s.y); });
+    ctx.stroke();
+    ctx.restore();
+  }
+  G.carried.forEach(function(s, i){ drawGem(s.x, s.y, 5.4, { alpha: 0.95, pulse: G.heart.pulse * 0.7, breath: 0.8 + 0.2 * Math.sin(s.t * 2 + i) }); });
+  G.comers.forEach(function(s){ drawGem(s.x, s.y, 5.4, { alpha: 0.9, pulse: 0.5 }); });
+  G.strays.forEach(function(s){
+    var left = STRAY.LIFE - s.t, a = left < 1.6 ? 0.35 + 0.55 * Math.abs(Math.sin(s.t * (8 + 10 * (1.6 - left)))) : 0.9;   // it gutters as it goes
+    drawGem(s.x, s.y, 5.4, { alpha: a, pulse: 0.6, breath: 0.8 + 0.2 * Math.sin(s.t * 3) });
+  });
+  G.rising.forEach(function(r){
+    if (r.dark){
+      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - r.t * 1.2);
+      ctx.fillStyle = 'rgba(40,8,12,.9)'; heartPath(r.x, r.y, 5.4); ctx.fill();
+      ctx.strokeStyle = col('ember', 0.6); ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
+    } else drawGem(r.x, r.y, 5.4 * (1 + r.t * 0.3), { alpha: Math.max(0, 1 - r.t * 0.6), pulse: 1, light: 1.3 });
+  });
+}
+// links along a curve
+function chainAlong(pts, link){
+  link = link || 8;
+  for (var i = 0; i < pts.length - 1; i++){
+    var a = pts[i], b = pts[i + 1], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, ang = Math.atan2(dy, dx);
+    for (var d = 0; d < L; d += link){
+      var x = a.x + dx / L * d, y = a.y + dy / L * d, n = Math.round((i * 1000 + d) / link);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+      if (n % 2){ ctx.fillStyle = '#2c2422'; ctx.fillRect(-link * 0.6, -1.3, link * 1.2, 2.6); }
+      else { ctx.strokeStyle = '#6e605a'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.ellipse(0, 0, link * 0.62, link * 0.36, 0, 0, 6.2832); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
+}
+// ---- chains: links, the ball, the pulley and the clamp ----
+// Links along a polyline, alternating face-on rings and edge-on bars through
+// them: dark iron with a cold light down each link, the lava's warmth
+// catching their lower edges.
+function chainLinks(pts, size){
+  size = size || 1;
+  var pitch = 6.2 * size, face = [], edge = [], acc = 0, n = 0, i, k;
+  for (i = 0; i < pts.length - 1; i++){
+    var a = pts[i], b = pts[i + 1], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy);
+    if (L < 1e-3) continue;
+    var ang = Math.atan2(dy, dx), d = acc;
+    for (; d < L; d += pitch) (n++ % 2 ? edge : face).push(a.x + dx * d / L, a.y + dy * d / L, ang);
+    acc = d - L;
+  }
+  ctx.save();
+  ctx.lineCap = 'round';
+  var rx = 4.6 * size, ry = 2.8 * size, hl = 4.8 * size;
+  ctx.beginPath();
+  for (k = 0; k < face.length; k += 3){
+    ctx.moveTo(face[k] + Math.cos(face[k + 2]) * rx, face[k + 1] + Math.sin(face[k + 2]) * rx);
+    ctx.ellipse(face[k], face[k + 1], rx, ry, face[k + 2], 0, 6.2832);
+  }
+  ctx.strokeStyle = '#120d0c'; ctx.lineWidth = 2.6 * size; ctx.stroke();
+  ctx.strokeStyle = '#6a5c56'; ctx.lineWidth = 1.0 * size; ctx.stroke();
+  ctx.beginPath();
+  for (k = 0; k < edge.length; k += 3){
+    var c = Math.cos(edge[k + 2]) * hl, s = Math.sin(edge[k + 2]) * hl;
+    ctx.moveTo(edge[k] - c, edge[k + 1] - s); ctx.lineTo(edge[k] + c, edge[k + 1] + s);
+  }
+  ctx.strokeStyle = '#120d0c'; ctx.lineWidth = 3.4 * size; ctx.stroke();
+  ctx.strokeStyle = '#4e423d'; ctx.lineWidth = 1.3 * size; ctx.stroke();
+  ctx.translate(0, 1.1 * size);
+  ctx.strokeStyle = 'rgba(255,120,50,.3)'; ctx.lineWidth = 0.8 * size; ctx.stroke();
+  ctx.restore();
+}
+// a spiked iron ball, turning as it swings, lit orange from below
+function drawSpikeBall(x, y, r, rot){
+  var k, sp = r * 0.62;
+  ctx.save();
+  ctx.beginPath();
+  for (k = 0; k < 8; k++){
+    var a = rot + k * Math.PI / 4, c = Math.cos(a), s = Math.sin(a);
+    ctx.moveTo(x + Math.cos(a - 0.32) * r * 0.86, y + Math.sin(a - 0.32) * r * 0.86);
+    ctx.lineTo(x + c * (r + sp), y + s * (r + sp));
+    ctx.lineTo(x + Math.cos(a + 0.32) * r * 0.86, y + Math.sin(a + 0.32) * r * 0.86);
+    ctx.closePath();
+  }
+  ctx.fillStyle = '#1a1312'; ctx.fill();
+  ctx.strokeStyle = 'rgba(160,140,130,.45)'; ctx.lineWidth = 0.7; ctx.stroke();
+  var g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r * 1.05);
+  g.addColorStop(0, '#776a64'); g.addColorStop(0.35, '#3b312f'); g.addColorStop(1, '#0e0a09');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.34, rot, 0, 6.2832); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,120,50,.6)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(x, y, r - 0.7, 0.4, Math.PI - 0.4); ctx.stroke();
+  ctx.restore();
+}
+function drawPulley(x, y, wheel){
+  var top = CHAIN.ROOF - 2;
+  ctx.fillStyle = '#161111'; ctx.fillRect(x - 8, top, 16, y - top);
+  ctx.strokeStyle = 'rgba(255,110,40,.25)'; ctx.lineWidth = 1; ctx.strokeRect(x - 8, top, 16, y - top);
+  ctx.beginPath(); ctx.arc(x, y, 6.5, 0, 6.2832); ctx.fillStyle = '#2a2220'; ctx.fill();
+  ctx.strokeStyle = '#6a5c56'; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.beginPath();
+  for (var k = 0; k < 3; k++){ var a = wheel + k * 2.094; ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * 5.5, y + Math.sin(a) * 5.5); }
+  ctx.strokeStyle = '#4a3e3a'; ctx.lineWidth = 1.2; ctx.stroke();
+}
+// the clamp under the girder that holds the ball, and opens to let it fall
+function drawClamp(x, y, r, open){
+  var top = CHAIN.ROOF - 2, dy = y - top;
+  ctx.save(); ctx.lineCap = 'round';
+  [-1, 1].forEach(function(s){
+    ctx.save(); ctx.translate(x + s * 4, top); ctx.rotate(-s * open * 0.9);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * (r + 7), dy + 1, s * r * 0.35, dy + r + 5);
+    ctx.strokeStyle = '#120d0c'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.strokeStyle = '#5c4e48'; ctx.lineWidth = 1.3; ctx.stroke();
+    ctx.restore();
+  });
+  ctx.fillStyle = '#161111'; ctx.fillRect(x - 9, top, 18, 5);
+  ctx.restore();
+}
+// the chain on fire: the iron glowing along its length, flames licking up
+// off the links (more toward the ball)
+function chainFire(pts, heat, seed){
+  if (heat <= 0.02 || !pts || pts.length < 2) return;
+  var i;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.strokeStyle = 'rgba(255,90,20,' + (0.3 * heat) + ')'; ctx.lineWidth = 9; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,170,60,' + (0.35 * heat) + ')'; ctx.lineWidth = 3.5; ctx.stroke();
+  for (i = 2; i < pts.length; i += 2){
+    var u = i / (pts.length - 1), q = pts[i], nz = FIRE.at(i * 37 + seed * 100, G.t * 60), r = (2.2 + 3.2 * u) * (0.6 + 0.6 * nz) * heat;
+    if (r < 0.6) continue;
+    drawLick(q.x, q.y + r * 0.4, r, 0.75, 'rgba(255,120,30,1)');
+    drawLick(q.x, q.y + r * 0.3, r * 0.55, 0.85, 'rgba(255,225,140,1)');
+  }
+  ctx.restore();
+}
+// the ball on fire: a glow round it, flames streaming back from its motion
+// (and up, when it is slow), and its iron red-hot
+function ballFire(x, y, r, V, heat, seed){
+  if (heat <= 0.02) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  drawGlow(x, y, 32, [255, 110, 30], 0.9 * heat, r * 6, r * 6);
+  var sp = Math.hypot(V.x, V.y), k = Math.min(1, sp / 500);
+  var dx = sp > 1 ? -V.x / sp * k : 0, dy = (sp > 1 ? -V.y / sp * k : 0) - (1 - k), dl = Math.hypot(dx, dy) || 1;
+  var ang = Math.atan2(dx / dl, -dy / dl);
+  for (var i = 0; i < 6; i++){
+    var a = ang + (i - 2.5) * 0.35, nz = FIRE.at(i * 53 + seed * 80, G.t * 70), len = r * (0.8 + 0.9 * nz) * (1 + k * 0.9) * heat;
+    ctx.save(); ctx.translate(x + Math.sin(a) * r * 0.6, y - Math.cos(a) * r * 0.6); ctx.rotate(a);
+    drawLick(0, 0, len * 0.45, 0.8, 'rgba(255,110,25,1)');
+    drawLick(0, 0, len * 0.25, 0.9, 'rgba(255,220,130,1)');
+    ctx.restore();
+  }
+  ctx.restore();
+}
+function ballHot(x, y, r, heat){
+  if (heat <= 0.02) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  var g = ctx.createRadialGradient(x, y + r * 0.2, 1, x, y, r * 1.1);
+  g.addColorStop(0, 'rgba(255,170,70,' + (0.6 * heat) + ')'); g.addColorStop(0.7, 'rgba(255,80,20,' + (0.35 * heat) + ')'); g.addColorStop(1, 'rgba(255,60,10,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.1, 0, 6.2832); ctx.fill();
+  ctx.restore();
+}
+// the chain: its telegraph (the drop and the arc it will swing), the pulley,
+// the links, and the ball, smeared along its arc when it is fast — all of it
+// on fire once it is let go
+function drawChain(fl){
+  ctx.save();
+  if (fl.state === 'aim' || fl.state === 'lock'){
+    var locked = fl.state === 'lock', flick = locked && Math.floor(fl.t * 30) % 2 === 0, ext = chainArc(fl);
+    ctx.globalAlpha = locked ? (flick ? 0.95 : 0.6) : 0.25 + 0.4 * (fl.t / fl.aimT);
+    ctx.strokeStyle = locked ? COLORS.sulfur : COLORS.bone; ctx.lineWidth = locked ? 1.5 : 1;
+    if (!locked) ctx.setLineDash([3, 9]);
+    ctx.beginPath();
+    if (fl.from === 'roof'){ ctx.moveTo(fl.hx, fl.by + 18); ctx.lineTo(fl.hx, fl.ay + Math.cos(fl.th0) * fl.L); }
+    var a0 = Math.PI / 2 - ext[1], a1 = Math.PI / 2 - ext[0];
+    ctx.moveTo(fl.ax + Math.cos(a0) * fl.L, fl.ay + Math.sin(a0) * fl.L);
+    ctx.arc(fl.ax, fl.ay, fl.L, a0, a1);
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
+  if (fl.from === 'roof'){
+    drawPulley(fl.ax, fl.ay, fl.wheel);
+    if (fl.state === 'aim' || fl.state === 'lock'){
+      chainLinks([{ x: fl.ax, y: fl.ay }, { x: (fl.ax + fl.hx) / 2, y: fl.ay + 6 }, { x: fl.bx, y: fl.by }], 0.9);
+      var h0 = chainHeat(fl);
+      ballFire(fl.bx, fl.by, fl.r, { x: 0, y: 0 }, h0 * 0.8, fl.seed);
+      drawSpikeBall(fl.bx, fl.by, fl.r, fl.spin);
+      ballHot(fl.bx, fl.by, fl.r, h0);
+      drawClamp(fl.hx, fl.by, fl.r, 0);
+      ctx.restore();
+      return;
+    }
+    var ca = fl.state === 'drop' ? 1 : (fl.state === 'swing' ? Math.max(0, 1 - fl.t / 0.6) : 0);
+    if (ca > 0){ ctx.globalAlpha = ca; drawClamp(fl.hx, fl.ay + 6, fl.r, 1); ctx.globalAlpha = 1; }
+  }
+  var heat = chainHeat(fl);
+  if (fl.nodes && fl.state !== 'aim' && fl.state !== 'lock') chainFire(fl.nodes, heat, fl.seed);
+  if (fl.nodes) chainLinks(fl.nodes, fl.from === 'fist' ? 1.1 : 1);
+  if (fl.state === 'swing' && Math.abs(fl.om * fl.len) > 280){
+    ctx.fillStyle = '#3a2e2b';
+    for (var k = 3; k >= 1; k--){
+      var th = fl.th - fl.om * 0.014 * k * fl.ts;
+      ctx.globalAlpha = 0.18 / k;
+      ctx.beginPath(); ctx.arc(fl.ax + Math.sin(th) * fl.len, fl.ay + Math.cos(th) * fl.len, fl.r + 3, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  ballFire(fl.bx, fl.by, fl.r, ballVelocity(fl), heat, fl.seed);
+  drawSpikeBall(fl.bx, fl.by, fl.r, fl.spin);
+  ballHot(fl.bx, fl.by, fl.r, heat);
+  ctx.restore();
+}
+
+// ---- the knights ----
+function drawKnights(){
+  G.knights.forEach(function(k){
+    if (k.kind === 'spear') drawSpearTelegraph(k); else drawXbowTelegraph(k);
+    drawKnight(k);
+  });
+  G.quarrels.forEach(drawQuarrel);
+}
+function telegraphStyle(locked, t, aimT){
+  var flick = locked && Math.floor(t * 30) % 2 === 0;
+  ctx.globalAlpha = locked ? (flick ? 0.95 : 0.6) : 0.2 + 0.4 * Math.min(1, t / aimT);
+  ctx.strokeStyle = locked ? COLORS.sulfur : COLORS.bone; ctx.lineWidth = locked ? 1.5 : 1;
+  if (!locked) ctx.setLineDash([3, 9]);
+}
+// a pale line over the pike, as high as it will reach
+function drawSpearTelegraph(k){
+  if (k.st !== 'aim' && k.st !== 'lock') return;
+  var x = spearX(k), top = FLOOR - k.reach;
+  ctx.save();
+  telegraphStyle(k.st === 'lock', k.t, KNIGHT.AIM);
+  ctx.beginPath(); ctx.moveTo(x, FLOOR - k.tip - 4); ctx.lineTo(x, top); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(x - 7, top); ctx.lineTo(x + 7, top); ctx.stroke();
+  ctx.restore();
+}
+// a pale line from the crossbow up through the heart
+function drawXbowTelegraph(k){
+  if ((k.st !== 'aim' && k.st !== 'lock') || k.t < 0 || k.raise < 0.6) return;
+  var X = xbowAt(k), c = Math.cos(k.ang), s = Math.sin(k.ang), d = Math.hypot(k.tx - X.x, k.ty - X.y) + 70;
+  ctx.save();
+  telegraphStyle(k.st === 'lock', k.t, KNIGHT.XAIM);
+  ctx.beginPath(); ctx.moveTo(X.x + c * 22, X.y + s * 22); ctx.lineTo(X.x + c * d, X.y + s * d); ctx.stroke();
+  ctx.restore();
+}
+function drawTrident(x, y, glint){
+  ctx.save();
+  ctx.fillStyle = '#2c2320';
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 4.5, y + 7, x + 2, y + 15); ctx.lineTo(x - 2, y + 15); ctx.quadraticCurveTo(x - 4.5, y + 7, x, y); ctx.fill();
+  ctx.strokeStyle = '#2c2320'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  [-1, 1].forEach(function(s){ ctx.beginPath(); ctx.moveTo(x, y + 16); ctx.quadraticCurveTo(x + s * 9, y + 15, x + s * 7.5, y + 4); ctx.stroke(); });
+  ctx.fillStyle = '#1c1411'; ctx.fillRect(x - 2.6, y + 15, 5.2, 7);
+  ctx.strokeStyle = 'rgba(210,195,185,.55)'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(x, y + 1); ctx.quadraticCurveTo(x + 3.4, y + 7, x + 1.6, y + 14); ctx.stroke();
+  if (glint > 0){
+    ctx.globalCompositeOperation = 'lighter';
+    drawGlow(x, y + 2, 12, [255, 220, 150], glint, 30, 30);
+    ctx.strokeStyle = 'rgba(255,240,200,' + glint + ')'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x - 6, y + 2); ctx.lineTo(x + 6, y + 2); ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 8); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawKnightLeg(L, far){
+  armPlate(L.hip, L.kn, 5.5, 4.6);
+  armPlate(L.kn, L.ft, 4.6, 3.8);
+  ctx.fillStyle = far ? '#1a1416' : '#2c2427';
+  ctx.beginPath(); ctx.arc(L.kn.x, L.kn.y, 3.8, 0, 6.2832); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,120,50,.5)'; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.fillStyle = '#161012';
+  ctx.beginPath(); ctx.moveTo(L.ft.x - 4.5, L.ft.y - 4); ctx.quadraticCurveTo(L.ft.x + 4, L.ft.y - 3.5, L.ft.x + 9, L.ft.y + 0.5); ctx.lineTo(L.ft.x - 4.5, L.ft.y + 1.2); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,130,60,.7)'; ctx.lineWidth = 0.9; ctx.stroke();
+}
+// A dark knight of the patrol, on his feet on the crust: a horned helm with
+// the fire in its slit, turned up to follow the heart; spiked shoulders;
+// black plate lit orange from the magma he walks on. Drawn facing the way he
+// walks (or the way he attacks), striding when he moves.
+function drawKnight(k){
+  var f = k.face, spear = k.kind === 'spear', legs = [], i;
+  for (i = 0; i < 2; i++){
+    var o = i ? Math.PI : 0, a = 0.42 * Math.sin(k.step + o), bend = Math.max(0, Math.sin(k.step + o + 1.3)) * 0.7;
+    var hip = { x: i ? -4 : 4, y: 4 }, kn = { x: hip.x + Math.sin(a) * 17, y: hip.y + Math.cos(a) * 17 };
+    legs.push({ hip: hip, kn: kn, ft: { x: kn.x + Math.sin(a - bend) * 17, y: kn.y + Math.cos(a - bend) * 17 } });
+  }
+  var wy = FLOOR - Math.max(legs[0].ft.y, legs[1].ft.y);          // his waist: the lower foot stands on the crust
+  ctx.save();
+  ctx.globalAlpha = k.fade;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // the magma's light where he walks
+  drawGlow(k.x, FLOOR, 24, [255, 110, 30], 0.5, 64, 18);
+  if (spear){
+    var sx = spearX(k), ty = FLOOR - k.tip, live = k.st === 'thrust' || k.st === 'hold';
+    ctx.strokeStyle = '#1c1411'; ctx.lineWidth = 3.8; ctx.beginPath(); ctx.moveTo(sx, ty + 14); ctx.lineTo(sx, Math.max(ty + 14, wy + 40)); ctx.stroke();
+    ctx.strokeStyle = 'rgba(205,185,172,.5)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(sx - 0.9 * f, ty + 16); ctx.lineTo(sx - 0.9 * f, Math.max(ty + 16, wy + 40)); ctx.stroke();
+    if (live){
+      var fk = k.st === 'thrust' ? 1 : Math.max(0, 1 - k.t / 0.25);
+      if (fk > 0){ ctx.strokeStyle = 'rgba(255,235,200,' + (0.55 * fk) + ')'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(sx, ty + 20); ctx.lineTo(sx, ty + 20 + 90 * fk); ctx.stroke(); }
+    }
+    drawTrident(sx, ty, k.st === 'lock' ? 0.5 + 0.5 * Math.sin(k.t * 60) : (live ? 0.6 : 0));
+  }
+  ctx.translate(k.x, wy); ctx.scale(f, 1);
+  drawKnightLeg(legs[1], true);
+  // faulds over the hips
+  ctx.fillStyle = '#1d1619'; ctx.beginPath(); ctx.moveTo(-12, 2); ctx.quadraticCurveTo(0, 5, 12, 2); ctx.lineTo(13, 10); ctx.quadraticCurveTo(0, 14, -13, 10); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,120,50,.55)'; ctx.lineWidth = 0.8; ctx.stroke();
+  drawKnightLeg(legs[0], false);
+  // the body
+  ctx.beginPath(); ctx.moveTo(-14, -38); ctx.quadraticCurveTo(-17, -16, -12, 4); ctx.lineTo(12, 4); ctx.quadraticCurveTo(17, -16, 14, -38); ctx.quadraticCurveTo(0, -43, -14, -38); ctx.closePath();
+  var g = ctx.createLinearGradient(0, -42, 0, 6);
+  g.addColorStop(0, '#2c2427'); g.addColorStop(0.6, '#150f11'); g.addColorStop(1, '#2a0e06');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,120,50,.65)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(170,150,145,.3)'; ctx.beginPath(); ctx.moveTo(0, -38); ctx.lineTo(0, 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,72,20,.3)'; ctx.lineWidth = 0.9;
+  for (i = 0; i < 3; i++){ ctx.beginPath(); ctx.moveTo(-10, -24 + i * 8); ctx.quadraticCurveTo(0, -20 + i * 8, 10, -24 + i * 8); ctx.stroke(); }
+  // the arms: on the pike, or on the crossbow (low as he walks, at his shoulder to aim)
+  var hands, xp = null;
+  if (spear) hands = [{ x: KNIGHT.SPEAR_DX, y: -12 }, { x: KNIGHT.SPEAR_DX, y: -28 }];
+  else {
+    var la = f > 0 ? k.ang : Math.PI - k.ang, r = k.raise;
+    xp = { x: 4, y: lerp(-16, -40, r), a: lerp(0.45, la, r) };
+    var ca = Math.cos(xp.a), sa = Math.sin(xp.a);
+    hands = [{ x: xp.x - 7 * ca + 3 * sa, y: xp.y - 7 * sa - 3 * ca }, { x: xp.x + 7 * ca, y: xp.y + 7 * sa }];
+  }
+  [-1, 1].forEach(function(s, i2){
+    var h = hands[i2];
+    ctx.strokeStyle = '#1b1416'; ctx.lineWidth = 5.5;
+    ctx.beginPath(); ctx.moveTo(s * 12, -34); ctx.quadraticCurveTo(s * 15, -18, h.x, h.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,110,40,.35)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#231a1c'; ctx.beginPath(); ctx.arc(h.x, h.y, 3.4, 0, 6.2832); ctx.fill();
+  });
+  if (xp) drawCrossbow(xp, k.st === 'walk' || k.st === 'aim' || k.st === 'lock');
+  // spiked shoulders
+  [-1, 1].forEach(function(s){
+    ctx.fillStyle = '#241c1f'; ctx.beginPath(); ctx.ellipse(s * 14, -37, 9.5, 6, s * 0.3, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,120,50,.5)'; ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.fillStyle = '#161012'; ctx.beginPath(); ctx.moveTo(s * 15, -41); ctx.quadraticCurveTo(s * 21, -46, s * 26, -53); ctx.quadraticCurveTo(s * 20, -44, s * 21, -40); ctx.closePath(); ctx.fill();
+  });
+  // the helm, turned up to the heart, and its horns
+  ctx.save();
+  ctx.translate(0, -42); ctx.rotate(k.look * f); ctx.translate(0, 42);
+  ctx.strokeStyle = '#1a1314';
+  [-1, 1].forEach(function(s){
+    ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(s * 5, -57); ctx.quadraticCurveTo(s * 13, -57, s * 14, -64); ctx.stroke();
+    ctx.lineWidth = 1.7; ctx.beginPath(); ctx.moveTo(s * 14, -64); ctx.quadraticCurveTo(s * 14.8, -69, s * 12, -73); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,120,50,.5)'; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(s * 6, -55.5); ctx.quadraticCurveTo(s * 14.5, -55.5, s * 15.4, -64); ctx.quadraticCurveTo(s * 16, -69, s * 13, -73.5); ctx.stroke();
+    ctx.strokeStyle = '#1a1314';
+  });
+  ctx.beginPath(); ctx.moveTo(-8, -43); ctx.bezierCurveTo(-9, -54, -7, -62, 0, -64); ctx.bezierCurveTo(7, -62, 9, -54, 8, -43); ctx.quadraticCurveTo(0, -38.5, -8, -43); ctx.closePath();
+  var hg = ctx.createLinearGradient(-9, 0, 9, 0);
+  hg.addColorStop(0, '#0d090a'); hg.addColorStop(0.4, '#3d3437'); hg.addColorStop(1, '#0b0708');
+  ctx.fillStyle = hg; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,120,50,.6)'; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.strokeStyle = '#020001'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-6, -55.5); ctx.lineTo(0, -52.8); ctx.lineTo(6, -55.5); ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter';
+  [-1, 1].forEach(function(s){
+    drawGlow(s * 3.2, -54.2, 10, [255, 80, 20], 1, 22, 12);
+    ctx.fillStyle = 'rgba(255,200,130,1)'; ctx.beginPath(); ctx.ellipse(s * 3.2, -54.2, 1.6, 1.1, 0, 0, 6.2832); ctx.fill();
+  });
+  ctx.restore();
+  ctx.restore();
+}
+// his crossbow, in his own (facing) frame: p is its pivot and angle
+function drawCrossbow(p, loaded){
+  ctx.save();
+  ctx.translate(p.x, p.y); ctx.rotate(p.a);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#2a1d16'; ctx.lineWidth = 3.6; ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(14, 0); ctx.stroke();
+  ctx.strokeStyle = '#140d0b'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(10, -12); ctx.quadraticCurveTo(18, 0, 10, 12); ctx.stroke();
+  ctx.strokeStyle = 'rgba(230,215,200,.6)'; ctx.lineWidth = 0.7; ctx.beginPath();
+  if (loaded){ ctx.moveTo(10, -12); ctx.lineTo(-2, 0); ctx.lineTo(10, 12); } else { ctx.moveTo(10, -12); ctx.lineTo(11, 12); }
+  ctx.stroke();
+  if (loaded){
+    ctx.strokeStyle = '#3a2c22'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-2, 0); ctx.lineTo(18, 0); ctx.stroke();
+    ctx.fillStyle = '#8a7c74'; ctx.beginPath(); ctx.moveTo(23, 0); ctx.lineTo(18, -2.4); ctx.lineTo(18, 2.4); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawQuarrel(q){
+  var c = Math.cos(q.ang), s = Math.sin(q.ang), a = q.stuck ? Math.max(0, 1 - q.t / 1.2) : 1;
+  ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+  if (!q.stuck){ ctx.strokeStyle = 'rgba(255,220,180,.2)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(q.x - c * 40, q.y - s * 40); ctx.lineTo(q.x - c * 12, q.y - s * 12); ctx.stroke(); }
+  ctx.strokeStyle = '#2a201b'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(q.x - c * 15, q.y - s * 15); ctx.lineTo(q.x, q.y); ctx.stroke();
+  ctx.strokeStyle = 'rgba(170,150,140,.55)'; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.fillStyle = '#9a8c84';
+  ctx.beginPath(); ctx.moveTo(q.x + c * 6, q.y + s * 6); ctx.lineTo(q.x - s * 2.6, q.y + c * 2.6); ctx.lineTo(q.x + s * 2.6, q.y - c * 2.6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#7a1e10';
+  [-1, 1].forEach(function(v){ var bx = q.x - c * 15, by = q.y - s * 15; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + c * 5 - s * v * 3.2, by + s * 5 + c * v * 3.2); ctx.lineTo(bx + c * 6, by + s * 6); ctx.closePath(); ctx.fill(); });
+  ctx.restore();
+}
+
+// ---- the Warden ----
+// His body is drawn once into two sprites at the canvas's own resolution:
+// what is behind his arms (cloak, breastplate, keys) and what is in front of
+// them (horns, pauldrons, helm). His arms, fists, eyes, lantern and flail are
+// drawn live over them. None of him is a straight-sided blob: plates, rims
+// and spikes, dark iron with a cold light on it and the lava's glow under it.
+var WS = { W: 300, H: 400, OX: 150, OY: 150 };
+var wardenArt = { scale: 0, back: null, front: null };
+function spriteOf(box, s, render){
+  var c = document.createElement('canvas'); c.width = Math.ceil(box.W * s); c.height = Math.ceil(box.H * s);
+  var cx = c.getContext('2d'); cx.setTransform(s, 0, 0, s, box.OX * s, box.OY * s);
+  var saved = ctx; ctx = cx;
+  try { render(); } finally { ctx = saved; }
+  return c;
+}
+function wardenSprites(){
+  var s = Math.max(1, cvs.width / LW);
+  if (wardenArt.scale !== s){ wardenArt.scale = s; wardenArt.back = spriteOf(WS, s, wardenBack); wardenArt.front = spriteOf(WS, s, wardenFront); }
+  return wardenArt;
+}
+function cubic(a, b, c, d, u){ var v = 1 - u; return v * v * v * a + 3 * v * v * u * b + 3 * v * u * u * c + u * u * u * d; }
+function cubicD(a, b, c, d, u){ var v = 1 - u; return 3 * v * v * (b - a) + 6 * v * u * (c - b) + 3 * u * u * (d - c); }
+function rrect(x, y, w, h, r){
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+}
+function wardenBack(){ wardenCloak(); wardenFaulds(); wardenTorso(); wardenBelt(); wardenGorget(); wardenChestChain(); }
+function wardenFront(){ wardenHorn(-1); wardenHorn(1); wardenPauldron(-1); wardenPauldron(1); wardenHelm(); }
+// a black cloak from his shoulders, its hem in tatters that fade into the dark
+function wardenCloak(){
+  var R = seeded(4077), hem = [], i, x;
+  for (x = -130; x <= 130; x += 10) hem.push({ x: x + (R() - 0.5) * 4, y: 146 + (1 - Math.pow(Math.abs(x) / 130, 2)) * 64 + R() * 28, n: 18 + R() * 26 });
+  function outline(){
+    ctx.beginPath();
+    ctx.moveTo(-62, -30);
+    ctx.bezierCurveTo(-110, -26, -128, 40, -134, 146);
+    hem.forEach(function(h){
+      ctx.lineTo(h.x - 4, h.y - h.n);
+      ctx.quadraticCurveTo(h.x - 1, h.y - 6, h.x + 1, h.y);
+      ctx.quadraticCurveTo(h.x + 3, h.y - 8, h.x + 5, h.y - h.n + 2);
+    });
+    ctx.lineTo(134, 146);
+    ctx.bezierCurveTo(128, 40, 110, -26, 62, -30);
+    ctx.closePath();
+  }
+  outline();
+  var g = ctx.createLinearGradient(0, -30, 0, 240);
+  g.addColorStop(0, '#170c0e'); g.addColorStop(0.4, '#0f0708'); g.addColorStop(0.75, 'rgba(12,5,6,.8)'); g.addColorStop(1, 'rgba(12,5,6,0)');
+  ctx.fillStyle = g; ctx.fill();
+  var rim = ctx.createLinearGradient(0, -30, 0, 240);
+  rim.addColorStop(0, 'rgba(255,90,30,0)'); rim.addColorStop(0.45, 'rgba(255,90,30,.3)'); rim.addColorStop(0.8, 'rgba(255,90,30,.16)'); rim.addColorStop(1, 'rgba(255,90,30,0)');
+  ctx.strokeStyle = rim; ctx.lineWidth = 1.2;
+  [-1, 1].forEach(function(s){ ctx.beginPath(); ctx.moveTo(s * 62, -30); ctx.bezierCurveTo(s * 110, -26, s * 128, 40, s * 134, 146); ctx.stroke(); });
+  ctx.save(); outline(); ctx.clip();
+  for (i = 0; i < 10; i++){
+    var fx = -120 + i * 26 + (R() - 0.5) * 10;
+    ctx.beginPath(); ctx.moveTo(fx * 0.45, -10); ctx.quadraticCurveTo(fx * 0.9, 90, fx * 1.02, 240);
+    ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 7; ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,50,45,.1)'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  ctx.restore();
+}
+function torsoPath(){
+  ctx.beginPath();
+  ctx.moveTo(-30, -26);
+  ctx.bezierCurveTo(-50, -24, -60, -8, -58, 16);
+  ctx.bezierCurveTo(-56, 44, -48, 68, -40, 90);
+  ctx.quadraticCurveTo(0, 100, 40, 90);
+  ctx.bezierCurveTo(48, 68, 56, 44, 58, 16);
+  ctx.bezierCurveTo(60, -8, 50, -24, 30, -26);
+  ctx.quadraticCurveTo(0, -18, -30, -26);
+  ctx.closePath();
+}
+// the breastplate: ribs worked into the iron, a fire burning in the grooves
+function wardenTorso(){
+  torsoPath();
+  var g = ctx.createLinearGradient(-58, 0, 58, 0);
+  g.addColorStop(0, '#0b0708'); g.addColorStop(0.28, '#2a2326'); g.addColorStop(0.46, '#3c3438'); g.addColorStop(0.7, '#1f181b'); g.addColorStop(1, '#090506');
+  ctx.fillStyle = g; ctx.fill();
+  var v = ctx.createLinearGradient(0, -26, 0, 100);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(0.55, 'rgba(0,0,0,.3)'); v.addColorStop(1, 'rgba(90,22,8,.5)');
+  ctx.fillStyle = v; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,100,40,.3)'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.save(); torsoPath(); ctx.clip();
+  [-1, 1].forEach(function(s){
+    ctx.beginPath(); ctx.moveTo(s * 2, 6); ctx.quadraticCurveTo(s * 30, 22, s * 60, 2);
+    ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 2, 4.5); ctx.quadraticCurveTo(s * 30, 20.5, s * 60, 0.5);
+    ctx.strokeStyle = 'rgba(170,150,145,.22)'; ctx.lineWidth = 1; ctx.stroke();
+  });
+  for (var k = 0; k < 4; k++){
+    var ry = 30 + k * 13, rw = 46 - k * 5;
+    [-1, 1].forEach(function(s){
+      ctx.beginPath(); ctx.moveTo(s * 6, ry); ctx.quadraticCurveTo(s * rw * 0.6, ry + 9, s * rw, ry - 4);
+      ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.lineWidth = 3.2; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,72,20,.34)'; ctx.lineWidth = 1.1; ctx.stroke();
+    });
+  }
+  ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, 96);
+  ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-1, -20); ctx.lineTo(-1, 96);
+  ctx.strokeStyle = 'rgba(180,160,155,.28)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.restore();
+}
+function wardenFaulds(){
+  for (var k = 1; k >= 0; k--){
+    var t0 = 94 + k * 11, w0 = 42 + k * 4;
+    ctx.beginPath(); ctx.moveTo(-w0, t0); ctx.quadraticCurveTo(0, t0 + 8, w0, t0); ctx.lineTo(w0 + 3, t0 + 13); ctx.quadraticCurveTo(0, t0 + 21, -w0 - 3, t0 + 13); ctx.closePath();
+    var g = ctx.createLinearGradient(0, t0, 0, t0 + 20); g.addColorStop(0, '#2a2225'); g.addColorStop(1, '#0f0a0b');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,100,40,.38)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+}
+// his belt, and the keys to every cage on a ring at his hip
+function wardenBelt(){
+  ctx.beginPath(); ctx.moveTo(-44, 82); ctx.quadraticCurveTo(0, 92, 44, 82); ctx.lineTo(42, 92); ctx.quadraticCurveTo(0, 102, -42, 92); ctx.closePath();
+  ctx.fillStyle = '#140e0f'; ctx.fill(); ctx.strokeStyle = 'rgba(255,100,40,.3)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = 'rgba(170,150,140,.45)';
+  for (var x = -36; x <= 36; x += 12){ ctx.beginPath(); ctx.arc(x, 87.5 + (1 - Math.pow(x / 44, 2)) * 4.5, 1.2, 0, 6.2832); ctx.fill(); }
+  var kx = -30, ky = 99;
+  ctx.strokeStyle = '#4a3e3a'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.arc(kx, ky, 5, 0, 6.2832); ctx.stroke();
+  [[-0.35, 22], [0.05, 26], [0.4, 20]].forEach(function(K){
+    ctx.save(); ctx.translate(kx, ky + 4); ctx.rotate(K[0]);
+    ctx.strokeStyle = '#3a302c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 4, 3, 0, 6.2832); ctx.moveTo(0, 7); ctx.lineTo(0, K[1]); ctx.stroke();
+    ctx.fillStyle = '#3a302c'; ctx.fillRect(0, K[1] - 5, 4, 2); ctx.fillRect(0, K[1] - 2, 5, 2);
+    ctx.strokeStyle = 'rgba(255,110,40,.3)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(1, 8); ctx.lineTo(1, K[1]); ctx.stroke();
+    ctx.restore();
+  });
+}
+function wardenGorget(){
+  for (var k = 0; k < 2; k++){
+    var y0 = -40 + k * 7, w0 = 27 + k * 4;
+    ctx.beginPath(); ctx.moveTo(-w0, y0 + 6); ctx.quadraticCurveTo(0, y0 - 4, w0, y0 + 6); ctx.lineTo(w0 + 2, y0 + 12); ctx.quadraticCurveTo(0, y0 + 3, -w0 - 2, y0 + 12); ctx.closePath();
+    ctx.fillStyle = k ? '#1c1518' : '#2a2226'; ctx.fill();
+    ctx.strokeStyle = 'rgba(170,150,145,.3)'; ctx.lineWidth = 0.9; ctx.stroke();
+  }
+}
+// a chain slung across his chest, a padlock hanging from it
+function wardenChestChain(){
+  var pts = [];
+  for (var i = 0; i <= 12; i++){ var u = i / 12; pts.push({ x: -54 + 108 * u, y: 2 + Math.sin(Math.PI * u) * 42 }); }
+  chainLinks(pts, 0.9);
+  var x = 0, y = 46;
+  ctx.strokeStyle = '#3a302c'; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.arc(x, y + 3, 5.5, Math.PI, 0); ctx.stroke();
+  var g = ctx.createLinearGradient(x - 9, 0, x + 9, 0); g.addColorStop(0, '#15100f'); g.addColorStop(0.4, '#4a3f3a'); g.addColorStop(1, '#120d0c');
+  rrect(x - 9, y + 3, 18, 15, 3); ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,100,40,.4)'; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.fillStyle = '#030101'; ctx.beginPath(); ctx.arc(x, y + 9, 1.9, 0, 6.2832); ctx.fill(); ctx.fillRect(x - 0.8, y + 9, 1.6, 5);
+}
+function wardenHorn(s){
+  var P = [[s * 17, -84], [s * 52, -94], [s * 84, -84], [s * 88, -122]], N = 18, A = [], B = [], i;
+  for (i = 0; i <= N; i++){
+    var u = i / N, x = cubic(P[0][0], P[1][0], P[2][0], P[3][0], u), y = cubic(P[0][1], P[1][1], P[2][1], P[3][1], u);
+    var dx = cubicD(P[0][0], P[1][0], P[2][0], P[3][0], u), dy = cubicD(P[0][1], P[1][1], P[2][1], P[3][1], u), l = Math.hypot(dx, dy) || 1;
+    var w = 8.5 * Math.pow(1 - u, 0.8) + 0.4, nx = -dy / l, ny = dx / l;
+    A.push([x + nx * w, y + ny * w]); B.push([x - nx * w, y - ny * w]);
+  }
+  ctx.beginPath(); ctx.moveTo(A[0][0], A[0][1]);
+  for (i = 1; i <= N; i++) ctx.lineTo(A[i][0], A[i][1]);
+  for (i = N; i >= 0; i--) ctx.lineTo(B[i][0], B[i][1]);
+  ctx.closePath();
+  var g = ctx.createLinearGradient(P[0][0], P[0][1], P[3][0], P[3][1]);
+  g.addColorStop(0, '#140e0f'); g.addColorStop(0.45, '#3a2e2a'); g.addColorStop(0.8, '#7d6c5a'); g.addColorStop(1, '#b3a088');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1; ctx.stroke();
+  for (i = 2; i < 13; i += 2){ ctx.beginPath(); ctx.moveTo(A[i][0], A[i][1]); ctx.lineTo(B[i][0], B[i][1]); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.1; ctx.stroke(); }
+  var low = s > 0 ? A : B;
+  ctx.beginPath(); ctx.moveTo(low[0][0], low[0][1]);
+  for (i = 1; i <= 13; i++) ctx.lineTo(low[i][0], low[i][1]);
+  ctx.strokeStyle = 'rgba(255,110,40,.4)'; ctx.lineWidth = 1.2; ctx.stroke();
+}
+function wardenPauldron(s){
+  var k;
+  for (k = 2; k >= 1; k--){
+    var o = k * 9;
+    ctx.beginPath();
+    ctx.moveTo(s * (30 + k * 2), 4 + o);
+    ctx.bezierCurveTo(s * 56, -2 + o, s * 94, 2 + o, s * (116 - k * 3), 14 + o);
+    ctx.bezierCurveTo(s * (119 - k * 3), 20 + o, s * (115 - k * 3), 25 + o, s * (108 - k * 3), 27 + o);
+    ctx.bezierCurveTo(s * 88, 18 + o, s * 58, 14 + o, s * (34 + k * 2), 17 + o);
+    ctx.closePath();
+    ctx.fillStyle = k === 2 ? '#150f11' : '#1c1518'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,100,40,.5)'; ctx.lineWidth = 1.1; ctx.stroke();
+  }
+  // the plate: up from the neck to a peak, then down and out over the arm
+  ctx.beginPath();
+  ctx.moveTo(s * 22, -20);
+  ctx.bezierCurveTo(s * 34, -46, s * 54, -66, s * 64, -72);
+  ctx.bezierCurveTo(s * 88, -60, s * 114, -36, s * 122, -6);
+  ctx.quadraticCurveTo(s * 126, 8, s * 116, 18);
+  ctx.bezierCurveTo(s * 92, 6, s * 56, 2, s * 28, 10);
+  ctx.closePath();
+  var g = ctx.createLinearGradient(0, -72, 0, 18);
+  g.addColorStop(0, '#4d4247'); g.addColorStop(0.4, '#2a2125'); g.addColorStop(1, '#100a0c');
+  ctx.fillStyle = g; ctx.fill();
+  var h = ctx.createLinearGradient(s * 20, 0, s * 126, 0);
+  h.addColorStop(0, 'rgba(0,0,0,.4)'); h.addColorStop(0.45, 'rgba(0,0,0,0)'); h.addColorStop(1, 'rgba(0,0,0,.5)');
+  ctx.fillStyle = h; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,100,40,.5)'; ctx.lineWidth = 1.2; ctx.stroke();
+  // its ridge, catching a cold light
+  ctx.beginPath(); ctx.moveTo(s * 28, -24); ctx.bezierCurveTo(s * 38, -46, s * 54, -62, s * 63, -67); ctx.bezierCurveTo(s * 86, -56, s * 110, -34, s * 117, -8);
+  ctx.strokeStyle = 'rgba(200,180,175,.38)'; ctx.lineWidth = 1.2; ctx.stroke();
+  // a groove parallel to the lower edge
+  ctx.beginPath(); ctx.moveTo(s * 36, -2); ctx.bezierCurveTo(s * 60, -8, s * 94, -6, s * 114, 6);
+  ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 2; ctx.stroke();
+  // spikes along the ridge, the tallest from the peak
+  [[0.98, 0, 30], [0.3, 1, 22], [0.62, 1, 18]].forEach(function(sp){
+    var u = sp[0], seg = sp[1], bx, by;
+    if (seg === 0){ bx = cubic(s * 22, s * 34, s * 54, s * 64, u); by = cubic(-20, -46, -66, -72, u); }
+    else { bx = cubic(s * 64, s * 88, s * 114, s * 122, u); by = cubic(-72, -60, -36, -6, u); }
+    var a = seg === 0 ? -Math.PI / 2 + s * 0.28 : -Math.PI / 2 + s * (0.55 + u * 0.5), c = Math.cos(a), sn = Math.sin(a), px = -sn, py = c, L = sp[2];
+    ctx.beginPath();
+    ctx.moveTo(bx + px * 5, by + py * 5);
+    ctx.quadraticCurveTo(bx + c * L * 0.55 + px * 1.8, by + sn * L * 0.55 + py * 1.8, bx + c * L, by + sn * L);
+    ctx.quadraticCurveTo(bx + c * L * 0.55 - px * 1.8, by + sn * L * 0.55 - py * 1.8, bx - px * 5, by - py * 5);
+    ctx.closePath();
+    var sg = ctx.createLinearGradient(bx, by, bx + c * L, by + sn * L);
+    sg.addColorStop(0, '#1a1314'); sg.addColorStop(1, '#6e5f58');
+    ctx.fillStyle = sg; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,110,40,.45)'; ctx.lineWidth = 0.8; ctx.stroke();
+  });
+  ctx.fillStyle = 'rgba(170,150,140,.5)';
+  for (k = 0; k < 4; k++){
+    var u2 = 0.2 + k * 0.2;
+    ctx.beginPath(); ctx.arc(cubic(s * 28, s * 56, s * 92, s * 116, u2), cubic(10, 2, 6, 18, u2) - 4, 1.3, 0, 6.2832); ctx.fill();
+  }
+}
+// a great helm: a crest, a scowling brow, a slit with nothing but fire behind it
+function wardenHelm(){
+  ctx.beginPath();
+  ctx.moveTo(-24, -34);
+  ctx.bezierCurveTo(-28, -58, -26, -84, -14, -95);
+  ctx.quadraticCurveTo(0, -103, 14, -95);
+  ctx.bezierCurveTo(26, -84, 28, -58, 24, -34);
+  ctx.quadraticCurveTo(12, -24, 0, -20);
+  ctx.quadraticCurveTo(-12, -24, -24, -34);
+  ctx.closePath();
+  var g = ctx.createLinearGradient(-28, 0, 28, 0);
+  g.addColorStop(0, '#0c0809'); g.addColorStop(0.32, '#3d3438'); g.addColorStop(0.5, '#4a4045'); g.addColorStop(0.7, '#241d20'); g.addColorStop(1, '#0a0607');
+  ctx.fillStyle = g; ctx.fill();
+  var v = ctx.createLinearGradient(0, -103, 0, -20);
+  v.addColorStop(0, 'rgba(0,0,0,.35)'); v.addColorStop(0.6, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(90,24,8,.45)');
+  ctx.fillStyle = v; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,100,40,.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, -101); ctx.quadraticCurveTo(1, -86, 0, -70);
+  ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-0.8, -101); ctx.quadraticCurveTo(0.2, -86, -0.8, -70);
+  ctx.strokeStyle = 'rgba(190,170,165,.35)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-25, -73); ctx.quadraticCurveTo(-10, -71, 0, -64); ctx.quadraticCurveTo(10, -71, 25, -73);
+  ctx.lineTo(25, -69); ctx.quadraticCurveTo(10, -67, 0, -60); ctx.quadraticCurveTo(-10, -67, -25, -69); ctx.closePath();
+  ctx.fillStyle = '#2a2226'; ctx.fill();
+  ctx.strokeStyle = 'rgba(190,170,165,.3)'; ctx.lineWidth = 0.9; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-20, -66); ctx.lineTo(-3, -59); ctx.lineTo(3, -59); ctx.lineTo(20, -66); ctx.lineTo(19, -61.5); ctx.lineTo(3, -55); ctx.lineTo(-3, -55); ctx.lineTo(-19, -61.5); ctx.closePath();
+  ctx.fillStyle = '#020001'; ctx.fill();
+  ctx.fillStyle = '#030102'; ctx.fillRect(-1.6, -52, 3.2, 22);
+  for (var r = 0; r < 3; r++) for (var c = 0; c < 3; c++) [-1, 1].forEach(function(s){ ctx.beginPath(); ctx.arc(s * (7 + c * 5), -48 + r * 6 + c * 1.5, 1.2, 0, 6.2832); ctx.fill(); });
+  ctx.fillStyle = 'rgba(170,150,140,.5)';
+  [[-18, -40], [-9, -30], [9, -30], [18, -40], [-22, -78], [22, -78]].forEach(function(p){ ctx.beginPath(); ctx.arc(p[0], p[1], 1.2, 0, 6.2832); ctx.fill(); });
+}
+function armPlate(a, b, wa, wb){
+  var dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+  ctx.beginPath();
+  ctx.moveTo(a.x + nx * wa, a.y + ny * wa);
+  ctx.lineTo(b.x + nx * wb, b.y + ny * wb);
+  ctx.quadraticCurveTo(b.x + ux * wb * 1.3, b.y + uy * wb * 1.3, b.x - nx * wb, b.y - ny * wb);
+  ctx.lineTo(a.x - nx * wa, a.y - ny * wa);
+  ctx.quadraticCurveTo(a.x - ux * wa * 1.3, a.y - uy * wa * 1.3, a.x + nx * wa, a.y + ny * wa);
+  ctx.closePath();
+  var g = ctx.createLinearGradient(a.x + nx * wa, a.y + ny * wa, a.x - nx * wa, a.y - ny * wa);
+  g.addColorStop(0, '#0e0a0b'); g.addColorStop(0.45, '#3a3135'); g.addColorStop(0.6, '#2a2226'); g.addColorStop(1, '#0c0809');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,100,40,.35)'; ctx.lineWidth = 1; ctx.stroke();
+}
+function drawWardenArm(A){
+  armPlate(A.S, A.E, 14, 12);
+  armPlate(A.E, A.F, 12, 10);
+  var dx = A.F.x - A.E.x, dy = A.F.y - A.E.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+  ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.4;
+  [0.35, 0.62].forEach(function(u){ var x = A.E.x + dx * u, y = A.E.y + dy * u; ctx.beginPath(); ctx.moveTo(x + nx * 9, y + ny * 9); ctx.lineTo(x - nx * 9, y - ny * 9); ctx.stroke(); });
+  // the couter over the elbow, spiked outward
+  var mx = (A.S.x + A.F.x) / 2, my = (A.S.y + A.F.y) / 2, ox = A.E.x - mx, oy = A.E.y - my, ol = Math.hypot(ox, oy) || 1;
+  ox /= ol; oy /= ol;
+  ctx.beginPath(); ctx.moveTo(A.E.x - oy * 4.5, A.E.y + ox * 4.5); ctx.lineTo(A.E.x + ox * 18, A.E.y + oy * 18); ctx.lineTo(A.E.x + oy * 4.5, A.E.y - ox * 4.5); ctx.closePath();
+  ctx.fillStyle = '#181112'; ctx.fill(); ctx.strokeStyle = 'rgba(170,150,140,.35)'; ctx.lineWidth = 0.8; ctx.stroke();
+  var g = ctx.createRadialGradient(A.E.x - 3, A.E.y - 3, 1, A.E.x, A.E.y, 10);
+  g.addColorStop(0, '#4a4044'); g.addColorStop(1, '#141011');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(A.E.x, A.E.y, 9, 0, 6.2832); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,100,40,.4)'; ctx.lineWidth = 1; ctx.stroke();
+}
+// an armoured fist, knuckle plates and claws
+function drawGauntlet(A){
+  var a = Math.atan2(A.F.y - A.E.y, A.F.x - A.E.x);
+  ctx.save(); ctx.translate(A.F.x, A.F.y); ctx.rotate(a);
+  ctx.fillStyle = '#1d1619'; ctx.beginPath(); ctx.moveTo(-11, -11); ctx.lineTo(-2, -12.5); ctx.lineTo(-2, 12.5); ctx.lineTo(-11, 11); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,100,40,.35)'; ctx.lineWidth = 0.9; ctx.stroke();
+  var g = ctx.createRadialGradient(1, -3, 1, 3, 0, 12);
+  g.addColorStop(0, '#4a4044'); g.addColorStop(1, '#120d0e');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(4, 0, 10.5, 9.5, 0, 0, 6.2832); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,100,40,.4)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1.2;
+  for (var k = 0; k < 4; k++){ ctx.beginPath(); ctx.arc(10, -6 + k * 4, 2.3, -1.3, 1.3); ctx.stroke(); }
+  ctx.fillStyle = '#120c0d';
+  for (k = 0; k < 4; k++){ var y = -6 + k * 4; ctx.beginPath(); ctx.moveTo(12, y - 1.2); ctx.quadraticCurveTo(17, y - 0.5, 17.5, y + 3); ctx.quadraticCurveTo(15, y + 1, 12, y + 1.2); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
+}
+function drawWardenEyes(w, P){
+  var k = clamp(w.eyes * (0.78 + 0.12 * Math.sin(G.t * 6.3) + 0.1 * Math.sin(G.t * 17)) + w.flare * 0.8, 0, 1.6);
+  if (k <= 0.01) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  [-1, 1].forEach(function(s){
+    var ex = P.x + s * 9.5, ey = P.y - 60.5;
+    drawGlow(ex, ey, 16, [255, 80, 20], 0.75 * k, 46, 22);
+    ctx.fillStyle = 'rgba(255,110,30,' + Math.min(1, 0.9 * k) + ')';
+    ctx.beginPath(); ctx.ellipse(ex, ey, 4.4, 1.7, s * -0.38, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = 'rgba(255,236,190,' + Math.min(1, k) + ')';
+    ctx.beginPath(); ctx.ellipse(ex, ey, 1.9, 0.9, s * -0.38, 0, 6.2832); ctx.fill();
+  });
+  ctx.restore();
+}
+function drawWarden(w){
+  drawWreck(w);
+  if (w.dead || w.state === 'wait') return;
+  var P = wardenPose(w), dieK = w.dying ? clamp(w.dieT / RELEASE.dead, 0, 1) : 0, S = wardenSprites(), arms = wardenArms(P);
+  ctx.save();
+  ctx.globalAlpha = 1 - dieK * 0.85;
+  var ag = ctx.createRadialGradient(P.x, P.y + 10, 30, P.x, P.y + 10, 210);
+  ag.addColorStop(0, 'rgba(0,0,0,.6)'); ag.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = ag; ctx.fillRect(P.x - 210, P.y - 200, 420, 420);
+  if (!w.dying) drawGlow(P.lantern.x, P.lantern.y, 90, [255, 150, 60], 0.22 + 0.4 * w.shutter, 300, 260);
+  ctx.drawImage(S.back, P.x - WS.OX, P.y - WS.OY, WS.W, WS.H);
+  arms.forEach(drawWardenArm);
+  if (!w.broken) ctx.drawImage(S.front, P.x - WS.OX, P.y - WS.OY, WS.W, WS.H);
+  arms.forEach(drawGauntlet);
+  if (!w.broken) drawWardenEyes(w, P);
+  if (!w.flailOut && !w.dying){
+    var F = P.flailFist, fb = { x: F.x + Math.sin(w.flail.th) * w.flail.len, y: F.y + 6 + Math.cos(w.flail.th) * w.flail.len };
+    chainLinks([{ x: F.x, y: F.y + 6 }, fb], 1.05);
+    drawSpikeBall(fb.x, fb.y + WARDEN.FLAIL_BALL * 0.5, WARDEN.FLAIL_BALL, 0.3 + w.flail.th);
+  }
+  if (!w.dying){
+    chainLinks([{ x: P.lampFist.x, y: P.lampFist.y + 6 }, P.ring], 0.75);
+    drawLantern(P, w);
+  }
+  ctx.restore();
+}
+// his armour when he dies: the helm and pauldrons come loose and fall into the crust
+function drawWreck(w){
+  if (!w.wreck || !w.wreck.length) return;
+  w.wreck.forEach(function(pc){
+    if (pc.a <= 0) return;
+    ctx.save(); ctx.globalAlpha = pc.a;
+    ctx.translate(pc.x, pc.y); ctx.rotate(pc.rot);
+    if (pc.kind === 'helm'){ ctx.translate(0, 62); wardenHorn(-1); wardenHorn(1); wardenHelm(); }
+    else if (pc.kind === 'pauldron'){ ctx.translate(-pc.s * 72, 24); wardenPauldron(pc.s); }
+    else drawSpikeBall(0, 0, WARDEN.FLAIL_BALL, 0);
+    ctx.restore();
+  });
+}
+// the lantern: iron bars, a fire inside, two shutters that slide apart when it
+// opens; shut, they leave a seam of fire between them so the target always
+// shows. It hangs from his fist and swings with it.
+function drawLantern(P, w){
+  var open = w.shutter, L = WARDEN.LAMP_W, T = WARDEN.LAMP_T, f, k;
+  ctx.save();
+  ctx.translate(P.lantern.x, P.lantern.y); ctx.rotate(-P.rot);
+  var fg = ctx.createRadialGradient(0, 3, 2, 0, 0, 24);
+  fg.addColorStop(0, 'rgba(255,250,225,' + (0.55 + 0.45 * open) + ')'); fg.addColorStop(0.45, 'rgba(255,186,76,.9)'); fg.addColorStop(1, 'rgba(255,90,20,0)');
+  ctx.fillStyle = fg; ctx.beginPath(); ctx.ellipse(0, 0, L - 2, T - 2, 0, 0, 6.2832); ctx.fill();
+  for (f = 0; f < 3; f++){
+    var fx = (f - 1) * 5, fh = 9 + 5 * FIRE.at(f * 30, G.t * 40);
+    drawLick(fx, 10, 3.4, 0.8, f === 1 ? 'rgba(255,240,190,1)' : 'rgba(255,160,50,1)');
+    ctx.fillStyle = 'rgba(255,200,90,.6)'; ctx.beginPath(); ctx.ellipse(fx, 7 - fh * 0.3, 2.3, fh * 0.45, 0, 0, 6.2832); ctx.fill();
+  }
+  if (w.hits > 0){
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-2, -4); ctx.lineTo(-9, -12); ctx.moveTo(-2, -4); ctx.lineTo(5, -13); ctx.moveTo(-2, -4); ctx.lineTo(7, 3); ctx.moveTo(-2, -4); ctx.lineTo(-7, 8); ctx.stroke();
+  }
+  ctx.strokeStyle = '#5c4e4a'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  for (k = -2; k <= 2; k++){ ctx.beginPath(); ctx.moveTo(k * 6.2, -T + 2); ctx.quadraticCurveTo(k * 7.2, 0, k * 6.2, T - 2); ctx.stroke(); }
+  ctx.fillStyle = '#2e2426';
+  ctx.beginPath(); ctx.moveTo(-L - 3, -T + 3); ctx.quadraticCurveTo(0, -T - 12, L + 3, -T + 3); ctx.quadraticCurveTo(0, -T - 1, -L - 3, -T + 3); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, T, L + 2, 4, 0, 0, 6.2832); ctx.fill();
+  ctx.strokeStyle = '#6e605a'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(0, -T - 6, 3.5, 0, 6.2832); ctx.stroke();
+  drawGlow(0, 0, 24, [255, 170, 70], 0.45 + 0.2 * Math.sin(G.t * 7), 46, 70);
+  var sw = (L - 1.4) * (1 - open);
+  if (sw > 0.5){
+    [-1, 1].forEach(function(s){
+      var x0 = s < 0 ? -L : L - sw;
+      var pg = ctx.createLinearGradient(x0, 0, x0 + sw, 0);
+      pg.addColorStop(0, '#3a3032'); pg.addColorStop(1, '#221a1c');
+      ctx.fillStyle = pg; ctx.fillRect(x0, -T + 3, sw, 2 * T - 6);
+      ctx.fillStyle = 'rgba(160,140,130,.6)';
+      ctx.beginPath(); ctx.arc(x0 + sw / 2, -7, 1.1, 0, 6.2832); ctx.arc(x0 + sw / 2, 7, 1.1, 0, 6.2832); ctx.fill();
+    });
+  }
+  if (open > 0.1){
+    drawGlow(0, 0, 44, [255, 240, 190], open, 120, 130);
+    ctx.globalAlpha = (0.5 + 0.4 * Math.sin(G.t * 12)) * open;
+    ctx.strokeStyle = COLORS.sulfur; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(0, 0, L + 7, T + 7, 0, 0, 6.2832); ctx.stroke();
+  }
+  ctx.restore();
+}
+// his lantern's beam. Aiming, the lantern gathers its light (a glow swelling
+// round it, sparks crawling over it) while a pale line runs from its foot to
+// the floor under the heart; locked, the line flashes; then a beam of energy
+// stands along that line: narrow where it leaves the lantern, wide where it
+// strikes, a white core in gold with filaments crawling along it.
+function drawWardenBeam(w){
+  var bm = w.beam; if (!bm || w.dead || w.dying) return;
+  var B = beamLine(w), dx = B.x1 - B.x0, dy = B.y1 - B.y0, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L, i;
+  ctx.save();
+  if (bm.state === 'aim' || bm.state === 'lock'){
+    var gk = bm.state === 'aim' ? bm.t / 0.9 : 1;
+    ctx.globalCompositeOperation = 'lighter';
+    drawGlow(B.x0, B.y0 - 14, 30, [255, 225, 150], 0.35 + 0.65 * gk, 50 + 50 * gk, 60 + 50 * gk);
+    ctx.strokeStyle = 'rgba(255,240,200,' + (0.35 + 0.5 * gk) + ')'; ctx.lineWidth = 1;
+    for (i = 0; i < 3; i++){
+      var a = Math.random() * 6.2832, r0 = 14 + Math.random() * 6, r1 = r0 + 6 + 10 * gk;
+      ctx.beginPath(); ctx.moveTo(B.x0 + Math.cos(a) * r0, B.y0 - 14 + Math.sin(a) * r0 * 1.2);
+      ctx.lineTo(B.x0 + Math.cos(a + 0.2) * (r0 + r1) / 2 + rnd(-2, 2), B.y0 - 14 + Math.sin(a + 0.2) * (r0 + r1) / 2 * 1.2);
+      ctx.lineTo(B.x0 + Math.cos(a - 0.1) * r1, B.y0 - 14 + Math.sin(a - 0.1) * r1 * 1.2); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    telegraphStyle(bm.state === 'lock', bm.t, 0.9);
+    ctx.beginPath(); ctx.moveTo(B.x0, B.y0); ctx.lineTo(B.x1, B.y1); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(B.x1 - BEAM.W1, FLOOR); ctx.lineTo(B.x1 + BEAM.W1, FLOOR); ctx.stroke();   // how wide it will burn
+  } else if (bm.state === 'fire'){
+    var k = 1 - bm.t / 0.6, flick = 0.85 + 0.15 * Math.sin(G.t * 70);
+    ctx.globalCompositeOperation = 'lighter';
+    [[1.9, 'rgba(255,170,70,', 0.22], [1.2, 'rgba(255,215,130,', 0.45], [0.55, 'rgba(255,248,220,', 0.9]].forEach(function(layer){
+      var w0 = BEAM.W0 * layer[0], w1 = BEAM.W1 * layer[0];
+      ctx.beginPath();
+      ctx.moveTo(B.x0 + nx * w0, B.y0 + ny * w0); ctx.lineTo(B.x1 + nx * w1, B.y1 + ny * w1);
+      ctx.lineTo(B.x1 - nx * w1, B.y1 - ny * w1); ctx.lineTo(B.x0 - nx * w0, B.y0 - ny * w0); ctx.closePath();
+      ctx.fillStyle = layer[1] + (layer[2] * k * flick) + ')'; ctx.fill();
+    });
+    // energy crawling along it
+    ctx.strokeStyle = 'rgba(255,255,240,' + (0.75 * k) + ')'; ctx.lineWidth = 1.2;
+    for (var f2 = 0; f2 < 2; f2++){
+      ctx.beginPath();
+      for (var u = 0; u <= 1.001; u += 0.08){
+        var off = (Math.random() - 0.5) * 2 * lerp(BEAM.W0, BEAM.W1, u) * 0.7;
+        var px = B.x0 + dx * u + nx * off, py = B.y0 + dy * u + ny * off;
+        if (u === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    drawGlow(B.x0, B.y0, 30, [255, 240, 200], k, 70, 70);
+    drawGlow(B.x1, B.y1, 44, [255, 200, 90], k, 150, 56);
+  }
+  ctx.restore();
+}
+// the losing end: a cage comes down over the heart
+function drawCagedEnd(){
+  var c = G.cagedEnd, p = G.player;
+  drawCage({ x: p.x, y: c.y, soul: false, lock: 0, shake: c.slam ? 0.2 : 0, sway: 0 });
+}
+// seven small hearts under the lives: freed (bright), carried (with you), still caged (outline)
+function drawSoulTally(){
+  for (var i = 0; i < STOLEN.SOULS; i++){
+    var x = 18 + i * 12, y = 88;
+    if (i < G.saved) drawGem(x, y, 4, { alpha: 1, light: 1.3 });
+    else if (i < G.saved + G.carried.length) drawGem(x, y, 4, { alpha: 0.55 + 0.35 * G.heart.pulse });
+    else { ctx.save(); ctx.strokeStyle = 'rgba(253,248,240,.28)'; ctx.lineWidth = 1; heartPath(x, y, 4); ctx.stroke(); ctx.restore(); }
+  }
 }
 
 // ---------- drawing ----------
@@ -2272,6 +4472,9 @@ function drawFlame(fl){
     else drawDetonation(fl);
   } else if (fl.type === 'jet'){
     drawJet(fl);
+  } else if (fl.type === 'chain'){
+    drawChain(fl);
+
   } else if (fl.type === 'breath' && fl.t > fl.warn){
     var d = G.devil, bt2 = (fl.t - fl.warn) / fl.burn;
     var top = d ? d.y + 62 : 0;
@@ -3717,12 +5920,15 @@ function makeLayer(){
 var hudLayer = makeLayer(), vignetteLayer = makeLayer(), mistStrip = null;
 function drawHUD(){
   var alive = G.devil ? livingEyes(G.devil).length : 0, open = G.devil ? anyEyeOpen(G.devil) : false;
-  var label = G.phase === 'survive' ? 'S' : (G.devil && !G.devil.dying && (G.devil.state === 'open' || G.devil.state === 'attack') ? (open ? 'O' : 'C') : '-');
+  var label = openPhase() ? 'S' : (G.devil && !G.devil.dying && (G.devil.state === 'open' || G.devil.state === 'attack') ? (open ? 'O' : 'C') : '-');
+  var W = G.warden;
+  if (W){ alive = 2 - W.hits; label = !W.dying && (W.state === 'open' || W.state === 'attack') ? (W.state === 'open' ? 'O' : 'C') : '-'; }
   var key = [Math.floor(runSeconds()), hiScore(), G.ammo, G.phase, Math.round(clamp(G.surv / G.SURV, 0, 1) * 200), alive, label].join('|');
   hudLayer.draw(key, drawHUDStatic);
 
   // lives, beating too
   for (var i=0;i<G.lives;i++) drawGem(18 + i*20, 44, 6.5 * (1 + (G.heart.scale - 1) * 0.6), { alpha: 0.9, pulse: G.heart.pulse * 0.5 });
+  if (G.level === 2) drawSoulTally();
 }
 // The touch controls, on their own layer in css px: cleared and drawn only
 // while there is a game to play.
@@ -3819,7 +6025,7 @@ function drawHUDStatic(){
   ctx.strokeStyle = 'rgba(253,248,240,.28)';
   ctx.lineWidth = 1;
   ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
-  if (G.phase === 'survive'){
+  if (openPhase()){
     var k = clamp(G.surv / G.SURV, 0, 1);
     var mg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
     mg.addColorStop(0, COLORS.ember);
@@ -3829,7 +6035,20 @@ function drawHUDStatic(){
     ctx.font = "7px 'Press Start 2P', monospace";
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(199,154,143,.85)';
-    ctx.fillText('SURVIVE', LW/2, by + 12);
+    ctx.fillText(G.phase === 'rescue' ? 'HE IS COMING' : 'SURVIVE', LW/2, by + 12);
+  } else if (G.warden && !G.warden.dying){
+    var Wd = G.warden;
+    ctx.fillStyle = COLORS.ember;
+    ctx.fillRect(bx + 1, by + 1, (bw - 2) * ((2 - Wd.hits) / 2), bh - 2);
+    ctx.font = "7px 'Press Start 2P', monospace";
+    ctx.textAlign = 'center';
+    if (Wd.state === 'open' || Wd.state === 'attack'){
+      var wl = Wd.state === 'open' ? 'THE LANTERN IS OPEN' : 'IT IS SHUTTERED', wtw = ctx.measureText(wl).width;
+      ctx.fillStyle = 'rgba(4,1,10,.7)';
+      ctx.fillRect(LW/2 - wtw/2 - 5, by + 9, wtw + 10, 13);
+      ctx.fillStyle = Wd.state === 'open' ? 'rgba(255,195,33,.95)' : 'rgba(199,154,143,.85)';
+      ctx.fillText(wl, LW/2, by + 12);
+    }
   } else if (G.devil && !G.devil.dying){
     var alive = livingEyes(G.devil).length;
     ctx.fillStyle = COLORS.ember;
@@ -3875,7 +6094,7 @@ function drawHerald(){
   ctx.shadowColor = COLORS.heart; ctx.shadowBlur = shadowR(24);
   ctx.fillStyle = COLORS.title;
   var jx = rnd(-1,1) * 2, jy = rnd(-1,1) * 2;
-  ctx.fillText("HE'S HERE", LW/2 + jx, LH*0.5 + jy);
+  ctx.fillText(G.level === 2 ? 'THE WARDEN' : "HE'S HERE", LW/2 + jx, LH*0.5 + jy);
   ctx.restore();
 }
 
@@ -3953,6 +6172,81 @@ function drawHeaven(){
       pg.addColorStop(0, col('grace', 0.4 * (H.beam - 0.9) * 10)); pg.addColorStop(1, col('grace', 0));
       ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(x, FLOOR, 110, 26, 0, 0, 6.2832); ctx.fill();
     }
+  }
+  ctx.restore();
+}
+
+// The gates of heaven, at the top of the light at level II's end: two golden
+// leaves of bars and scrollwork under an arch, between white pillars, clouds at
+// their feet. They open (each leaf swinging on its outer hinge, so it narrows
+// toward it) on a white radiance behind, the heart and the souls go up through
+// them, and they fade. Gold and white only: the palette's sulfur and grace.
+function drawGates(g){
+  var x = G.heaven.x, top = 34, bot = 238, w = 78, open = g.open, i;
+  ctx.save();
+  ctx.globalAlpha = g.a;
+  ctx.globalCompositeOperation = 'lighter';
+  drawGlow(x, (top + bot) / 2, 120, RGB.grace, 0.45 + 0.75 * open, 2 * w + 150, bot - top + 150);
+  var gap = open * w * 0.9;                                   // the radiance through the opening
+  if (gap > 0.5){
+    var rg = ctx.createLinearGradient(x - gap, 0, x + gap, 0);
+    rg.addColorStop(0, col('grace', 0)); rg.addColorStop(0.5, col('grace', 0.9 * open)); rg.addColorStop(1, col('grace', 0));
+    ctx.fillStyle = rg; ctx.fillRect(x - gap, top + 8, gap * 2, bot - top - 8);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // the pillars
+  [-1, 1].forEach(function(s){
+    var px = x + s * (w + 12), pg = ctx.createLinearGradient(px - 9, 0, px + 9, 0);
+    pg.addColorStop(0, col('grace', 0.55)); pg.addColorStop(0.5, col('grace', 0.95)); pg.addColorStop(1, col('grace', 0.5));
+    ctx.fillStyle = pg; ctx.fillRect(px - 8, top - 10, 16, bot - top + 18);
+    ctx.fillRect(px - 12, top - 16, 24, 7); ctx.fillRect(px - 12, bot + 4, 24, 7);        // capital and base
+    ctx.strokeStyle = col('sulfur', 0.45); ctx.lineWidth = 0.8;
+    for (i = -1; i <= 1; i++){ ctx.beginPath(); ctx.moveTo(px + i * 4, top - 8); ctx.lineTo(px + i * 4, bot + 4); ctx.stroke(); }   // fluting
+  });
+  // the arch over them, with rays at its crown
+  ctx.lineWidth = 3; ctx.strokeStyle = col('sulfur', 0.95);
+  ctx.beginPath(); ctx.arc(x, top + 30, w + 12, Math.PI, 0); ctx.stroke();
+  ctx.lineWidth = 1.2; ctx.strokeStyle = col('grace', 0.9);
+  ctx.beginPath(); ctx.arc(x, top + 30, w + 5, Math.PI, 0); ctx.stroke();
+  for (i = 0; i < 9; i++){
+    var ra = Math.PI + (i + 0.5) / 9 * Math.PI, r0 = w + 16, r1 = w + 26 + (i % 2) * 8;
+    ctx.beginPath(); ctx.moveTo(x + Math.cos(ra) * r0, top + 30 + Math.sin(ra) * r0); ctx.lineTo(x + Math.cos(ra) * r1, top + 30 + Math.sin(ra) * r1);
+    ctx.strokeStyle = col('sulfur', 0.7); ctx.lineWidth = 1.4; ctx.stroke();
+  }
+  ctx.fillStyle = col('grace', 0.95);
+  for (i = 0; i <= 12; i++){ var pa = Math.PI + i / 12 * Math.PI; ctx.beginPath(); ctx.arc(x + Math.cos(pa) * (w + 12), top + 30 + Math.sin(pa) * (w + 12), 1.6, 0, 6.2832); ctx.fill(); }   // pearls
+  // the two leaves, each on its outer hinge
+  [-1, 1].forEach(function(s){
+    var hx = x + s * w, lw = w * (1 - 0.86 * open), dir = -s;          // from the hinge toward the middle
+    function at(u){ return hx + dir * lw * u; }
+    function crown(u){ return top + 30 - Math.sin(u * Math.PI / 2) * 26; }   // the leaves' tops rise to the middle: an arch between them
+    // the frame
+    ctx.strokeStyle = col('sulfur', 0.95); ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(at(0), bot); ctx.lineTo(at(0), crown(0));
+    for (i = 1; i <= 10; i++) ctx.lineTo(at(i / 10), crown(i / 10));
+    ctx.lineTo(at(1), bot); ctx.closePath(); ctx.stroke();
+    // bars
+    ctx.lineWidth = 1.5; ctx.strokeStyle = col('sulfur', 0.85);
+    for (i = 1; i <= 6; i++){ var u = i / 7; ctx.beginPath(); ctx.moveTo(at(u), bot); ctx.lineTo(at(u), crown(u) + 4); ctx.stroke(); }
+    // rails
+    [bot - 18, (top + bot) / 2 + 20, top + 62].forEach(function(ry){ ctx.beginPath(); ctx.moveTo(at(0), ry); ctx.lineTo(at(1), ry); ctx.stroke(); });
+    // scrollwork: a curl in each panel under the crown
+    ctx.strokeStyle = col('grace', 0.85); ctx.lineWidth = 1.1;
+    for (i = 0; i < 3; i++){
+      var cu = (i + 0.5) / 3, cx = at(cu), cy = top + 50, cr = Math.max(1.5, lw / 9);
+      ctx.beginPath();
+      for (var k = 0; k <= 20; k++){ var aa = k / 20 * 5.5, rr = cr * (1 - k / 24); ctx.lineTo(cx + Math.cos(aa) * rr * s, cy + Math.sin(aa) * rr); }
+      ctx.stroke();
+    }
+    // a light down its edge as it turns
+    ctx.strokeStyle = col('grace', 0.5 + 0.5 * open); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(at(1), bot); ctx.lineTo(at(1), crown(1)); ctx.stroke();
+  });
+  // clouds at their feet
+  ctx.globalCompositeOperation = 'lighter';
+  for (i = 0; i < 7; i++){
+    var cx2 = x + (i - 3) * (w * 0.55) + Math.sin(G.t * 0.6 + i) * 4;
+    drawGlow(cx2, bot + 6 + (i % 2) * 5, 30, RGB.grace, 0.55, 90, 34);
   }
   ctx.restore();
 }
@@ -4100,23 +6394,6 @@ function drawVignette(){
   }
 }
 
-function drawPaused(){
-  ctx.save();
-  ctx.fillStyle = 'rgba(4,1,10,.72)';
-  ctx.fillRect(0, 0, LW, LH);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = "14px 'Press Start 2P', monospace";
-  ctx.fillStyle = COLORS.sulfur;
-  ctx.shadowColor = COLORS.sulfur; ctx.shadowBlur = shadowR(12);
-  ctx.fillText('PAUSED', LW/2, LH/2 - 12);
-  ctx.shadowBlur = 0;
-  ctx.font = "7px 'Press Start 2P', monospace";
-  ctx.fillStyle = COLORS.ash;
-  ctx.fillText(isTouch ? 'Tap to resume' : 'P to resume', LW/2, LH/2 + 14);
-  ctx.restore();
-}
-
 function draw(){
   var prog = G.prog, pulse = G.heart.pulse;
   if (G.black >= 1){
@@ -4156,6 +6433,7 @@ function draw(){
     ctx.fillRect(-20, LH - 300, LW + 40, 320);
   }
   }
+  if (G.level === 2 && !skip('pit')){ dungeonLayer.draw('dungeon', renderDungeon); drawShaft(); }
   if (window.BTD_LIGHT){ ctx.fillStyle = '#6d6774'; ctx.fillRect(-20, -20, LW + 40, LH + 40); }
   if (G.mode === 'title') drawTitleHearts();
 
@@ -4194,6 +6472,7 @@ function draw(){
   if (G.watch && !skip('watch')) drawWatch();
 
   var taken = G.taken && G.mode === 'ending', gripped = G.freed && G.mode === 'ending';
+  if (G.warden && !skip('devil')){ drawWarden(G.warden); drawWardenBeam(G.warden); }
   if (G.devil && !skip('devil')){
     // on lower tiers he is redrawn every 2nd or 3rd frame; the eyes and beams
     // are attack telegraphs, and a frame of lag is well inside their windows
@@ -4201,6 +6480,7 @@ function draw(){
     else drawDevil(G.devil);
   }
   if (G.arms && !taken && !gripped && !skip('arms')) drawArms();
+  if (G.level === 2){ G.cages.forEach(drawCage); drawKnights(); }
   if (!skip('flames')) G.flames.forEach(drawFlame);
   G.forks.forEach(drawFork);
   G.loose.forEach(function(L){
@@ -4208,6 +6488,7 @@ function draw(){
     ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#c85a24'; ctx.lineWidth = 3; forkShape(); ctx.restore();
   });
   if (G.heaven) drawHeaven();                     // the light, behind the heart
+  if (G.gates && G.gates.a > 0.01) drawGates(G.gates);   // and in it, at level II's end, the gates
   G.bolts.forEach(drawBolt);
 
   // particles; blood droplets are drawn as small drops, with a short tail while falling
@@ -4222,16 +6503,19 @@ function draw(){
     ctx.restore();
   });
 
+  if (G.level === 2) drawSouls();
   var playerVisible = G.mode === 'play' || (G.mode === 'ending' && G.ending.kind !== 'dead');
   if (taken && G.taken.grabbed){ if (G.arms) drawArms(true); drawPlayer(); }   // cupped: the heart over the fingers
   else { if (playerVisible) drawPlayer(); if ((taken || gripped) && G.arms) drawArms(true); }
   if (taken) drawPointingHand(G.taken.point);
+  if (G.cagedEnd && G.mode === 'ending') drawCagedEnd();
   drawTexts();
 
   ctx.restore();
 
   if (G.mode !== 'title' && !skip('vignette')) drawVignette();
   if (G.mode === 'play' && !skip('hud')) drawHUD();
+  if (DEV.on){ ctx.font = "6px 'Press Start 2P', monospace"; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = col('title', 0.85); ctx.fillText('DEV', 6, LH - 6); }
   if (G.herald > 0) drawHerald();
   if (G.flash > 0){
     ctx.fillStyle = 'rgba(255,42,0,' + (G.flash * 0.4) + ')';
@@ -4241,7 +6525,6 @@ function draw(){
     ctx.fillStyle = 'rgba(255,255,255,' + (G.white * 0.55) + ')';
     ctx.fillRect(0, 0, LW, LH);
   }
-  if (G.paused) drawPaused();
 }
 
 // ---------- frame-time telemetry ----------
@@ -4287,7 +6570,7 @@ function adapt(frameMs){
 }
 function applyTier(){
   if (wantTier === tier) return;
-  var d = G.devil, safe = G.mode !== 'play' || G.phase === 'survive' || !d || d.state === 'wait' || d.state === 'open' || d.dead;
+  var d = G.devil || G.warden, safe = G.mode !== 'play' || openPhase() || !d || d.state === 'wait' || d.state === 'open' || d.dead;
   if (safe) setTier(wantTier);
 }
 if (/debug/.test(location.hash)){
@@ -4304,13 +6587,15 @@ function frame(now){
   var frameMs = now - last, t0 = performance.now();
   last = now;
   try {
-    if (!G.paused && !window.BTD_FREEZE) update(dt);   // BTD_FREEZE: debug, holds the state for a screenshot
+    if (!G.paused && !window.BTD_FREEZE) update(DEV.on && DEV.slow ? dt * 0.35 : dt);   // BTD_FREEZE: debug, holds the state for a screenshot
     draw();
   } catch(err){
     PERF.errors++;
     console.error(err);
   }
   if (isTouch) drawControls();
+  pauseUI();
+  if (brief) briefTick();
   perfPush(frameMs, performance.now() - t0);
   adapt(frameMs);
   if (perfShow) drawPerf();
