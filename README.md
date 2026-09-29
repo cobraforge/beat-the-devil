@@ -488,6 +488,11 @@ to unlock it until it runs, playing one silent sample inside the gesture.
 The ringer switch mutes Web Audio unless the page's audio session is
 `playback`, which is set on the same gesture (Safari 16.4+).
 
+**Only on screen.** While the page is hidden (another app, another tab, the
+screen off) the audio context is suspended, so everything stops, the
+narrator mid-word; it resumes where it was when the page is back, and the
+story's typing waits with her. A run in progress also pauses.
+
 The win has its own music and sounds: his death cry (three sawtooth voices a
 fifth and an octave apart falling through a closing formant, into the long
 reverb), the crumble of his hands to ash, and the roof splitting open (a
@@ -563,10 +568,12 @@ pattern's length doesn't match `bars * 16` or a choir isn't one four-note
 chord per bar.
 
 The title plays `title`. It is asked for as the page loads, so a browser
-that lets a page make sound before a tap plays it at once; otherwise it comes
-in with the first touch or key that doesn't start a game (scrolling the
-board or its tabs, or *Sound on*, which before any sound has played
-lets it in rather than muting). Both end panels have **Main menu** (Esc on a
+that lets a page make sound before a tap plays it at once. Otherwise the
+title's prompt reads **Tap for sound** (*Press any key for sound*): that
+first press lets the sound in and the music starts, and the prompt turns to
+*Tap to start*. Scrolling the board or its tabs, or *Sound on* (which before
+any sound has played lets it in rather than muting), answer it too; muted,
+there is nothing to ask and the first press starts. Both end panels have **Main menu** (Esc on a
 keyboard), back to the title and its music with the
 board fetched fresh; there, space or a tap starts level I.
 

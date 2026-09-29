@@ -63,8 +63,21 @@ function unlock(){
 ['touchend', 'pointerup', 'click', 'keydown'].forEach(function(type){
   window.addEventListener(type, function(){ if (!running()) unlock(); }, true);
 });
-// after a call or a trip to another app iOS leaves it 'interrupted'; the next touch resumes it
-document.addEventListener('visibilitychange', function(){ if (!document.hidden && actx && actx.state !== 'running') try { actx.resume(); } catch(e){} });
+// Out of sight, out of earshot: while the page is hidden (another app, another
+// tab, the screen off) the whole context stops, the menu's drone and choir and
+// the narrator with it, and it starts again, where it was, when the page is
+// back. The music's steps come from the heartbeat, which stops with the page,
+// but its held layers would sound on. After a call or a trip to another app
+// iOS leaves it 'interrupted'; if the resume here is refused, the next touch
+// lets it in.
+function quiet(pr){ if (pr && pr.catch) pr.catch(function(){}); }
+document.addEventListener('visibilitychange', function(){
+  if (!actx) return;
+  try {
+    if (document.hidden){ if (actx.state === 'running') quiet(actx.suspend()); }
+    else if (actx.state !== 'running') quiet(actx.resume());
+  } catch(e){}
+});
 
 // ---------- primitives ----------
 // tone({freq, dur, vol, type, slide, attack, filter, q, detune, t, bus})

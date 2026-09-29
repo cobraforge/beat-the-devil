@@ -315,6 +315,16 @@ would play differently on a slow phone.
   3 kHz on purpose: a phone speaker plays almost nothing below 200 Hz, where
   the drone, rumble and bass live, so without them a phone heard little
   music at all.
+- **Sound plays only while the game is on screen, and the first press lets it
+  in.** Hidden (another app, another tab, the screen off), the audio context
+  is suspended: the music, the narrator, everything, resuming where it was.
+  The music's steps come from the heartbeat, which stops with the page, but
+  the menu's held drone and choir sounded on in the background. And a browser
+  lets no sound in before a tap, click or key, so on a fresh title the prompt
+  reads *Tap for sound* and that first press is for the sound, the next one
+  starts. It used to start the story at once: the menu stayed silent, and the
+  music and the narrator arrived together. (Muted, or with the sound already
+  in, the first press starts.)
 - **All audio is synthesised**, with one exception. No asset files; Web
   Audio only. Sound counts are capped (thuds 3, fire voices 4) so the mix
   cannot clip. The exception is the spoken lines: the narrator's (rule 13)
