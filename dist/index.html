@@ -1727,7 +1727,7 @@ window.addEventListener('orientationchange', function(){ setTimeout(resize, 120)
 resize();
 
 // the version the title shows; bump it with each release (BTD_VERSION counts builds)
-var GAME_VERSION = '1.2';
+var GAME_VERSION = '1.25';
 document.getElementById('ver').textContent = 'v' + GAME_VERSION;
 // ---------- the briefings ----------
 // Before each level: its story, typed out a page at a time (and read aloud),
@@ -2177,7 +2177,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 53;
+  window.BTD_VERSION = 54;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
