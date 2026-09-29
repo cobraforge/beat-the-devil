@@ -570,8 +570,21 @@ function unlock(){
 ['touchend', 'pointerup', 'click', 'keydown'].forEach(function(type){
   window.addEventListener(type, function(){ if (!running()) unlock(); }, true);
 });
-// after a call or a trip to another app iOS leaves it 'interrupted'; the next touch resumes it
-document.addEventListener('visibilitychange', function(){ if (!document.hidden && actx && actx.state !== 'running') try { actx.resume(); } catch(e){} });
+// Out of sight, out of earshot: while the page is hidden (another app, another
+// tab, the screen off) the whole context stops, the menu's drone and choir and
+// the narrator with it, and it starts again, where it was, when the page is
+// back. The music's steps come from the heartbeat, which stops with the page,
+// but its held layers would sound on. After a call or a trip to another app
+// iOS leaves it 'interrupted'; if the resume here is refused, the next touch
+// lets it in.
+function quiet(pr){ if (pr && pr.catch) pr.catch(function(){}); }
+document.addEventListener('visibilitychange', function(){
+  if (!actx) return;
+  try {
+    if (document.hidden){ if (actx.state === 'running') quiet(actx.suspend()); }
+    else if (actx.state !== 'running') quiet(actx.resume());
+  } catch(e){}
+});
 
 // ---------- primitives ----------
 // tone({freq, dur, vol, type, slide, attack, filter, q, detune, t, bus})
@@ -1804,10 +1817,7 @@ var STORY = 'He wants your heart.<br>You have five bolts.<br>Two are for his eye
 document.getElementById('tip').innerHTML = STORY + (isTouch
   ? 'Left thumb on the circle to move<br>Right thumb on the button to fire'
   : 'Arrows / WASD to move<br>Space to fire<br>P pause &middot; M mute');
-if (isTouch){
-  document.body.classList.add('touch');
-  document.getElementById('start-hint').textContent = 'Tap to start';
-}
+if (isTouch) document.body.classList.add('touch');
 if (!isTouch) [].forEach.call(document.querySelectorAll('.menubtn'), function(b){ b.textContent = 'Main menu (Esc)'; });
 
 // ---------- storage ----------
@@ -2177,7 +2187,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 54;
+  window.BTD_VERSION = 55;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
@@ -2260,12 +2270,22 @@ window.addEventListener('keydown', function(e){
   } else if (G.mode === 'title'){
     AUDIO.unlock();
     music.play('title');
+    soundAsked = true; startHint();
   }
 });
 window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
 window.addEventListener('blur', function(){ keys = {}; pointers = {}; movePtr = null; drag = null; stickRelease(); });
+// away from the page: a run pauses; the story's typing waits, as her voice does
+// (the sound stops with the page: audio.js)
+var hiddenAt = 0;
 document.addEventListener('visibilitychange', function(){
-  if (document.hidden && G.mode === 'play' && !G.paused && !window.BTD_FREEZE) togglePause();
+  if (document.hidden){
+    hiddenAt = performance.now();
+    if (G.mode === 'play' && !G.paused && !window.BTD_FREEZE) togglePause();
+  } else if (hiddenAt){
+    if (brief) brief.at += performance.now() - hiddenAt;
+    hiddenAt = 0;
+  }
 });
 
 // the canvas rect, measured once per layout rather than per pointer event
@@ -2338,6 +2358,7 @@ function toggleMute(){
   if (!AUDIO.running() && !AUDIO.isMuted()){
     AUDIO.unlock();
     if (G.mode === 'title') music.play('title');
+    soundAsked = true; startHint();
     return;
   }
   AUDIO.unlock();
@@ -2345,6 +2366,7 @@ function toggleMute(){
   muteLabel();
   if (AUDIO.isMuted()) hush();                      // the narrator too
   if (G.mode === 'title') music.play('title');
+  startHint();
 }
 muteBtn.addEventListener('click', function(e){ e.stopPropagation(); toggleMute(); });
 // its label, and its speaker (waves when on, a red line across it when off)
@@ -2462,7 +2484,19 @@ function briefSkip(){
 // step goes down for them; anywhere else (the title, a loss, level II's win)
 // it is the pit again.
 function nextLevel(){ return G.mode === 'won' && G.level === 1 ? 2 : 1; }
+// A fresh page is silent until the first tap, click or key: no browser lets a
+// page make a sound before one. So on the title that first press is for the
+// sound (the menu music comes in) and the next one starts; the prompt says
+// which. Muted, or with the sound already in, the first press starts.
+var soundAsked = false;
+function wantsSoundTap(){ return G.mode === 'title' && !soundAsked && !AUDIO.running() && !AUDIO.isMuted(); }
+function startHint(){
+  document.getElementById('start-hint').textContent = wantsSoundTap()
+    ? (isTouch ? 'Tap for sound' : 'Press any key for sound')
+    : (isTouch ? 'Tap to start' : 'Press space to start');
+}
 function tryStart(){
+  if (wantsSoundTap()){ soundAsked = true; AUDIO.unlock(); music.play('title'); startHint(); return; }
   AUDIO.unlock();
   if (WORLD.naming) return;                       // a winner is giving a name
   if (G.mode === 'brief'){ briefNext(); return; }
@@ -2602,9 +2636,11 @@ worldLoad();
 devRender();
 narratorLoad();                                    // her lines (a third of a megabyte), fetched at once
 // the title's music is asked for at once: a browser that lets a page sound
-// before a tap plays it now; otherwise it comes in on the first touch or key
-// that isn't a start (the board, its tabs, Sound on)
+// before a tap plays it now; otherwise it comes in with the first touch or key
+// (the one the prompt asks for, or the board, its tabs, Sound on)
 music.play('title');
+startHint();
+AUDIO.whenRunning().then(startHint);
 
 // ---------- a coffee ----------
 // A thank-you link to the author's tip page, on the title and the end panels,
