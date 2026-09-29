@@ -516,7 +516,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 51;
+  window.BTD_VERSION = 52;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
@@ -948,14 +948,16 @@ music.play('title');
 // ---------- a coffee ----------
 // A thank-you link to the author's tip page, on the title and the end panels,
 // never in play. It buys nothing — no badge, no bonus, no name in gold — and
-// it must stay that way (DESIGN rule 9). It is hidden when the page runs as an
-// installed store app: a Trusted Web Activity opens with an android-app://
-// referrer, remembered for the session.
+// it must stay that way (DESIGN rule 9). It is hidden when the page runs as the
+// installed store app, whose start address will carry ?app=play, remembered for
+// the session. (Not the referrer: Chrome on Android gives every page opened
+// from another app — a link in Gmail, Messages, a chat — an android-app://
+// referrer, and the first version hid the link from all of them.)
 var COFFEE_URL = 'https://buymeacoffee.com/cobraforge';   // the tip page; empty hides the link
 var inStoreApp = false;
 try {
-  if (/^android-app:\/\//.test(document.referrer)) sessionStorage.setItem('btd.app', '1');
-  inStoreApp = sessionStorage.getItem('btd.app') === '1';
+  if (/[?&]app=play(&|$)/.test(location.search)) sessionStorage.setItem('btd.play', '1');
+  inStoreApp = sessionStorage.getItem('btd.play') === '1';
 } catch(e){}
 [].forEach.call(document.querySelectorAll('.coffee'), function(a){
   if (!COFFEE_URL || inStoreApp) return;
