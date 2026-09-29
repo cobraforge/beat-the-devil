@@ -66,7 +66,7 @@ window.addEventListener('orientationchange', function(){ setTimeout(resize, 120)
 resize();
 
 // the version the title shows; bump it with each release (BTD_VERSION counts builds)
-var GAME_VERSION = '1.25';
+var GAME_VERSION = '1.26';
 document.getElementById('ver').textContent = 'v' + GAME_VERSION;
 // ---------- the briefings ----------
 // Before each level: its story, typed out a page at a time (and read aloud),
