@@ -331,8 +331,9 @@ BTD_API_SIM.sql('SELECT * FROM runs')
 tip page (buymeacoffee.com/cobraforge). While it is empty the link is hidden; set, a small "Enjoyed it? Buy
 me a coffee" link appears on the title and the end panels (never in play),
 opening the page in a new tab. It buys nothing (DESIGN rule 9) and is hidden
-when the game runs as an installed Play app (a Trusted Web Activity, detected
-by its `android-app://` referrer).
+when the game runs as an installed Play app: give that app's start address
+`?app=play` (it is remembered for the session). Not the `android-app://`
+referrer: Chrome gives one to every page opened from another app.
 
 ## On a phone
 

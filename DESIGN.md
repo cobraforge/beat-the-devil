@@ -340,7 +340,10 @@ would play differently on a slow phone.
   nothing and reaches the creator whole as a peer-to-peer payment, outside its
   billing rules; a tip that bought anything would need Play billing. It is
   hidden when the game runs as an installed store app until that has been
-  through review.
+  through review — known by `?app=play` in the app's start address, never by
+  an `android-app://` referrer, which Chrome gives any page opened from
+  another app (the first version hid the link from everyone who opened the
+  game from a link in a message).
 - **No references to any source material.** The title is "Beat the Devil"
   and that is all. No author, book, series, year or "based on" — in the UI,
   the README, or code comments.
