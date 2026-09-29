@@ -516,7 +516,7 @@ reset();
 // window.BTD_G is the state, window.BTD_STEP(dt) advances one frame by hand
 if (/debug/.test(location.hash)){
   window.BTD_G = G;
-  window.BTD_VERSION = 52;
+  window.BTD_VERSION = 53;
   window.BTD_STEP = function(dt){ update(dt); draw(); };
   window.BTD_START = function(level){ startGame(level || 1); };   // straight into a level, no menu or briefing
 }
@@ -1390,6 +1390,22 @@ function burnOutHazards(){
     else fl.t = fl.warn + fl.burn;
   });
 }
+// When he comes the pit goes quiet: the survive phase's fire dies down with its
+// forks, so nothing lit before the hush stands through his entrance. (A column
+// lit a second before the end once burned 4.5 s into the fight, in the band the
+// lowered ceiling leaves the heart.) Unlike burnOutHazards, the bolts fly on.
+function quenchSurvive(){
+  for (var i = G.flames.length - 1; i >= 0; i--){
+    var fl = G.flames[i];
+    if (fl.type === 'walker'){ if (fl.state !== 'die'){ fl.state = 'die'; fl.t = 0; fl.flare = 0; } }   // the usual shrink, under a second
+    else if (fl.type === 'jet'){ fl.state = 'retract'; fl.t = fl.len > 0 ? 0 : 1; }
+    else if (fl.type === 'ember'){                                      // fizzles where it is
+      var fly = fl.state === 'fly';
+      burst(fly ? fl.x : fl.tx, fly ? fl.y : fl.ty, '#ff7a10', 5, 120);
+      G.flames.splice(i, 1);
+    }
+  }
+}
 // a chain is hauled up (one still in its clamp just goes)
 function windDown(fl){
   if (fl.type !== 'chain' || fl.state === 'reel') return;
@@ -1777,6 +1793,7 @@ function update(dt){
       music.whisper(0);
       sayLine('here', 'fear');
       G.forks.length = 0;
+      quenchSurvive();
     }
   } else if (G.level === 2){
     updateStolen(dt);

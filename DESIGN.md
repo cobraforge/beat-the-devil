@@ -103,6 +103,14 @@ at the phase transition. The locked target exists because a column that
 tracks the heart is a homing attack the player cannot outthink; once it
 stands, dodging is a matter of geometry.
 
+**When he comes, the survive phase's fire goes out.** At the hush before he
+lands its forks vanish, its columns die down (the usual shrink, under a
+second), its wall jets retract and its embers fizzle; bolts in flight fly on.
+A column lit a second before the end used to stand through his whole
+entrance — 4.5 s into the fight, in the band the lowered ceiling leaves the
+heart — and burn it while he came in. (Level 2 already did this at the
+Warden's arrival: its chains wind up and its knights stand.)
+
 **The picture must match the box.** A column's danger is the rectangle
 `|x - fl.x| < w/2`, from `LH - h` to the floor. The fire is drawn as tongues,
 so the *hot* part — the orange and yellow layers — has to reach close to `h`
@@ -110,8 +118,8 @@ and stay inside `w`; only the dull red outer layer dissolves above it. A
 prettier fire that burned lower than its hitbox would be a trap.
 
 **In code.** `ceilingY()`, `flameLimit()`, `spawnWalker()`,
-`moveHazards()` (`fl.hmax = Math.min(fl.hmax, flameLimit())`), and the layer
-heights in `flameColumn()`.
+`moveHazards()` (`fl.hmax = Math.min(fl.hmax, flameLimit())`), the layer
+heights in `flameColumn()`, and `quenchSurvive()` at the phase change.
 
 ---
 
